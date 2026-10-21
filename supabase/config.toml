@@ -1,0 +1,38 @@
+# Minimal Supabase CLI config. `supabase link --project-ref <ref>` then `supabase db push`.
+# Local stack (`supabase start`) is optional; the hosted free tier is the MVP target.
+project_id = "boreal-web"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/auth/confirm", "http://localhost:4173/auth/confirm"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+# Magic links hit /auth/confirm with token_hash (see src/routes/auth/confirm).
+otp_expiry = 3600
+
+[inbucket]
+enabled = true
+port = 54324

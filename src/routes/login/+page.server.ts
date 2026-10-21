@@ -1,0 +1,38 @@
+import { fail } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
+
+// Only allow same-origin relative paths as a post-login destination.
+function safeRedirect(value: FormDataEntryValue | string | null): string {
+	if (typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')) return value;
+	return '/';
+}
+
+export const load: PageServerLoad = ({ url }) => {
+	return { redirectTo: safeRedirect(url.searchParams.get('redirectTo')) };
+};
+
+export const actions: Actions = {
+	default: async ({ request, url, locals }) => {
+		const form = await request.formData();
+		const email = String(form.get('email') ?? '').trim();
+		const redirectTo = safeRedirect(form.get('redirectTo'));
+
+		if (!email || !email.includes('@')) {
+			return fail(400, { email, error: 'Enter a valid email address.' });
+		}
+
+		// Magic link: Supabase emails a link to /auth/confirm, which exchanges the token for a session.
+		const confirm = new URL('/auth/confirm', url.origin);
+		confirm.searchParams.set('next', redirectTo);
+
+		const { error } = await locals.supabase.auth.signInWithOtp({
+			email,
+			options: { emailRedirectTo: confirm.toString() }
+		});
+
+		if (error) {
+			return fail(500, { email, error: error.message });
+		}
+		return { sent: true, email };
+	}
+};

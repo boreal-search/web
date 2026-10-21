@@ -1,0 +1,6 @@
+# Copy to `.env` for `bun run dev` and to `.dev.vars` for `bun run preview` (wrangler).
+# In production these are Workers secrets: `bun exec wrangler secret put <NAME>`.
+PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=<anon-or-publishable-key>
+ENGINE_URL=http://localhost:8000
+ENGINE_SERVICE_TOKEN=dev-token-change-me
