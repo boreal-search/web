@@ -39,7 +39,8 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 - Engine calls only from `src/lib/server/**` or `+page.server.ts`/`+server.ts`. `ENGINE_SERVICE_TOKEN` never reaches the browser.
 - Every search/data-source request re-checks org access (`findForbiddenDataSources`); never trust ids from the client.
-- Svelte 5 runes (`$state`, `$derived`, `$props`), `PageProps`/`LayoutProps` types, `resolve()` from `$app/paths` for internal links, `rel="external"` for presigned URLs.
+- Every search records a `search_events` row (ok / forbidden / engine_error). Keep that when changing the search path.
+- Svelte 5 runes (`$state`, `$derived`, `$props`), `PageProps`/`LayoutProps` types, `resolve()` from `$app/paths` for internal links, `rel="external"` for signed engine `/files/` URLs.
 - `#lib/...` imports use a `.js` extension (`#lib/server/engine.js`). No `any`. Keep markup semantic; design pass is a separate effort.
 - Supabase schema changes = new migration file + update `src/lib/supabase/types.ts`.
 
