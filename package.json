@@ -16,7 +16,7 @@
 		"test": "vitest --run",
 		"test:watch": "vitest",
 		"gen": "wrangler types",
-		"gen:engine-client": "openapi-typescript \"${ENGINE_URL:-http://localhost:8000}/openapi.json\" -o src/lib/server/engine.types.ts",
+		"gen:engine-client": "sh scripts/gen-engine-client.sh",
 		"gen:supabase-types": "supabase gen types typescript --linked > src/lib/supabase/types.ts"
 	},
 	"devDependencies": {

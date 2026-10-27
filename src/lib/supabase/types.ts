@@ -3,6 +3,7 @@
 // once the project is linked; keep the shape in sync with the migrations.
 
 export type OrgRole = 'owner' | 'member';
+export type SearchStatus = 'ok' | 'forbidden' | 'engine_error';
 
 export interface Database {
 	public: {
@@ -14,9 +15,15 @@ export interface Database {
 				Relationships: [];
 			};
 			orgs: {
-				Row: { id: string; slug: string; name: string; created_at: string };
-				Insert: { id?: string; slug: string; name: string; created_at?: string };
-				Update: { slug?: string; name?: string };
+				Row: { id: string; slug: string; name: string; log_queries: boolean; created_at: string };
+				Insert: {
+					id?: string;
+					slug: string;
+					name: string;
+					log_queries?: boolean;
+					created_at?: string;
+				};
+				Update: { slug?: string; name?: string; log_queries?: boolean };
 				Relationships: [];
 			};
 			org_members: {
@@ -31,10 +38,63 @@ export interface Database {
 				Update: Record<string, never>;
 				Relationships: [];
 			};
+			search_events: {
+				Row: {
+					id: string;
+					org_id: string;
+					user_id: string | null;
+					data_source_ids: string[];
+					query: string | null;
+					query_length: number;
+					top_k: number;
+					rerank: boolean;
+					status: SearchStatus;
+					result_count: number | null;
+					top_score: number | null;
+					retrieval_ms: number | null;
+					reranked: boolean | null;
+					error: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					org_id: string;
+					user_id?: string | null;
+					data_source_ids: string[];
+					query?: string | null;
+					query_length: number;
+					top_k: number;
+					rerank: boolean;
+					status: SearchStatus;
+					result_count?: number | null;
+					top_score?: number | null;
+					retrieval_ms?: number | null;
+					reranked?: boolean | null;
+					error?: string | null;
+					created_at?: string;
+				};
+				Update: Record<string, never>;
+				Relationships: [];
+			};
 		};
-		Views: Record<string, never>;
+		Views: {
+			org_search_daily: {
+				Row: {
+					org_id: string;
+					day: string;
+					searches: number;
+					ok: number;
+					engine_errors: number;
+					zero_result: number;
+					active_users: number;
+					p50_retrieval_ms: number | null;
+					p95_retrieval_ms: number | null;
+				};
+				Relationships: [];
+			};
+		};
 		Functions: Record<string, never>;
-		Enums: { org_role: OrgRole };
+		Enums: { org_role: OrgRole; search_status: SearchStatus };
 		CompositeTypes: Record<string, never>;
 	};
 }

@@ -13,6 +13,8 @@ import type {
 	SearchResponse
 } from './engine.types';
 
+export type { Answer, Claim, SearchResponse, SearchResult, Verification } from './engine.types';
+
 export class EngineError extends Error {
 	constructor(
 		public readonly status: number,
@@ -46,6 +48,37 @@ async function request<T>(path: string, init: RequestInit = {}, fetchFn: typeof 
 	return (await res.json()) as T;
 }
 
+/** User-facing message for a failed engine call. 503 = Qdrant/Ollama down on the engine side. */
+export function engineErrorMessage(e: unknown): string {
+	if (!(e instanceof EngineError)) return 'Engine unreachable';
+	if (e.status === 503) return `Search is temporarily unavailable: ${e.message}`;
+	return `${e.status} ${e.message}`;
+}
+
+export interface SearchOutcome {
+	response: SearchResponse;
+	/** Set when an answer was requested but the engine refused it (400: no LLM configured). */
+	answerError: string | null;
+}
+
+/**
+ * POST /search. With `answer: true`, a 400 means the engine has no LLM configured: retry
+ * without `answer` so the user still gets results (the answer is optional, the search isn't).
+ */
+export async function search(
+	body: SearchRequest,
+	fetchFn: typeof fetch = fetch
+): Promise<SearchOutcome> {
+	const post = (b: SearchRequest) =>
+		request<SearchResponse>('/search', { method: 'POST', body: JSON.stringify(b) }, fetchFn);
+	try {
+		return { response: await post(body), answerError: null };
+	} catch (e) {
+		if (!body.answer || !(e instanceof EngineError) || e.status !== 400) throw e;
+		return { response: await post({ ...body, answer: false }), answerError: e.message };
+	}
+}
+
 function query(params: Record<string, string | number | undefined>) {
 	const qs = new URLSearchParams();
 	for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v));
@@ -76,8 +109,7 @@ export function engine(fetchFn: typeof fetch = fetch) {
 		getDocument: (id: string) =>
 			request<Document>(`/documents/${encodeURIComponent(id)}`, {}, fetchFn),
 
-		search: (body: SearchRequest) =>
-			request<SearchResponse>('/search', { method: 'POST', body: JSON.stringify(body) }, fetchFn),
+		search: (body: SearchRequest) => search(body, fetchFn),
 
 		listJobs: (opts: { data_source_id?: string; status?: JobStatus; limit?: number } = {}) =>
 			request<Job[]>(`/jobs${query(opts)}`, {}, fetchFn)

@@ -26,3 +26,12 @@ not code. Sessions are validated with `auth.getUser()` in `hooks.server.ts`, not
 Free tier with no cold starts; Render's free web services sleep after 15 minutes. The Worker
 runtime is not Node, which is fine because this app is a thin shell (auth + proxy + UI).
 Deployed with `adapter-cloudflare` + `wrangler`.
+
+## 2026-10-21 — Product analytics live in Supabase (`search_events`)
+
+Every search writes one row (org, user, data sources, query, result count, top score,
+latency, status) via `src/lib/server/analytics.ts`, after the engine responds and through
+`waitUntil` on Workers so it never slows the request. `orgs.log_queries` lets an org opt out of
+raw query text (length is still kept). `org_search_daily` is the first rollup view; insights
+pages read from it. No third-party analytics vendor — this is for our own retrieval-quality
+and usage review, and zero-result queries are the signal Daud needs most.

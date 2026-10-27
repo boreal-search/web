@@ -21,7 +21,7 @@ bun run test                # vitest --run
 bun run build               # cloudflare build
 bun run preview             # wrangler dev on the built worker (reads .dev.vars)
 bun run deploy              # build + wrangler deploy
-bun run gen:engine-client   # regen src/lib/server/engine.types.ts from $ENGINE_URL/openapi.json
+bun run gen:engine-client   # regen src/lib/server/engine.openapi.ts from $ENGINE_URL/openapi.json (curl w/ token, .env); engine.types.ts = aliases
 bun run gen:supabase-types  # regen src/lib/supabase/types.ts (needs `supabase link`)
 supabase migration new <name> && supabase db push   # schema changes live in supabase/migrations
 ```
@@ -30,7 +30,7 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 - `src/env.ts` — declared env vars (`defineEnvVars`); import from `$app/env/private|public`.
 - `src/hooks.server.ts` — Supabase client + validated session on `locals`.
-- `src/lib/server/` — server-only: `engine.ts` (API client), `access.ts` (org ↔ data source checks), `auth.ts`.
+- `src/lib/server/` — server-only: `engine.ts` (API client), `access.ts` (org ↔ data source checks), `analytics.ts` (search_events), `auth.ts`.
 - `src/lib/supabase/` — SSR client factory and hand-written `Database` types.
 - `src/routes/(app)/` — authenticated pages; `+layout.server.ts` guards and loads `accessibleDataSourceIds`.
 - `supabase/migrations/` — control-plane schema with RLS.

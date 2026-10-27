@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { resultAnchorId, splitCitations, verificationBadge } from '#lib/answer.js';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -8,6 +9,11 @@
 	// Keep the user's last selection across submits; default to everything they can see.
 	let selected = $derived(new Set(form?.requested ?? data.dataSources.map((ds) => ds.id)));
 	let results = $derived(form && 'response' in form ? form.response : null);
+	let answerError = $derived(form && 'answerError' in form ? form.answerError : null);
+	let answerOn = $derived(form?.answer ?? true);
+	let answer = $derived(results?.answer ?? null);
+	let segments = $derived(answer ? splitCitations(answer.text, results?.results.length ?? 0) : []);
+	let badge = $derived(answer ? verificationBadge(answer.verification) : null);
 </script>
 
 <h1>Search</h1>
@@ -58,6 +64,11 @@
 		</label>
 	</details>
 
+	<label>
+		<input type="checkbox" name="answer" value="on" checked={answerOn} />
+		Draft an answer from the top results
+	</label>
+
 	{#if form?.error}
 		<p class="error" role="alert">{form.error}</p>
 	{/if}
@@ -65,7 +76,55 @@
 	<button type="submit" class="primary" disabled={searching || data.dataSources.length === 0}>
 		{searching ? 'Searching…' : 'Search'}
 	</button>
+	{#if searching && answerOn}
+		<p class="muted" role="status">
+			Searching and drafting an answer; this can take a few seconds.
+		</p>
+	{/if}
 </form>
+
+{#if answer && badge}
+	<section aria-labelledby="answer-heading">
+		<h2 id="answer-heading">Answer</h2>
+		<p class={['verification', badge.state]}>
+			<strong>{badge.label}</strong>
+			{#if answer.abstained}
+				<span class="muted">· the sources don't cover this question</span>
+			{/if}
+		</p>
+		<p class="answer">
+			{#each segments as seg, i (i)}
+				{#if seg.kind === 'cite'}
+					<a href="#{resultAnchorId(seg.ref)}" aria-label="Source {seg.ref}">[{seg.ref}]</a>
+				{:else}
+					{seg.text}
+				{/if}
+			{/each}
+		</p>
+		{#if badge.unsupported.length > 0}
+			<details>
+				<summary>
+					{badge.unsupported.length} unsupported claim{badge.unsupported.length === 1 ? '' : 's'}
+				</summary>
+				<ul>
+					{#each badge.unsupported as c, i (i)}
+						<li>
+							{c.claim}
+							{#if c.ref !== null}<span class="muted">(cited [{c.ref}])</span>{/if}
+						</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
+		<p class="muted">
+			<small>
+				{answer.model} · drafted in {answer.generation_ms} ms · verified in {answer.verify_ms} ms
+			</small>
+		</p>
+	</section>
+{:else if answerError}
+	<p class="muted" role="status">Answer unavailable ({answerError}); showing results only.</p>
+{/if}
 
 {#if results}
 	<section aria-live="polite">
@@ -77,8 +136,8 @@
 			<p class="muted">Nothing matched.</p>
 		{:else}
 			<ul class="results">
-				{#each results.results as r (`${r.document_id}:${r.page_number}`)}
-					<li>
+				{#each results.results as r, i (`${r.document_id}:${r.page_number}`)}
+					<li id={resultAnchorId(i + 1)}>
 						<a href={r.pdf_url} target="_blank" rel="external noopener">
 							<img
 								src={r.page_image_url}
@@ -91,7 +150,7 @@
 								<a href={r.pdf_url} target="_blank" rel="external noopener">{r.document_title}</a>
 							</h3>
 							<p class="muted">
-								Page {r.page_number} · {r.data_source_id} · score {r.score.toFixed(3)}
+								#{i + 1} · Page {r.page_number} · {r.data_source_id}
 							</p>
 							{#if r.snippet}
 								<p>{r.snippet}</p>
@@ -103,3 +162,15 @@
 		{/if}
 	</section>
 {/if}
+
+<style>
+	.verification.partial {
+		color: var(--warn, #a15c00);
+	}
+	.answer {
+		white-space: pre-line;
+	}
+	li:target {
+		outline: 2px solid currentColor;
+	}
+</style>
