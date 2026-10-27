@@ -4,6 +4,7 @@
 
 	let { data, form }: PageProps = $props();
 	let submitting = $state(false);
+	let password = $state('');
 </script>
 
 <h1>Log in</h1>
@@ -26,12 +27,25 @@
 			Work email
 			<input type="email" name="email" autocomplete="email" required value={form?.email ?? ''} />
 		</label>
+		<label>
+			Password <small>(optional — leave blank to get an email link)</small>
+			<input
+				type="password"
+				name="password"
+				autocomplete="current-password"
+				bind:value={password}
+			/>
+		</label>
 		<input type="hidden" name="redirectTo" value={data.redirectTo} />
 		{#if form?.error}
 			<p class="error" role="alert">{form.error}</p>
 		{/if}
 		<button type="submit" class="primary" disabled={submitting}>
-			{submitting ? 'Sending…' : 'Email me a sign-in link'}
+			{#if password}
+				{submitting ? 'Signing in…' : 'Sign in'}
+			{:else}
+				{submitting ? 'Sending…' : 'Email me a sign-in link'}
+			{/if}
 		</button>
 	</form>
 {/if}

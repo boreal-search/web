@@ -1,4 +1,4 @@
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 // Only allow same-origin relative paths as a post-login destination.
@@ -16,9 +16,17 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const email = String(form.get('email') ?? '').trim();
 		const redirectTo = safeRedirect(form.get('redirectTo'));
+		const password = String(form.get('password') ?? '');
 
 		if (!email || !email.includes('@')) {
 			return fail(400, { email, error: 'Enter a valid email address.' });
+		}
+
+		// Password set: sign in directly (users created in the Supabase dashboard have one).
+		if (password) {
+			const { error } = await locals.supabase.auth.signInWithPassword({ email, password });
+			if (error) return fail(400, { email, error: error.message });
+			redirect(303, redirectTo);
 		}
 
 		// Magic link: Supabase emails a link to /auth/confirm, which exchanges the token for a session.
