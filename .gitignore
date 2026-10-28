@@ -28,3 +28,6 @@ supabase/.branches
 # Private, local-only context (brand strategy etc.); never commit
 CLAUDE.local.md
 docs/private/
+
+# Screenshots (scripts/shots.ts)
+.shots

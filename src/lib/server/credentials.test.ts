@@ -26,7 +26,7 @@ describe('validateNewPassword', () => {
 
 	it('rejects a mismatched confirmation', () => {
 		expect(validateNewPassword('correct horse', 'correct house')).toBe(
-			'The passwords don’t match.'
+			"The passwords don't match."
 		);
 	});
 });

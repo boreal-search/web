@@ -7,7 +7,13 @@
 	let submitting = $state(false);
 </script>
 
-<h1>Set a new password</h1>
+<svelte:head>
+	<title>Set a new password · Boreal Search</title>
+</svelte:head>
+
+<div class="page-head">
+	<h1>Set a new password</h1>
+</div>
 
 <form
 	method="POST"
@@ -20,21 +26,31 @@
 		};
 	}}
 >
-	<label>
-		New password <small>(at least 8 characters)</small>
-		<input type="password" name="password" autocomplete="new-password" minlength="8" required />
+	<label class="field">
+		New password
+		<input
+			type="password"
+			name="password"
+			autocomplete="new-password"
+			minlength="8"
+			required
+			aria-describedby="password-help"
+		/>
+		<span class="help" id="password-help">At least 8 characters.</span>
 	</label>
-	<label>
+	<label class="field">
 		Confirm new password
 		<input type="password" name="confirm" autocomplete="new-password" minlength="8" required />
 	</label>
 	{#if form?.error}
-		<p class="error" role="alert">
+		<p class="notice" data-tone="error" role="alert">
 			{form.error}
 			{#if form.expired}<a href={resolve('/forgot')}>Request a new link</a>.{/if}
 		</p>
 	{/if}
-	<button type="submit" class="primary" disabled={submitting}>
-		{submitting ? 'Saving…' : 'Set password'}
-	</button>
+	<div class="actions">
+		<button type="submit" class="primary" disabled={submitting}>
+			{submitting ? 'Saving…' : 'Save password'}
+		</button>
+	</div>
 </form>

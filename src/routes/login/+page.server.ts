@@ -9,7 +9,7 @@ export const load: PageServerLoad = ({ url }) => {
 		// Set by /auth/confirm when an email link (sign-in, sign-up or reset) can't be used.
 		linkError:
 			url.searchParams.get('error') === 'invalid_link'
-				? 'That link is invalid or has expired. Request a new one.'
+				? 'That link is invalid or has expired.'
 				: null
 	};
 };

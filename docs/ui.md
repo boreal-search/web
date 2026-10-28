@@ -60,6 +60,28 @@ No skeleton screens, spinners, shimmer or typing dots. Show nothing for the firs
 then a thin bar and a seconds counter; label stages only when the engine reports them. On
 completion the bar becomes the readout (pages used, pages searched, time).
 
+## Components
+
+Shared classes in `src/app.css` (listed at its top). Prefer these over one-off styles; page
+layout beyond them uses Tailwind utilities from the theme.
+
+- Layout: `.page-head` (h1, then a `.readout` line), `.band` (a `<section>` under a full-width
+  rule; bands, not boxes), `.actions` (button row). The shell is in `+layout.svelte`.
+- Text: `.muted`, `.readout` (mono readings, `<b>` = value), `.loc` (locator; `a.loc` opens the
+  PDF), `.source` (serif, document words only, always with a `.loc`), `.empty`.
+- Forms: `form.stack`, `.field` (label, control, `.help`, `.field-error` linked by
+  `aria-describedby`, `aria-invalid` on the control), `.check` (checkbox row), `fieldset`/`legend`.
+- Buttons: `<button>` is secondary; `.primary` (one per form), `.quiet` (text), `.danger`
+  (destructive only); `a.button` for a link shaped like a button.
+- Notices: `.notice` with `role="status"`; `data-tone="error"` with `role="alert"` (never in
+  search: engine problems there are plain notices); `data-tone="partial"` for done-with-a-caveat.
+- Tables: hairline `table` by default; `.table-wrap` to scroll sideways on phones, or
+  `table.stacked` with `data-label` on each `td`; `.num` for right-aligned figures.
+- States: `.flag[data-state]` (see Answer states). Waiting: `.waiting` > `.progress`
+  (`style:--value` 0–1) + `.readout` seconds counter. Pages: `.sheet` (dims in dark, `.zoomed`
+  is full brightness).
+- A11y: `.sr-only` hides text visually but keeps it for screen readers.
+
 ## Copy
 
 Short, plain, specific. Boreal never says "I". No exclamation marks or emoji. Label generated

@@ -16,7 +16,7 @@ export function validateNewPassword(password: string, confirm: string): string |
 	if (new TextEncoder().encode(password).length > MAX_PASSWORD_LENGTH) {
 		return `Use at most ${MAX_PASSWORD_LENGTH} characters.`;
 	}
-	if (password !== confirm) return 'The passwords don’t match.';
+	if (password !== confirm) return "The passwords don't match.";
 	return null;
 }
 

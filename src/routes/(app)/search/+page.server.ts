@@ -63,12 +63,20 @@ export const actions: Actions = {
 		const query = String(form.get('query') ?? '').trim();
 		const requested = form.getAll('data_source_ids').map(String);
 		const topK = Math.min(Math.max(Number(form.get('top_k') ?? 10) || 10, 1), MAX_TOP_K);
-		const rerank = form.get('rerank') !== 'off';
+		const rerank = form.get('rerank') === 'on';
 		const answer = form.get('answer') === 'on';
 
-		if (!query) return fail(400, { query, requested, answer, error: 'Enter a query.' });
+		if (!query)
+			return fail(400, { query, requested, answer, topK, rerank, error: 'Enter a query.' });
 		if (requested.length === 0) {
-			return fail(400, { query, requested, answer, error: 'Select at least one data source.' });
+			return fail(400, {
+				query,
+				requested,
+				answer,
+				topK,
+				rerank,
+				error: 'Select at least one data source.'
+			});
 		}
 
 		// Re-check access on every search; never trust the cookie or the ids posted by the form.
@@ -99,6 +107,8 @@ export const actions: Actions = {
 				query,
 				requested,
 				answer,
+				topK,
+				rerank,
 				error: `You don't have access to: ${forbidden.join(', ')}. Reload the page to see what you can search.`
 			});
 		}
@@ -122,7 +132,7 @@ export const actions: Actions = {
 							? 'answer disabled'
 							: undefined
 			});
-			return { query, requested, answer, outcome, answerNotice: answerNotice(a) };
+			return { query, requested, answer, topK, rerank, outcome, answerNotice: answerNotice(a) };
 		}
 
 		const detail = 'detail' in outcome ? outcome.detail : undefined;
@@ -133,6 +143,8 @@ export const actions: Actions = {
 			query,
 			requested,
 			answer,
+			topK,
+			rerank,
 			error: engineFailureMessage(outcome)
 		});
 	}

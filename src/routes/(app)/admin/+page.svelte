@@ -10,40 +10,61 @@
 		({ update }) =>
 			update({ reset: false });
 	let isPublic = $derived(new Set(data.publicCorpora.publicIds));
+	let names = $derived(new Map(data.publicCorpora.dataSources.map((ds) => [ds.id, ds.name])));
+
+	// createOrg errors are one string: an empty name is the name's fault, anything else the slug's.
+	let nameError = $derived(form?.error && !form.name ? form.error : null);
+	let slugError = $derived(form?.error && form.name ? form.error : null);
 </script>
 
-<h1>Platform admin</h1>
+<svelte:head>
+	<title>Platform admin · Boreal Search</title>
+</svelte:head>
+
+<div class="page-head">
+	<h1>Platform admin</h1>
+	<p class="readout">
+		<span><b>{data.orgs.length}</b> {data.orgs.length === 1 ? 'org' : 'orgs'}</span>
+		<span><b>{data.publicCorpora.publicIds.length}</b> public data sources</span>
+	</p>
+</div>
 <p class="muted">
-	Platform admins can see and change every org. They are added in SQL (the
+	Platform admins see and change every org. They are added in SQL (the
 	<code>platform_admins</code> table), not here.
 </p>
 
-<section aria-labelledby="orgs-heading">
+<section class="band" aria-labelledby="orgs-heading">
 	<h2 id="orgs-heading">Orgs</h2>
-	<p class="muted">
+	<p id="orgs-help" class="muted">
 		Open an org to manage its members, data source access, email domains and settings.
 	</p>
 	{#if data.orgs.length === 0}
-		<p class="muted">No orgs yet.</p>
+		<p class="empty">No orgs yet.</p>
 	{:else}
-		<table>
+		<table class="stacked" aria-describedby="orgs-help">
 			<thead>
 				<tr>
-					<th>Name</th>
-					<th>Slug</th>
-					<th>Members</th>
-					<th>Data sources</th>
+					<th scope="col">Name</th>
+					<th scope="col">Slug</th>
+					<th scope="col" class="num">Members</th>
+					<th scope="col">Data sources</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each data.orgs as org (org.id)}
 					<tr>
-						<td
-							><a href={resolve('/(app)/orgs/[slug]/manage', { slug: org.slug })}>{org.name}</a></td
-						>
-						<td>{org.slug}</td>
-						<td>{org.memberCount}</td>
-						<td>{org.dataSourceIds.join(', ') || '—'}</td>
+						<td data-label="Name">
+							<a href={resolve('/(app)/orgs/[slug]/manage', { slug: org.slug })}>{org.name}</a>
+						</td>
+						<td data-label="Slug"><code>{org.slug}</code></td>
+						<td data-label="Members" class="num">{org.memberCount}</td>
+						<td data-label="Data sources" class="sources">
+							{#if org.dataSourceIds.length === 0}
+								<span class="muted">None</span>
+							{:else}
+								{org.dataSourceIds.map((id) => names.get(id) ?? id).join(', ')}
+							{/if}
+						</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -51,22 +72,66 @@
 	{/if}
 </section>
 
-<section aria-labelledby="public-heading">
-	<h2 id="public-heading">Public corpora</h2>
+<section class="band" aria-labelledby="create-heading">
+	<h2 id="create-heading">Create an org</h2>
+	<p class="muted">
+		A new org has no members and no data sources. Next, add its first org admin and grant it data
+		sources.
+	</p>
+	<form method="POST" action="?/createOrg" class="stack" use:enhance>
+		<label class="field">
+			Name
+			<input
+				name="name"
+				required
+				value={form?.name ?? ''}
+				aria-invalid={nameError ? 'true' : undefined}
+				aria-describedby="name-help{nameError ? ' name-error' : ''}"
+			/>
+			<span class="help" id="name-help">Shown on the org's pages and in invite emails.</span>
+			{#if nameError}<span class="field-error" id="name-error">{nameError}</span>{/if}
+		</label>
+		<label class="field">
+			Slug
+			<input
+				name="slug"
+				required
+				autocomplete="off"
+				spellcheck="false"
+				value={form?.slug ?? ''}
+				aria-invalid={slugError ? 'true' : undefined}
+				aria-describedby="slug-help{slugError ? ' slug-error' : ''}"
+			/>
+			<span class="help" id="slug-help">
+				2–63 lower-case letters, digits and dashes. Used in URLs (<code>/orgs/slug/manage</code>)
+				and can't be changed in the app later.
+			</span>
+			{#if slugError}<span class="field-error" id="slug-error">{slugError}</span>{/if}
+		</label>
+		<div class="actions">
+			<button type="submit" class="primary">Create org</button>
+		</div>
+	</form>
+</section>
+
+<section class="band" aria-labelledby="public-heading">
+	<h2 id="public-heading">Public data sources</h2>
 	{#if data.publicCorpora.engineError}
-		<p class="error" role="alert">{data.publicCorpora.engineError}</p>
-		<p class="muted">Public: {data.publicCorpora.publicIds.join(', ') || 'none'}</p>
+		<p class="notice" data-tone="error" role="alert">
+			The data source list can't be loaded, so public access can't be changed right now.
+			{data.publicCorpora.engineError}
+		</p>
+		<p class="readout">
+			<span>public <b>{data.publicCorpora.publicIds.join(', ') || 'none'}</b></span>
+		</p>
 	{:else if data.publicCorpora.dataSources.length === 0}
-		<p class="muted">The engine has no data sources.</p>
+		<p class="empty">The engine has no data sources.</p>
 	{:else}
 		<form method="POST" action="?/savePublic" class="stack" use:enhance={keep}>
 			<fieldset aria-describedby="public-help">
 				<legend>Data sources anyone can search</legend>
-				<small id="public-help" class="muted">
-					Every signed-in user can search these, without an org or a seat.
-				</small>
 				{#each data.publicCorpora.dataSources as ds (ds.id)}
-					<label>
+					<label class="check">
 						<input
 							type="checkbox"
 							name="data_source_id"
@@ -76,40 +141,28 @@
 						{ds.name}
 					</label>
 				{/each}
+				<span id="public-help" class="help">
+					Every signed-in user can search these, with or without an org.
+				</span>
 			</fieldset>
 			{#if form?.publicError}
-				<p class="error" role="alert">{form.publicError}</p>
+				<p class="notice" data-tone="error" role="alert">{form.publicError}</p>
 			{:else if form?.publicNotice}
-				<p role="status">{form.publicNotice}</p>
+				<p class="notice" role="status">{form.publicNotice}</p>
 			{/if}
-			<button type="submit" class="primary">Save public corpora</button>
+			<div class="actions">
+				<button type="submit" class="primary">Save public data sources</button>
+			</div>
 		</form>
 	{/if}
 </section>
 
-<section aria-labelledby="create-heading">
-	<h2 id="create-heading">Create org</h2>
-	<p class="muted">
-		A new org has no members and no data sources. Next you'll add its first org admin and grant it
-		data sources.
-	</p>
-	<form method="POST" action="?/createOrg" class="stack" use:enhance>
-		<label>
-			Name
-			<input name="name" required value={form?.name ?? ''} aria-describedby="name-help" />
-		</label>
-		<small id="name-help" class="muted">Shown on the org admin page and in invite emails.</small>
-		<label>
-			Slug
-			<input name="slug" required value={form?.slug ?? ''} aria-describedby="slug-help" />
-		</label>
-		<small id="slug-help" class="muted">
-			Lower-case letters, digits and dashes, 2–63 characters. Used in URLs (/orgs/<em>slug</em
-			>/manage) and can't be changed in the app later.
-		</small>
-		{#if form?.error}
-			<p class="error" role="alert">{form.error}</p>
-		{/if}
-		<button type="submit" class="primary">Create org</button>
-	</form>
-</section>
+<style>
+	.sources {
+		overflow-wrap: anywhere;
+	}
+	fieldset .help {
+		display: block;
+		margin-top: 0.5rem;
+	}
+</style>

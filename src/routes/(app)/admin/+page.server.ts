@@ -44,7 +44,7 @@ export const actions: Actions = {
 		try {
 			known = (await engine(fetch).listDataSources()).map((ds) => ds.id);
 		} catch (e) {
-			return fail(502, { publicError: `Could not reach the engine: ${engineErrorMessage(e)}` });
+			return fail(502, { publicError: `Public data sources not saved. ${engineErrorMessage(e)}` });
 		}
 		const current = await locals.supabase.from('public_data_sources').select('data_source_id');
 		if (current.error) return fail(400, { publicError: current.error.message });
@@ -67,7 +67,7 @@ export const actions: Actions = {
 				.in('data_source_id', remove);
 			if (error) return fail(400, { publicError: error.message });
 		}
-		return { publicNotice: 'Public corpora saved.' };
+		return { publicNotice: 'Public data sources saved.' };
 	},
 
 	createOrg: async ({ request, locals }) => {
@@ -79,12 +79,15 @@ export const actions: Actions = {
 			return fail(400, {
 				name,
 				slug: String(form.get('slug') ?? ''),
-				error: 'Enter a name and a slug (lower-case letters, digits and dashes, 2–63 chars).'
+				error: name
+					? 'Use 2–63 lower-case letters, digits and dashes, starting with a letter or digit.'
+					: 'Enter a name.'
 			});
 		}
 		const { error } = await locals.supabase.from('orgs').insert({ name, slug });
 		if (error) {
-			const message = error.code === '23505' ? `The slug "${slug}" is taken.` : error.message;
+			const message =
+				error.code === '23505' ? `Another org already uses the slug ${slug}.` : error.message;
 			return fail(400, { name, slug, error: message });
 		}
 		redirect(303, `/orgs/${slug}/manage`);

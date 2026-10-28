@@ -73,7 +73,9 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const email = parseEmail(form.get('email'));
 		const role = parseRole(form.get('role'));
-		if (!email || !role) return fail(400, { error: 'Enter a valid email and role.' });
+		if (!email || !role) {
+			return fail(400, { error: 'Enter an email address like name@acme.com, and pick a role.' });
+		}
 
 		const { data: result, error } = await locals.supabase.rpc('add_org_member', {
 			p_org_id: org.id,
@@ -86,12 +88,13 @@ export const actions: Actions = {
 		try {
 			await sendEmail(inviteEmail(email, org.name, `${url.origin}/login`), fetch);
 			return {
-				notice: `Invited ${email}. They join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
+				notice: `Invite sent to ${email}. They join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
 			};
 		} catch (e) {
 			const reason = e instanceof EmailError ? e.message : String(e);
 			return {
-				notice: `Invite for ${email} saved, but the email was not sent (${reason}). They join once they sign up at ${url.origin}/login and confirm that address.`
+				partial: true,
+				notice: `Invite for ${email} saved, but the email wasn't sent (${reason}). Send them ${url.origin}/login: they join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
 			};
 		}
 	},
@@ -101,7 +104,8 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const email = parseEmail(form.get('email'));
 		const role = parseRole(form.get('role'));
-		if (!email || !role) return fail(400, { error: 'Enter a valid email and role.' });
+		if (!email || !role)
+			return fail(400, { error: 'That member has no valid email address or role.' });
 
 		// Same idempotent RPC as adding: it updates the role of a member or a pending invite.
 		const { error } = await locals.supabase.rpc('add_org_member', {
@@ -122,14 +126,14 @@ export const actions: Actions = {
 			.eq('org_id', org.id)
 			.eq('user_id', userId);
 		if (error) return fail(400, { error: error.message });
-		if (!count) return fail(404, { error: 'No such member.' });
+		if (!count) return fail(404, { error: 'That person is no longer a member.' });
 		return { notice: 'Member removed.' };
 	},
 
 	revokeInvite: async ({ params, request, locals }) => {
 		const { org } = await requireOrgAdmin(params.slug);
 		const email = parseEmail((await request.formData()).get('email'));
-		if (!email) return fail(400, { error: 'Invalid email.' });
+		if (!email) return fail(400, { error: 'That invite has no valid email address.' });
 		const { error } = await locals.supabase
 			.from('org_invites')
 			.delete()
@@ -148,7 +152,7 @@ export const actions: Actions = {
 		try {
 			known = (await engine(fetch).listDataSources()).map((ds) => ds.id);
 		} catch (e) {
-			return fail(502, { error: `Could not reach the engine: ${engineErrorMessage(e)}` });
+			return fail(502, { error: `Access not saved. ${engineErrorMessage(e)}` });
 		}
 		const current = await locals.supabase
 			.from('org_data_sources')
@@ -191,24 +195,24 @@ export const actions: Actions = {
 		const { error } = await locals.supabase.from('org_domains').insert({ org_id: org.id, domain });
 		if (error) {
 			const message =
-				error.code === '23505' ? `${domain} is already claimed by an org.` : error.message;
+				error.code === '23505' ? `@${domain} already belongs to an org.` : error.message;
 			return fail(400, { error: message });
 		}
-		return { notice: `New sign-ups from @${domain} will join ${org.name}.` };
+		return { notice: `Added @${domain}. New sign-ups from it join ${org.name}.` };
 	},
 
 	removeDomain: async ({ params, request, locals }) => {
 		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
 		if (!isPlatformAdmin) return platformAdminOnly();
 		const domain = parseDomain((await request.formData()).get('domain'));
-		if (!domain) return fail(400, { error: 'Invalid domain.' });
+		if (!domain) return fail(400, { error: 'That domain is not valid.' });
 		const { error } = await locals.supabase
 			.from('org_domains')
 			.delete()
 			.eq('org_id', org.id)
 			.eq('domain', domain);
 		if (error) return fail(400, { error: error.message });
-		return { notice: `Removed @${domain}.` };
+		return { notice: `Removed @${domain}. New sign-ups from it no longer join ${org.name}.` };
 	},
 
 	saveSettings: async ({ params, request, locals }) => {
@@ -216,7 +220,7 @@ export const actions: Actions = {
 		if (!isPlatformAdmin) return platformAdminOnly();
 		const form = await request.formData();
 		const defaultRole = parseRole(form.get('default_role'));
-		if (!defaultRole) return fail(400, { error: 'Pick a default role.' });
+		if (!defaultRole) return fail(400, { error: 'Pick a role for domain sign-ups.' });
 		const { error } = await locals.supabase
 			.from('orgs')
 			.update({ log_queries: form.get('log_queries') === 'on', default_role: defaultRole })

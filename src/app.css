@@ -1,25 +1,40 @@
 /* Global styles. The theme below is the only place colours and fonts are defined (rules:
    docs/ui.md). Tailwind's default palette is cleared, so only these colours exist as classes
    (`bg-surface`, `text-muted`, `border-rule`, `font-mono`) or as `var(--color-*)` in CSS.
-   No preflight: element defaults below stay as they are until the design pass. */
+   No preflight: element defaults are set here, then the shared components.
+
+   Shared classes (docs/ui.md "Components"):
+     Layout     .page-head (h1 + .readout)  .band (section under a full-width rule)  .actions
+     Text       .muted  .readout (mono line; <b> = value)  .loc (mono locator)  .source (serif quote)
+                .empty (empty-state line)  .help (field help)  .field-error (inline field error)
+     Forms      form.stack  .field (label + control + .help + .field-error)  .check (checkbox row)
+     Buttons    <button> = secondary  .primary  .quiet  .danger  a.button (link styled as button)
+     Notices    .notice (role=status)  .notice[data-tone='error'] (role=alert; never in search)
+                .notice[data-tone='partial'] (done, with a caveat)
+     Tables     .table-wrap (horizontal scroll)  table.stacked (cards on phones; td[data-label])  .num
+     States     .flag[data-state=verified|unsupported|not_checked|not_found]
+     Waiting    .waiting > .progress (style:--value 0..1) + .readout seconds counter
+     Pages      .sheet (page-render frame; never inverted; dimmed in dark; .zoomed = full)
+     A11y       .sr-only (visually hidden, still read aloud) */
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
 @theme {
 	--color-*: initial;
-	--color-page: #f4f1e8;
-	--color-surface: #faf8f2; /* raised surface */
-	--color-ink: #1c1a16; /* text */
-	--color-muted: #6b6459; /* secondary text */
-	--color-rule: #e0dbcd; /* hairline dividers only: 1.2:1, never a control's edge */
-	--color-edge: #6b6459; /* input and control edges: 3:1 or more */
-	--color-accent: #1f4b31; /* links, primary action, focus */
-	--color-on-accent: #f4f1e8; /* text on accent */
-	--color-verified: #1f4b31;
-	--color-unsupported: #8b5510;
-	--color-highlight: #dce5d3; /* wash behind quoted passages */
+	--color-page: #f5f2ea; /* fog */
+	--color-surface: #fbf9f4; /* paper: raised surface */
+	--color-ink: #1d1b17; /* basalt: text */
+	--color-muted: #6a655a; /* bark: secondary text */
+	--color-rule: #e1dccf; /* hairline dividers only: 1.2:1, never a control's edge */
+	--color-edge: #6a655a; /* input and control edges: 3:1 or more */
+	--color-accent: #1e4a32; /* spruce: links, primary action, focus */
+	--color-on-accent: #f5f2ea; /* text on accent */
+	--color-verified: #1e4a32;
+	--color-unsupported: #9a5f12; /* resin */
+	--color-highlight: #dde6d5; /* moss: wash behind quoted passages */
 	--color-danger: #a2331f; /* destructive actions, system errors; never in search results */
-	--color-sheet: #fffdf8; /* page renders: same in both themes, never inverted */
+	--color-sheet: #fffefa; /* page renders: same in both themes, never inverted */
+	--color-sheet-rule: #d6d2c8; /* edge of a page render */
 
 	--font-*: initial;
 	--font-sans:
@@ -30,26 +45,32 @@
 
 :root {
 	color-scheme: light dark;
+	--sheet-dim: 1;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--color-page: #161512;
-		--color-surface: #1e1c19;
-		--color-ink: #ebe6d9;
-		--color-muted: #9d9687;
-		--color-rule: #302d27;
-		--color-edge: #9d9687;
-		--color-accent: #85b693;
-		--color-on-accent: #161512;
-		--color-verified: #85b693;
-		--color-unsupported: #d8a14f;
-		--color-highlight: #24352b;
+		--color-page: #151411;
+		--color-surface: #1d1b18;
+		--color-ink: #ece7db;
+		--color-muted: #9c9588;
+		--color-rule: #2f2c26;
+		--color-edge: #9c9588;
+		--color-accent: #86b794;
+		--color-on-accent: #151411;
+		--color-verified: #86b794;
+		--color-unsupported: #d9a250;
+		--color-highlight: #23342a;
 		--color-danger: #e4896e;
+		--sheet-dim: 0.9;
 	}
 }
 
-* {
+/* ---- Elements ---------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
 	box-sizing: border-box;
 }
 
@@ -57,114 +78,94 @@ body {
 	margin: 0;
 	background: var(--color-page);
 	color: var(--color-ink);
-	font-family: var(--font-sans);
-	line-height: 1.5;
+	font: 400 1rem/1.5 var(--font-sans);
+	-webkit-text-size-adjust: 100%;
 }
 
 main {
 	max-width: 72rem;
 	margin: 0 auto;
-	padding: 1.5rem 1rem;
+	padding: 2rem max(1rem, env(safe-area-inset-right)) 4rem max(1rem, env(safe-area-inset-left));
+}
+
+h1,
+h2,
+h3,
+h4 {
+	margin: 0 0 0.5rem;
+	font-family: var(--font-sans);
+	font-style: normal;
+	font-weight: 600;
+	color: var(--color-ink);
+	letter-spacing: -0.015em;
+	line-height: 1.2;
+	text-wrap: balance;
+}
+h1 {
+	font-size: 1.75rem;
+	letter-spacing: -0.025em;
+}
+h2 {
+	font-size: 1.25rem;
+}
+h3 {
+	font-size: 1rem;
+}
+h4 {
+	font-size: 0.875rem;
+}
+
+p,
+ul,
+ol,
+dl {
+	margin: 0 0 1rem;
+}
+p {
+	max-width: 68ch;
 }
 
 a {
 	color: var(--color-accent);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+a:hover {
+	text-decoration-thickness: 2px;
 }
 
-header.site {
-	display: flex;
-	align-items: center;
-	gap: 1rem;
-	padding: 0.75rem 1rem;
-	border-bottom: 1px solid var(--color-rule);
+small {
+	font-size: 0.875rem;
 }
 
-header.site nav {
-	display: flex;
-	gap: 1rem;
-	flex: 1;
+code,
+kbd,
+samp {
+	font-family: var(--font-mono);
+	font-size: 0.875em;
 }
-
-header.site form {
-	margin: 0;
-}
-
-form.stack {
-	display: grid;
-	gap: 0.75rem;
-	max-width: 32rem;
-}
-
-input,
-textarea,
-select,
-button {
-	font: inherit;
-	padding: 0.5rem 0.75rem;
-	border: 1px solid var(--color-edge);
-	border-radius: 4px;
-	background: var(--color-page);
-	color: var(--color-ink);
-}
-
-button {
-	cursor: pointer;
-}
-
-button.primary {
-	background: var(--color-accent);
-	border-color: var(--color-accent);
-	color: var(--color-on-accent);
-}
-
-.muted {
-	color: var(--color-muted);
-}
-
-.error {
-	color: var(--color-danger);
-}
-
-table {
-	border-collapse: collapse;
-	width: 100%;
-}
-
-th,
-td {
-	text-align: left;
-	padding: 0.5rem;
-	border-bottom: 1px solid var(--color-rule);
-	vertical-align: top;
-}
-
-ul.results {
-	list-style: none;
-	padding: 0;
-	display: grid;
-	gap: 1.5rem;
-}
-
-ul.results li {
-	display: grid;
-	grid-template-columns: minmax(10rem, 16rem) 1fr;
-	gap: 1rem;
+kbd {
+	padding: 0 0.3em;
 	border: 1px solid var(--color-rule);
-	border-radius: 6px;
-	padding: 1rem;
+	border-bottom-width: 2px;
+	border-radius: 3px;
 }
 
-ul.results img {
-	width: 100%;
-	height: auto;
-	background: var(--color-sheet);
-	border: 1px solid var(--color-rule);
+hr {
+	margin: 2rem 0;
+	border: 0;
+	border-top: 1px solid var(--color-rule);
 }
 
-@media (max-width: 40rem) {
-	ul.results li {
-		grid-template-columns: 1fr;
-	}
+mark {
+	background: var(--color-highlight);
+	color: inherit;
+	box-shadow: inset 0 -2px 0 var(--color-accent);
+	padding: 0 0.1em;
+}
+
+img {
+	max-width: 100%;
 }
 
 :focus-visible {
@@ -172,18 +173,402 @@ ul.results img {
 	outline-offset: 2px;
 }
 
-/* Answer states (docs/ui.md): shape + label + colour, so none relies on colour alone. */
+/* ---- Text roles -------------------------------------------------------------------------- */
+
+.muted {
+	color: var(--color-muted);
+}
+
+/* Mono line of readings: "5 pages · 6,214 searched · 0.6 s". <b> marks the value. */
+.readout {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 1.25rem;
+	margin: 0;
+	font: 400 0.8125rem/1.5 var(--font-mono);
+	color: var(--color-muted);
+	font-variant-numeric: tabular-nums;
+}
+.readout b {
+	color: var(--color-ink);
+	font-weight: 500;
+}
+
+/* Locator: VOL 3 · §12.6 · P.412. As a link it opens the PDF at that page. */
+.loc {
+	font: 500 0.8125rem/1.5 var(--font-mono);
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	font-variant-numeric: tabular-nums;
+}
+a.loc {
+	color: var(--color-accent);
+}
+
+/* The document's words. Never Boreal's own. Always next to a .loc. */
+.source {
+	font-family: var(--font-serif);
+	font-size: 1.0625rem;
+	line-height: 1.55;
+	quotes: none;
+}
+
+.empty {
+	margin: 0;
+	padding: 1.5rem 0;
+	color: var(--color-muted);
+	border-top: 1px solid var(--color-rule);
+	border-bottom: 1px solid var(--color-rule);
+}
+
+/* ---- Layout ------------------------------------------------------------------------------ */
+
+/* Page title with an optional mono readout line under it. */
+.page-head {
+	display: grid;
+	gap: 0.375rem;
+	margin-bottom: 2rem;
+}
+.page-head h1 {
+	margin: 0;
+}
+.page-head p {
+	margin: 0;
+}
+
+/* A low band of the page, under a full-width hairline. Use on <section>. */
+.band {
+	padding: 1.5rem 0 2rem;
+	border-top: 1px solid var(--color-rule);
+}
+.band > :last-child {
+	margin-bottom: 0;
+}
+.band > :is(table, .table-wrap):last-child tbody tr:last-child > * {
+	border-bottom: 0; /* the next band's rule closes it */
+}
+.band > h2:first-child {
+	margin-bottom: 1rem;
+}
+
+/* A row of buttons/links. */
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.75rem 1rem;
+}
+
+/* ---- Forms ------------------------------------------------------------------------------- */
+
+form {
+	margin: 0;
+}
+
+form.stack {
+	display: grid;
+	gap: 1.25rem;
+	max-width: 28rem;
+	margin-bottom: 1.5rem;
+}
+
+/* <label class="field">Label <input> <span class="help">…</span></label>, or a <div> with a
+   <label for>. Errors: <span class="field-error" id> + aria-describedby + aria-invalid. */
+.field,
+form.stack > label {
+	display: grid;
+	gap: 0.375rem;
+	font-weight: 500;
+}
+.help {
+	font-size: 0.875rem;
+	font-weight: 400;
+	color: var(--color-muted);
+}
+.field-error {
+	margin: 0;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--color-danger);
+}
+
+input,
+textarea,
+select,
+button,
+.button {
+	font: inherit;
+	font-size: 1rem;
+	line-height: 1.25;
+	min-height: 2.75rem;
+	padding: 0.625rem 0.75rem;
+	border: 1px solid var(--color-edge);
+	border-radius: 3px;
+	background: var(--color-page);
+	color: var(--color-ink);
+}
+input,
+textarea,
+select {
+	width: 100%;
+	max-width: 100%;
+	font-weight: 400;
+}
+textarea {
+	min-height: 6rem;
+	resize: vertical;
+}
+input::placeholder,
+textarea::placeholder {
+	color: var(--color-muted);
+	opacity: 1;
+}
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+	border-color: var(--color-danger);
+}
+input:disabled,
+select:disabled,
+textarea:disabled {
+	opacity: 0.6;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+	width: 1.125rem;
+	height: 1.125rem;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	accent-color: var(--color-accent);
+	flex: none;
+}
+/* <label class="check"><input type="checkbox"> Text</label>: the whole row is the hit area. */
+.check {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	min-height: 2.25rem;
+	font-weight: 400;
+	cursor: pointer;
+}
+
+fieldset {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+legend {
+	padding: 0;
+	margin-bottom: 0.5rem;
+	font: 500 0.75rem/1.4 var(--font-mono);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+}
+
+details > summary {
+	cursor: pointer;
+	min-height: 2.25rem;
+	display: list-item;
+	padding: 0.375rem 0;
+	font-weight: 500;
+}
+
+/* ---- Buttons ----------------------------------------------------------------------------- */
+/* <button> alone is secondary. One .primary per form. .quiet for low-weight actions,
+   .danger only for destructive ones. a.button for a link that must look like a button. */
+
+button,
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	font-weight: 500;
+	text-decoration: none;
+	cursor: pointer;
+	white-space: nowrap;
+	background: var(--color-surface);
+}
+button:hover,
+.button:hover {
+	border-color: var(--color-ink);
+}
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+button.primary,
+.button.primary {
+	background: var(--color-accent);
+	border-color: var(--color-accent);
+	color: var(--color-on-accent);
+}
+button.primary:hover:not(:disabled) {
+	border-color: var(--color-ink);
+}
+
+button.quiet,
+.button.quiet {
+	min-height: 2.25rem;
+	padding-inline: 0.25rem;
+	border-color: transparent;
+	background: transparent;
+	color: var(--color-accent);
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+button.quiet:hover {
+	border-color: transparent;
+	text-decoration-thickness: 2px;
+}
+
+button.danger,
+.button.danger {
+	border-color: var(--color-danger);
+	color: var(--color-danger);
+}
+button.danger:hover:not(:disabled) {
+	background: var(--color-danger);
+	color: var(--color-page);
+}
+
+/* ---- Notices ----------------------------------------------------------------------------- */
+/* One pattern. <p class="notice" role="status"> for outcomes; data-tone="error" + role="alert"
+   for system errors outside search; data-tone="partial" when it worked with a caveat.
+   Search never uses the error tone: engine problems there are plain notices. */
+
+.notice {
+	max-width: 68ch;
+	margin: 0 0 1.5rem;
+	padding: 0.625rem 0 0.625rem 0.875rem;
+	border-left: 3px solid var(--color-ink);
+	background: var(--color-surface);
+}
+.notice > :last-child {
+	margin-bottom: 0;
+}
+.notice[data-tone='error'] {
+	border-left-color: var(--color-danger);
+}
+.notice[data-tone='error'] > strong:first-child {
+	color: var(--color-danger);
+}
+.notice[data-tone='partial'] {
+	border-left-style: dashed;
+	border-left-color: var(--color-edge);
+}
+
+/* ---- Tables ------------------------------------------------------------------------------ */
+/* Dense hairline rows. Wrap in <div class="table-wrap"> so wide tables scroll sideways on
+   phones; or add class="stacked" and data-label on each <td> to stack rows instead. */
+
+.table-wrap {
+	overflow-x: auto;
+	margin-bottom: 1.5rem;
+	-webkit-overflow-scrolling: touch;
+}
+.table-wrap > table {
+	margin-bottom: 0;
+}
+
+table {
+	width: 100%;
+	margin-bottom: 1.5rem;
+	border-collapse: collapse;
+	font-size: 0.9375rem;
+}
+th,
+td {
+	padding: 0.5rem 1rem 0.5rem 0;
+	text-align: left;
+	vertical-align: top;
+	border-bottom: 1px solid var(--color-rule);
+}
+th:last-child,
+td:last-child {
+	padding-right: 0;
+}
+thead th {
+	padding-top: 0;
+	font: 500 0.75rem/1.4 var(--font-mono);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	border-bottom-color: var(--color-ink);
+	white-space: nowrap;
+}
+.num,
+td.num,
+th.num {
+	text-align: right;
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+caption {
+	text-align: left;
+	padding-bottom: 0.5rem;
+	color: var(--color-muted);
+}
+
+@media (max-width: 40rem) {
+	table.stacked thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+	table.stacked tr {
+		display: grid;
+		gap: 0.25rem;
+		padding: 0.75rem 0;
+		border-bottom: 1px solid var(--color-rule);
+	}
+	table.stacked td {
+		display: flex;
+		gap: 1rem;
+		padding: 0;
+		border: 0;
+		text-align: left;
+	}
+	table.stacked td[data-label]::before {
+		content: attr(data-label);
+		flex: 0 0 7rem;
+		font: 500 0.75rem/1.6 var(--font-mono);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--color-muted);
+	}
+}
+
+/* ---- Answer states ----------------------------------------------------------------------- */
+/* Shape + label + colour, so none relies on colour alone (docs/ui.md). Nothing is red.
+   verified: filled square · unsupported: half-filled · not_checked: empty · not_found: dash */
+
 .flag {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.4em;
+	gap: 0.5em;
 	font: 500 0.8125rem/1.2 var(--font-mono);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
 	color: var(--color-muted);
+	white-space: nowrap;
 }
 .flag::before {
 	content: '';
-	width: 0.6em;
-	height: 0.6em;
+	flex: none;
+	width: 0.65em;
+	height: 0.65em;
 	border: 1px solid currentColor;
 }
 .flag[data-state='verified'] {
@@ -197,4 +582,70 @@ ul.results img {
 }
 .flag[data-state='unsupported']::before {
 	background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+}
+.flag[data-state='not_found']::before {
+	height: 0;
+	border-width: 1px 0 0;
+}
+
+/* ---- Waiting ----------------------------------------------------------------------------- */
+/* No spinners or skeletons. After ~300 ms show:
+   <div class="waiting" role="status"><span class="progress" style:--value={0.4}></span>
+   <span class="readout">Searching · <b>2.1</b> s</span></div>. Omit --value for a plain bar. */
+
+.waiting {
+	display: grid;
+	gap: 0.5rem;
+	max-width: 34rem;
+	margin-bottom: 1.5rem;
+}
+.progress {
+	display: block;
+	height: 3px;
+	background: var(--color-rule);
+	overflow: hidden;
+}
+.progress::before {
+	content: '';
+	display: block;
+	height: 100%;
+	width: calc(var(--value, 0) * 100%);
+	background: var(--color-ink);
+	transition: width 200ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+	.progress::before {
+		transition: none;
+	}
+}
+
+/* ---- Page renders ------------------------------------------------------------------------ */
+/* <a class="sheet" href=pdf#page=n><img …></a> or <figure class="sheet">. Shown as filed:
+   never cropped, inverted or recoloured. Dimmed slightly in dark; .zoomed is full brightness. */
+
+.sheet {
+	display: block;
+	margin: 0;
+	background: var(--color-sheet);
+	box-shadow: 0 0 0 1px var(--color-sheet-rule);
+	filter: brightness(var(--sheet-dim));
+}
+.sheet img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+.sheet.zoomed,
+.sheet:focus-visible {
+	filter: none;
+}
+
+/* Visually hidden, still read by screen readers. */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
