@@ -24,3 +24,7 @@ vite.config.ts.timestamp-*
 # Supabase
 supabase/.temp
 supabase/.branches
+
+# Private, local-only context (brand strategy etc.); never commit
+CLAUDE.local.md
+docs/private/
