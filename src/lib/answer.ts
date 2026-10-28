@@ -1,6 +1,12 @@
 // Pure helpers for rendering an engine answer. `answer.text` is model output: callers render
 // the segments as text, never as HTML.
-import type { Answer, CitationStatus, Highlight, SearchResult } from '#lib/server/engine.types.js';
+import type {
+	Answer,
+	Citation,
+	CitationStatus,
+	Highlight,
+	SearchResult
+} from '#lib/server/engine.types.js';
 
 /** `[x0, y0, x1, y1]` as fractions of the page from its top-left corner, each in 0..1. */
 export type Box = readonly [number, number, number, number];
@@ -52,16 +58,13 @@ export function cleanBoxes(boxes: readonly (readonly number[])[]): Box[] {
 
 type Located = Pick<SearchResult, 'document_id' | 'page_number'>;
 
-const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
-
-/** A checked claim and an answer sentence match: equal, or one contains the other. */
-function sameSentence(a: string, b: string) {
-	const x = norm(a);
-	const y = norm(b);
-	return x !== '' && y !== '' && (x === y || x.includes(y) || y.includes(x));
+/** A run of the summary: one cited sentence (its `sentence.status`), or text outside any (null). */
+export interface AnswerSentence {
+	status: CitationStatus | null;
+	segments: AnswerSegment[];
 }
 
-function toMark(c: Answer['citations'][number], results: readonly Located[]): Mark | null {
+function toMark(c: Citation, results: readonly Located[]): Mark | null {
 	const r = results[c.ref - 1];
 	if (!Number.isInteger(c.ref) || !r) return null;
 	// `[n]` is results[n-1]. Boxes for any other page don't fit the page we show: open it unmarked.
@@ -73,33 +76,43 @@ function toMark(c: Answer['citations'][number], results: readonly Located[]): Ma
 		boxes,
 		quote: boxes.length > 0 ? c.highlight.quote : null,
 		text: c.text,
-		// The engine's check of this citation (older engines don't send it: not checked).
-		status: c.status ?? 'not_checked'
+		status: c.status
 	};
 }
 
+const validSpan = (start: number, end: number, length: number) =>
+	Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end <= length && start < end;
+
+interface Marker {
+	start: number;
+	end: number;
+	marks: Mark[];
+}
+
 /**
- * Split answer text on its citations' offsets (the engine's, not a re-parse of `[n]`, so both
- * agree on which marker is which). Citations sharing offsets are one grouped marker. Markers
- * with bad offsets, or whose refs are all outside the results, stay as plain text.
+ * The markers in text order, from the citations' offsets (the engine's, not a re-parse of
+ * `[n]`, so both agree on which marker is which). Citations sharing offsets are one grouped
+ * marker; a marker overlapping the previous one, or with bad offsets, is dropped.
  */
-export function answerSegments(
-	answer: Pick<Answer, 'text' | 'citations'>,
-	results: readonly Located[]
-): AnswerSegment[] {
-	const { text } = answer;
-	const groups = new Map<string, { start: number; end: number; marks: Mark[] }>();
+function markers(answer: Pick<Answer, 'text' | 'citations'>, results: readonly Located[]) {
+	const groups = new Map<string, Marker>();
 	for (const c of answer.citations) {
-		const { start, end } = c;
-		if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > text.length)
-			continue;
-		if (start >= end) continue;
-		const key = `${start}:${end}`;
-		const group = groups.get(key) ?? { start, end, marks: [] };
+		if (!validSpan(c.start, c.end, answer.text.length)) continue;
+		const key = `${c.start}:${c.end}`;
+		const group = groups.get(key) ?? { start: c.start, end: c.end, marks: [] };
 		groups.set(key, group);
 		const mark = toMark(c, results);
 		if (mark && !group.marks.some((m) => m.ref === mark.ref)) group.marks.push(mark);
 	}
+	const out: Marker[] = [];
+	for (const g of [...groups.values()].sort((a, b) => a.start - b.start)) {
+		if (g.start >= (out.at(-1)?.end ?? 0)) out.push(g);
+	}
+	return out;
+}
+
+/** Segments of `text[from, to)`; markers must lie inside it. Refless markers stay text. */
+function segmentsOf(text: string, inside: readonly Marker[], from: number, to: number) {
 	const segments: AnswerSegment[] = [];
 	const push = (t: string) => {
 		if (!t) return;
@@ -107,16 +120,59 @@ export function answerSegments(
 		if (last?.kind === 'text') last.text += t;
 		else segments.push({ kind: 'text', text: t });
 	};
-	let at = 0;
-	for (const g of [...groups.values()].sort((a, b) => a.start - b.start)) {
-		if (g.start < at) continue; // overlaps the previous marker
+	let at = from;
+	for (const g of inside) {
 		push(text.slice(at, g.start));
 		if (g.marks.length > 0) segments.push({ kind: 'cite', marks: g.marks });
 		else push(text.slice(g.start, g.end));
 		at = g.end;
 	}
-	push(text.slice(at));
+	push(text.slice(at, to));
 	return segments;
+}
+
+/**
+ * Split answer text into text and markers. Markers whose refs are all outside the results stay
+ * as plain text.
+ */
+export function answerSegments(
+	answer: Pick<Answer, 'text' | 'citations'>,
+	results: readonly Located[]
+): AnswerSegment[] {
+	return segmentsOf(answer.text, markers(answer, results), 0, answer.text.length);
+}
+
+/**
+ * The summary as runs: each cited sentence (from `citation.sentence`, with its status) and the
+ * text between them (status null), each split into segments. A marker that starts inside a
+ * sentence belongs to it even if it runs past the sentence's end.
+ */
+export function answerSentences(
+	answer: Pick<Answer, 'text' | 'citations'>,
+	results: readonly Located[]
+): AnswerSentence[] {
+	const { text } = answer;
+	const all = markers(answer, results);
+	const spans = new Map<string, { start: number; end: number; status: CitationStatus }>();
+	for (const { sentence: s } of answer.citations) {
+		if (validSpan(s.start, s.end, text.length)) spans.set(`${s.start}:${s.end}`, { ...s });
+	}
+	const out: AnswerSentence[] = [];
+	const run = (from: number, to: number, status: CitationStatus | null) => {
+		if (from >= to) return;
+		const inside = all.filter((m) => m.start >= from && m.start < to);
+		const end = Math.max(to, inside.at(-1)?.end ?? to);
+		out.push({ status, segments: segmentsOf(text, inside, from, end) });
+		return end;
+	};
+	let at = 0;
+	for (const s of [...spans.values()].sort((a, b) => a.start - b.start)) {
+		if (s.start < at) continue; // overlaps the previous sentence
+		at = run(at, s.start, null) ?? at;
+		at = run(Math.max(at, s.start), s.end, s.status) ?? at;
+	}
+	run(at, text.length, null);
+	return out;
 }
 
 /** Every mark in the answer, in text order. */
@@ -141,50 +197,40 @@ export function pageOutlines(marks: readonly Mark[], ref: number): Outline[] {
 }
 
 /**
- * The mark backing a checked claim: same ref, and its sentence matches the claim (equal, or
- * one contains the other). Otherwise null, even if the ref has other marks: never guess.
- */
-export function claimMark(
-	claim: { text: string; ref: number | null },
-	marks: readonly Mark[]
-): Mark | null {
-	if (claim.ref === null) return null;
-	return marks.find((m) => m.ref === claim.ref && sameSentence(m.text, claim.text)) ?? null;
-}
-
-/**
- * How far an answer was checked against its pages (docs/ui.md, "Answer states").
- * `not_found`: the engine abstained. `not_checked`: the verifier didn't run, its reply was
- * unparseable, or it found no claims; never treated as verified.
+ * How far a summary was checked against its pages (docs/ui.md, "Answer states"), counted in
+ * sentences that carry a citation. `not_found`: the engine abstained. `not_checked`: the check
+ * didn't run, or there was nothing to check; never treated as verified.
  */
 export type AnswerCheck =
-	{ state: 'not_found' } | { state: 'not_checked' } | { state: 'checked'; claims: CheckedClaim[] };
+	| { state: 'not_found' }
+	| { state: 'not_checked' }
+	| {
+			state: 'checked';
+			/** Sentences whose cited pages support them. */
+			verified: number;
+			/** Sentences none of whose cited pages support them. */
+			unsupported: number;
+			/** Cited sentences. */
+			total: number;
+	  };
 
-export interface CheckedClaim {
-	text: string;
-	state: 'verified' | 'unsupported';
-	/** Cited result (1-based), if the claim carried one. */
-	ref: number | null;
-}
-
-export function answerCheck(answer: Pick<Answer, 'abstained' | 'verification'>): AnswerCheck {
+export function answerCheck(
+	answer: Pick<Answer, 'abstained' | 'verification' | 'readout' | 'citations'>
+): AnswerCheck {
 	if (answer.abstained) return { state: 'not_found' };
-	const claims = answer.verification?.claims ?? [];
-	if (claims.length === 0) return { state: 'not_checked' };
-	return {
-		state: 'checked',
-		claims: claims.map((c) => ({
-			text: c.claim,
-			state: c.supported ? 'verified' : 'unsupported',
-			ref: c.ref
-		}))
-	};
+	const { sentences, sentences_verified } = answer.readout;
+	if (answer.verification === null || sentences === 0) return { state: 'not_checked' };
+	const unsupported = new Set(
+		answer.citations
+			.filter((c) => c.sentence.status === 'unsupported')
+			.map((c) => `${c.sentence.start}:${c.sentence.end}`)
+	).size;
+	return { state: 'checked', verified: sentences_verified, unsupported, total: sentences };
 }
 
-/** The one-line status shown with an answer. */
+/** The one-line status shown with a summary. */
 export function answerCheckLabel(check: AnswerCheck): string {
 	if (check.state === 'not_found') return 'Not found in the pages searched';
 	if (check.state === 'not_checked') return 'Not checked';
-	const verified = check.claims.filter((c) => c.state === 'verified').length;
-	return `${verified} of ${check.claims.length} claims verified`;
+	return `${check.verified} of ${check.total} ${check.total === 1 ? 'sentence' : 'sentences'} verified`;
 }

@@ -8,6 +8,8 @@ export type SearchStatus =
 /** `add_org_member` result: the email had an account (member row) or not (pending invite). */
 export type AddMemberResult = 'added' | 'invited';
 export type AccessRequestStatus = 'open' | 'done';
+export type TrailRelation = 'owner' | 'shared' | 'member';
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface Database {
 	public: {
@@ -40,6 +42,8 @@ export interface Database {
 					slug: string;
 					name: string;
 					log_queries: boolean;
+					/** Off: no trails are stored for this org (separate from log_queries). */
+					conversation_history: boolean;
 					default_role: OrgRole;
 					created_at: string;
 				};
@@ -48,10 +52,17 @@ export interface Database {
 					slug: string;
 					name: string;
 					log_queries?: boolean;
+					conversation_history?: boolean;
 					default_role?: OrgRole;
 					created_at?: string;
 				};
-				Update: { slug?: string; name?: string; log_queries?: boolean; default_role?: OrgRole };
+				Update: {
+					slug?: string;
+					name?: string;
+					log_queries?: boolean;
+					conversation_history?: boolean;
+					default_role?: OrgRole;
+				};
 				Relationships: [];
 			};
 			org_members: {
@@ -215,6 +226,89 @@ export interface Database {
 				Update: Record<string, never>;
 				Relationships: [];
 			};
+			trails: {
+				Row: {
+					id: string;
+					/** null: the Public context. */
+					org_id: string | null;
+					user_id: string;
+					title: string;
+					created_at: string;
+					updated_at: string;
+				};
+				/** `user_id` defaults to the caller. */
+				Insert: {
+					id?: string;
+					org_id: string | null;
+					user_id?: string;
+					title: string;
+				};
+				Update: { title?: string };
+				Relationships: [
+					{
+						foreignKeyName: 'trails_org_id_fkey';
+						columns: ['org_id'];
+						isOneToOne: false;
+						referencedRelation: 'orgs';
+						referencedColumns: ['id'];
+					}
+				];
+			};
+			trail_shares: {
+				Row: { trail_id: string; user_id: string; created_at: string };
+				Insert: { trail_id: string; user_id: string };
+				Update: Record<string, never>;
+				Relationships: [
+					{
+						foreignKeyName: 'trail_shares_trail_id_fkey';
+						columns: ['trail_id'];
+						isOneToOne: false;
+						referencedRelation: 'trails';
+						referencedColumns: ['id'];
+					}
+				];
+			};
+			trail_steps: {
+				Row: {
+					id: string;
+					trail_id: string;
+					n: number;
+					query: string;
+					resolved_query: string;
+					rewrite: boolean;
+					scope: Json;
+					builds_on: number | null;
+					results: Json;
+					answer: Json | null;
+					readout: Json;
+					created_at: string;
+				};
+				/** `n` and `created_at` are set by a trigger (pass any `n`, e.g. 0). */
+				Insert: {
+					id?: string;
+					trail_id: string;
+					n: number;
+					query: string;
+					resolved_query: string;
+					rewrite?: boolean;
+					scope: Json;
+					builds_on?: number | null;
+					results: Json;
+					answer?: Json | null;
+					readout: Json;
+				};
+				/** Completing a step: the summary once, and the final readout. */
+				Update: { answer?: Json | null; readout?: Json };
+				Relationships: [
+					{
+						foreignKeyName: 'trail_steps_trail_id_fkey';
+						columns: ['trail_id'];
+						isOneToOne: false;
+						referencedRelation: 'trails';
+						referencedColumns: ['id'];
+					}
+				];
+			};
 		};
 		Views: {
 			org_search_daily: {
@@ -237,6 +331,20 @@ export interface Database {
 			is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
 			is_org_member: { Args: { p_org_id: string }; Returns: boolean };
 			is_org_admin: { Args: { p_org_id: string }; Returns: boolean };
+			owns_trail: { Args: { p_trail_id: string }; Returns: boolean };
+			can_read_trail: { Args: { p_trail_id: string }; Returns: boolean };
+			can_write_trail: { Args: { p_trail_id: string }; Returns: boolean };
+			keeps_trails: { Args: { p_org_id: string | null }; Returns: boolean };
+			/** Owner, shares, and (to the owner only) org members it could be shared with. */
+			trail_people: {
+				Args: { p_trail_id: string };
+				Returns: {
+					user_id: string;
+					email: string;
+					display_name: string | null;
+					relation: TrailRelation;
+				}[];
+			};
 			add_org_member: {
 				Args: { p_org_id: string; p_email: string; p_role: OrgRole };
 				Returns: AddMemberResult;

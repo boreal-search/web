@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { enhance } from '$app/forms';
+	// The trail screen (infra/docs/handovers/2026-10-28-search-trail.md, "The trail screen"): each
+	// search is a numbered step with its own scope, readout and checked summary; the selected
+	// step's pages fill the results view. Steps stream from POST /search/stream and are built
+	// with the same reducer the server stores them with (`applyEvent`).
+	import { onMount, tick } from 'svelte';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { tick } from 'svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import {
-		answerCheck,
-		answerCheckLabel,
 		answerMarks,
 		answerSegments,
-		claimMark,
 		markOutlines,
 		pageOutlines,
 		resultAnchorId,
@@ -17,59 +17,294 @@
 		type Outline
 	} from '#lib/answer.js';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
+	import StepSummary from '#lib/components/StepSummary.svelte';
+	import TrailHeader from '#lib/components/TrailHeader.svelte';
+	import WaitingBar from '#lib/components/WaitingBar.svelte';
+	import type { Failure } from '#lib/failure.js';
 	import { count, plural } from '#lib/format.js';
-	import { checkFlag, isTypingTarget, pagesSearched, seconds, step } from '#lib/search-view.js';
+	import { ndjson } from '#lib/ndjson.js';
+	import { isTypingTarget, locator, step as move } from '#lib/search-view.js';
+	import {
+		indexedDay,
+		startClock,
+		stepReadout,
+		summaryProblem,
+		tickClock,
+		type WaitClock
+	} from '#lib/step-view.js';
+	import {
+		applyEvent,
+		isNarrowed,
+		newStep,
+		refine,
+		scopeLabel,
+		stepDocuments,
+		stepNumber,
+		widen,
+		type StepRequest,
+		type StepResult,
+		type StreamEvent,
+		type TrailStep
+	} from '#lib/trail.js';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 
 	let all = $derived(data.groups.flatMap((g) => g.dataSources));
+	let allIds = $derived(all.map((ds) => ds.id));
 	let groups = $derived(data.groups.filter((g) => g.dataSources.length > 0));
 	let noOrg = $derived(data.access.memberships.length === 0);
 	let sourceNames = $derived(new Map(all.map((ds) => [ds.id, ds.name])));
-	// Keep the user's last selection across submits; default to everything they can see.
-	let selected = $derived(new Set(form?.requested ?? all.map((ds) => ds.id)));
-	// Bound, so re-renders (the button's disabled state) never overwrite what the user typed or ticked.
-	let query = $derived(form?.query ?? '');
-	let draftOn = $derived(form?.answer ?? true);
+	let contextName = $derived(
+		data.access.context.kind === 'org' ? data.access.context.org.name : 'Public'
+	);
+	const orgName = (id: string | null) =>
+		id === null
+			? 'Public'
+			: (data.access.memberships.find((m) => m.id === id)?.name ?? 'another org');
 
-	let outcome = $derived(form && 'outcome' in form ? form.outcome : null);
-	let results = $derived(outcome?.response.results ?? []);
-	let answerNotice = $derived(form && 'answerNotice' in form ? form.answerNotice : null);
-	let answer = $derived(
-		outcome && (outcome.answer.kind === 'ok' || outcome.answer.kind === 'abstained')
-			? outcome.answer.answer
+	// ---- The new-search form: picker and options, kept across searches. ----
+	/** Unticked data sources (default: everything the user can search). */
+	const unpicked = new SvelteSet<string>();
+	let picked = $derived(allIds.filter((id) => !unpicked.has(id)));
+	const initialQuery = () => data.query;
+	let query = $state(initialQuery());
+	let summaryOn = $state(true);
+	let topK = $state(10);
+	let rerank = $state(true);
+	let refineQuery = $state('');
+	let exact = $state(false);
+
+	// ---- The trail: stored steps from `?trail=`, or the ones searched on this page. ----
+	const fromData = () => ({
+		steps: data.trail?.steps ?? [],
+		id: data.trail?.id ?? null
+	});
+	let steps = $state.raw<TrailStep[]>(fromData().steps);
+	let trailId = $state<string | null>(fromData().id);
+	let selectedN = $state(fromData().steps.at(-1)?.n ?? 0);
+	let selected = $derived(steps.find((s) => s.n === selectedN) ?? steps.at(-1) ?? null);
+
+	// Another trail (or none) opened by navigation: show it. Shallow URL updates don't count, and
+	// reloading the trail this page just stored keeps the live steps (they carry page URLs).
+	afterNavigate((nav) => {
+		if (nav.type === 'enter' || nav.shallow) return;
+		const next = fromData();
+		if (next.id === trailId || (next.id === null && trailId === null)) return;
+		stop();
+		steps = next.steps;
+		trailId = next.id;
+		selectedN = next.steps.at(-1)?.n ?? 0;
+	});
+
+	/** The stored trail as loaded, when it's the one shown: title, owner, people. */
+	let stored = $derived(data.trail && data.trail.id === trailId ? data.trail : null);
+	let canRefine = $derived(stored ? stored.canRefine : true);
+	let title = $derived(stored?.title ?? steps[0]?.query ?? '');
+	let contextNote = $derived(
+		stored?.isOwner && !stored.canRefine
+			? `This trail was searched in ${orgName(stored.org_id)}. Switch back to it to refine, or start a new search.`
 			: null
 	);
-	let segments = $derived(answer ? answerSegments(answer, results) : []);
-	let marks = $derived(answerMarks(segments));
-	let check = $derived(answer ? answerCheck(answer) : null);
-	let claims = $derived(check?.state === 'checked' ? check.claims : []);
-	let summaryPages = $derived(new Set(answer?.sources.map((s) => s.ref) ?? []).size);
-
-	let pdfCount = $derived(new Set(results.map((r) => r.document_id)).size);
-	let searchedPages = $derived(
-		pagesSearched(
-			(form?.requested ?? []).map((id) => all.find((ds) => ds.id === id)?.pages ?? null)
-		)
+	let actionNotice = $derived(
+		form && 'error' in form ? form.error : form && 'notice' in form ? form.notice : null
 	);
 
-	type Hit = (typeof results)[number];
+	// ---- Streaming one step. ----
+	let live = $state<{ key: string; clock: WaitClock } | null>(null);
+	let now = $state(0);
+	let ticker: ReturnType<typeof setInterval> | undefined;
+	let controller: AbortController | null = null;
+	/** A search that produced no step (refused, or failed before results), by the form it came from. */
+	let problem = $state<{
+		where: 'new' | 'refine';
+		text: string | null;
+		failure: Failure | null;
+	} | null>(null);
+
+	function stop() {
+		controller?.abort();
+		controller = null;
+		live = null;
+		clearInterval(ticker);
+	}
+	onMount(() => stop);
+
+	const searchHref = () => resolve('/(app)/search');
+	const trailHref = (id: string) => `${searchHref()}?trail=${id}`;
+
+	async function run(req: StepRequest, where: 'new' | 'refine') {
+		stop();
+		const ac = new AbortController();
+		controller = ac;
+		problem = null;
+		if (req.from === null) {
+			steps = [];
+			trailId = null;
+			if (new URL(location.href).searchParams.has('trail'))
+				void goto(searchHref(), { shallow: true, replace: true });
+		}
+		const n = Math.max(0, ...steps.map((s) => s.n)) + 1;
+		const fresh = newStep(
+			req,
+			n,
+			Object.fromEntries(all.map((ds) => [ds.id, ds.name])),
+			Object.fromEntries(all.map((ds) => [ds.id, ds.indexed_at]))
+		);
+		const key = fresh.created_at;
+		const current = () => steps.find((s) => s.created_at === key);
+		const update = (f: (s: TrailStep) => TrailStep) =>
+			(steps = steps.map((s) => (s.created_at === key ? f(s) : s)));
+		const drop = () => (steps = steps.filter((s) => s.created_at !== key));
+		steps = [...steps, fresh];
+		selectedN = n;
+		now = performance.now();
+		live = { key, clock: startClock(now, req.answer) };
+		ticker = setInterval(() => (now = performance.now()), 100);
+		void tick().then(() =>
+			document.querySelector(`[data-step="${key}"]`)?.scrollIntoView({ block: 'nearest' })
+		);
+		let newTrail: string | null = null;
+
+		try {
+			const res = await fetch(resolve('/(app)/search/stream'), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+				signal: ac.signal
+			});
+			if (!res.ok || !res.body) {
+				const body = (await res.json().catch(() => null)) as {
+					error?: string;
+					failure?: Failure;
+				} | null;
+				drop();
+				problem = {
+					where,
+					failure: body?.failure ?? null,
+					text: body?.failure ? null : (body?.error ?? `The search failed (${res.status}).`)
+				};
+				return;
+			}
+			for await (const event of ndjson<StreamEvent>(res.body)) {
+				if (live?.key === key)
+					live = { key, clock: tickClock(live.clock, event, performance.now()) };
+				if (event.type === 'stored') {
+					if (selectedN === current()?.n) selectedN = event.n;
+					if (trailId === null) {
+						trailId = newTrail = event.trail_id;
+						// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, plus ?trail=
+						void goto(trailHref(event.trail_id), {
+							shallow: true,
+							replace: true
+						});
+					}
+				}
+				update((s) => applyEvent(s, event, req.from));
+			}
+		} catch {
+			const got = current();
+			if (got && got.readout.search !== null && !got.readout.finished) {
+				const detail = ac.signal.aborted
+					? 'The search was stopped.'
+					: 'The connection to Boreal was lost.';
+				update((s) => applyEvent(s, { type: 'error', status: null, detail }, req.from));
+			}
+		} finally {
+			if (controller === ac) stop();
+			// No results: nothing to keep in the trail; say why where it was asked.
+			const got = current();
+			if (got && got.readout.search === null) {
+				drop();
+				if (!ac.signal.aborted)
+					problem = {
+						where,
+						failure: null,
+						text: summaryProblem(got) ?? 'Results not available. Try again.'
+					};
+			}
+		}
+		// Load the trail just stored (owner, people to share with), keeping the steps shown.
+		if (newTrail && trailId === newTrail)
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, plus ?trail=
+			await goto(trailHref(newTrail), { replace: true, reset: false });
+	}
+
+	const settings = () => ({
+		answer: summaryOn,
+		top_k: Math.min(50, Math.max(1, Math.round(topK || 10))),
+		rerank,
+		trail_id: trailId
+	});
+
+	function newSearch(e: SubmitEvent) {
+		e.preventDefault();
+		const q = query.trim();
+		if (!q || picked.length === 0) return;
+		void run(
+			{
+				query: q,
+				data_source_ids: picked,
+				document_ids: null,
+				document_titles: {},
+				rewrite: true,
+				doc_filter: true,
+				from: null,
+				context: [],
+				...settings(),
+				trail_id: null
+			},
+			'new'
+		);
+	}
+
+	function refineSearch(e: SubmitEvent) {
+		e.preventDefault();
+		const q = refineQuery.trim();
+		if (!q || !selected) return;
+		void run(
+			{ ...refine(steps, selected.n), query: q, rewrite: !exact, doc_filter: true, ...settings() },
+			'refine'
+		);
+		refineQuery = '';
+	}
+
+	const widenStep = (s: TrailStep) => void run({ ...widen(s), ...settings() }, 'refine');
+
+	/** Documents across a step's data sources, for "Search all N documents"; null if unknown. */
+	function documentsIn(s: TrailStep): number | null {
+		let total = 0;
+		for (const id of s.scope.data_source_ids) {
+			const n = all.find((ds) => ds.id === id)?.documents;
+			if (n === null || n === undefined) return null;
+			total += n;
+		}
+		return total;
+	}
+	const canWiden = (s: TrailStep) =>
+		canRefine && s.readout.finished && stepDocuments(s).ids.length > 0;
+
+	// ---- The results view: the selected step's pages. ----
+	const NONE: StepResult[] = [];
+	let results = $derived(selected?.results ?? NONE);
+	let answer = $derived(selected?.answer ?? null);
+	let segments = $derived(answer ? answerSegments(answer, results) : []);
+	let marks = $derived(answerMarks(segments));
+
 	/** Permanent link to the PDF at the result's page; it leaves the app (`rel="external"`). */
-	const pdfHref = (r: Hit) =>
+	const pdfHref = (r: StepResult) =>
 		`${resolve('/pdf/[ds]/[doc]', { ds: r.data_source_id, doc: r.document_id })}?page=${r.page_number}`;
-	/** The page render: the permanent link when the server can sign, else the engine's URL. */
-	const pageSrc = (r: Hit) =>
+	/** The page render: the permanent link when the server can sign, else the live step's engine URL. */
+	const pageSrc = (r: StepResult): string | null =>
 		data.permanentLinks
 			? resolve('/pages/[ds]/[doc]/[page]', {
 					ds: r.data_source_id,
 					doc: r.document_id,
 					page: String(r.page_number)
 				})
-			: r.page_image_url;
+			: (r.page_image_url ?? null);
 
-	// The result shown large beside the list: on every new search, the first result the answer
-	// cites, else the top result.
+	// The result shown large beside the list: the first result the summary cites, else the top.
 	let current = $derived(marks.length > 0 ? marks[0].ref - 1 : 0);
 	let shown = $derived(results[current] ?? null);
 	// The large page sits beside the list only on wide screens; phones open a page under its row.
@@ -79,18 +314,19 @@
 	onMount(() => {
 		interactive = true;
 	});
-	// Engine-signed URLs expire; a render that fails to load shows a plain line instead.
+	// Engine-signed URLs expire, and stored steps keep none; a missing render shows a plain line.
 	const failed = new SvelteSet<string>();
-	let failedText = $derived(
+	const missingText = (r: StepResult) =>
 		data.permanentLinks
 			? "Page image couldn't be loaded."
-			: 'Page image expired. Search again to refresh.'
-	);
+			: r.page_image_url
+				? 'Page image expired. Search again to refresh.'
+				: "Page images aren't kept with the trail. Open the PDF at this page.";
 	// Space: the large page at full brightness and wider.
 	let zoomed = $state(false);
 
 	// Phones: the result whose page is open large under its row, and what opened it (focus
-	// returns there on close). Closed by a new search.
+	// returns there on close). Closed by another step.
 	let expanded = $derived.by<number | null>(() => {
 		void results;
 		return null;
@@ -113,7 +349,7 @@
 	}
 
 	// The `[n]` last chosen. Its page shows only its boxes; any other page shows every box the
-	// answer cites on it. Cleared by a new search or by moving to another result.
+	// summary cites on it. Cleared by another step or by moving to another result.
 	let active = $derived.by<Mark | null>(() => {
 		void results;
 		return null;
@@ -132,10 +368,16 @@
 	}
 
 	/**
-	 * Show mark `m`: select its result. Activated (`from` the link chosen): move focus there and
-	 * scroll its first box into view; on phones, open its page large under the row.
+	 * Show mark `m` of step `s`: open the step, select its result. Activated (`from` the link
+	 * chosen): move focus there and scroll its first box into view; on phones, open its page
+	 * large under the row. Focus alone only acts within the selected step.
 	 */
-	async function choose(m: Mark, from: HTMLElement | null = null) {
+	async function choose(s: TrailStep, m: Mark, from: HTMLElement | null) {
+		if (s !== selected) {
+			if (!from) return;
+			selectedN = s.n;
+			await tick();
+		}
 		select(m.ref - 1, from !== null);
 		active = m;
 		if (!from) return;
@@ -144,15 +386,16 @@
 		document.querySelector('.viewer .mark')?.scrollIntoView({ block: 'nearest' });
 	}
 
-	const markLabel = (m: Mark) =>
-		`Result ${m.ref}, page ${results[m.ref - 1]?.page_number}` +
-		(m.boxes.length > 0 ? ', cited text outlined' : '');
+	function openStep(n: number) {
+		selectedN = n;
+		zoomed = false;
+	}
 
 	// "Citation copied", announced and shown briefly.
 	let copyStatus = $state('');
 	let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
-	async function copyCitation(r: Hit) {
+	async function copyCitation(r: StepResult) {
 		const link = new URL(pdfHref(r), location.href);
 		try {
 			await navigator.clipboard.writeText(`${r.document_title} · p.${r.page_number} · ${link}`);
@@ -176,7 +419,7 @@
 			case 'j':
 			case 'k':
 				e.preventDefault();
-				select(step(current, e.key === 'j' ? 1 : -1, results.length), true);
+				select(move(current, e.key === 'j' ? 1 : -1, results.length), true);
 				return;
 			case 'o':
 				e.preventDefault();
@@ -199,14 +442,6 @@
 		}
 	}
 
-	// Waiting: nothing for 300 ms, then a bar and a seconds counter (docs/ui.md, "Waiting").
-	let searching = $state(false);
-	let drafting = $state(false);
-	let elapsed = $state(0);
-	// No stage reports from the engine: the bar eases toward the typical time and never fills.
-	let expected = $derived(drafting ? 4000 : 1000);
-	let progress = $derived(Math.min(0.9, 1 - Math.exp(-elapsed / expected)));
-
 	const snippetText = (s: string) => `…${s.replace(/\s+/g, ' ').trim()}…`;
 </script>
 
@@ -228,47 +463,47 @@
 {/snippet}
 
 <!-- A page render with its outlines; width/height are an aspect hint only, to reserve space. -->
-{#snippet render(r: Hit, outlines: Outline[], lazy = false)}
-	{#if failed.has(pageSrc(r))}
-		<span class="expired">{failedText}</span>
+{#snippet render(r: StepResult, outlines: Outline[], lazy = false)}
+	{@const src = pageSrc(r)}
+	{#if src === null || failed.has(src)}
+		<span class="expired">{missingText(r)}</span>
 	{:else}
 		<span class="frame">
 			<img
-				src={pageSrc(r)}
+				{src}
 				alt="Page {r.page_number} of {r.document_title}"
 				width="935"
 				height="1210"
 				loading={lazy ? 'lazy' : 'eager'}
 				decoding="async"
-				onerror={() => failed.add(pageSrc(r))}
+				onerror={() => failed.add(src)}
 			/>
 			{@render outline(outlines)}
 		</span>
 	{/if}
 {/snippet}
 
+{#snippet searchProblem(where: 'new' | 'refine')}
+	{#if problem?.where === where}
+		{#if problem.failure}
+			<FailureNotice failure={problem.failure} />
+		{:else if problem.text}
+			<p class="notice" role="status">{problem.text}</p>
+		{/if}
+	{/if}
+{/snippet}
+
+{#snippet widenAction(s: TrailStep)}
+	{@const n = documentsIn(s)}
+	<p class="widen">
+		<button type="button" class="outline" onclick={() => widenStep(s)}>
+			Search all {n === null ? '' : `${count(n)} `}{plural(n ?? 2, 'document')}
+		</button>
+	</p>
+{/snippet}
+
 <div class="page-head">
 	<h1>Search</h1>
-	{#if searching && elapsed >= 300}
-		<div class="waiting" role="status">
-			<span class="progress" style:--value={progress}></span>
-			<span class="readout">
-				<span
-					>{drafting ? 'Searching and drafting' : 'Searching'} · <b>{seconds(elapsed)}</b> s</span
-				>
-			</span>
-		</div>
-	{:else if outcome}
-		<p class="readout" role="status">
-			<span><b>{results.length}</b> {plural(results.length, 'page')}</span>
-			{#if pdfCount > 0}<span><b>{pdfCount}</b> {plural(pdfCount, 'PDF')}</span>{/if}
-			{#if searchedPages !== null}
-				<span><b>{count(searchedPages)}</b> pages searched</span>
-			{/if}
-			<span>results <b>{seconds(outcome.response.retrieval_ms)}</b> s</span>
-			{#if outcome.response.reranked}<span>reranked</span>{/if}
-		</p>
-	{/if}
 </div>
 
 {#if data.access.dataSourceIds.length === 0}
@@ -287,25 +522,7 @@
 			effect="Data source names and page counts can't be loaded."
 		/>
 	{/if}
-	<form
-		method="POST"
-		class="search"
-		use:enhance={({ formData }) => {
-			drafting = formData.get('answer') === 'on';
-			searching = true;
-			elapsed = 0;
-			const start = performance.now();
-			const tick = setInterval(() => (elapsed = performance.now() - start), 100);
-			return async ({ update }) => {
-				try {
-					await update({ reset: false });
-				} finally {
-					clearInterval(tick);
-					searching = false;
-				}
-			};
-		}}
-	>
+	<form class="search" onsubmit={newSearch}>
 		<div class="query">
 			<label for="query" class="sr-only">Query</label>
 			<input
@@ -315,9 +532,9 @@
 				required
 				bind:value={query}
 				autocomplete="off"
-				placeholder="Search documents"
+				placeholder={steps.length > 0 ? 'Start a new search' : 'Search documents'}
 			/>
-			<button type="submit" class="primary" disabled={searching || groups.length === 0}>
+			<button type="submit" class="primary" disabled={groups.length === 0 || picked.length === 0}>
 				Search
 			</button>
 		</div>
@@ -333,7 +550,9 @@
 									type="checkbox"
 									name="data_source_ids"
 									value={ds.id}
-									checked={selected.has(ds.id)}
+									checked={!unpicked.has(ds.id)}
+									onchange={(e) =>
+										e.currentTarget.checked ? unpicked.delete(ds.id) : unpicked.add(ds.id)}
 								/>
 								<span>
 									{ds.name}
@@ -350,29 +569,25 @@
 
 		<div class="options">
 			<label class="check">
-				<input type="checkbox" name="answer" value="on" bind:checked={draftOn} />
-				Draft an answer
+				<input type="checkbox" name="answer" bind:checked={summaryOn} />
+				Generated summary, each sentence checked
 			</label>
 			<details>
 				<summary>Options</summary>
 				<div class="option-fields">
 					<label class="count">
 						Results
-						<input type="number" name="top_k" min="1" max="50" value={form?.topK ?? 10} />
+						<input type="number" name="top_k" min="1" max="50" bind:value={topK} />
 					</label>
 					<label class="check">
-						<input type="checkbox" name="rerank" value="on" checked={form?.rerank ?? true} />
+						<input type="checkbox" name="rerank" bind:checked={rerank} />
 						Rerank
 					</label>
 				</div>
 			</details>
 		</div>
 
-		{#if form && 'failure' in form && form.failure}
-			<FailureNotice failure={form.failure} />
-		{:else if form?.error}
-			<p class="notice" role="status">{form.error}</p>
-		{/if}
+		{@render searchProblem('new')}
 	</form>
 
 	{#if noOrg}
@@ -380,93 +595,123 @@
 	{/if}
 {/if}
 
-{#if answer && check}
-	<section class="band summary" aria-labelledby="summary-heading" aria-busy={searching}>
-		<h2 id="summary-heading">
-			Generated summary
-			{#if check.state === 'checked'}
-				<span class="muted">· each claim checked against its page</span>
-			{/if}
-		</h2>
-		<p class="status">
-			<span class="flag" data-state={checkFlag(check)}>{answerCheckLabel(check)}</span>
-		</p>
-		<p class="answer">
-			{#each segments as seg, i (i)}
-				{#if seg.kind === 'cite'}
-					{@const one = seg.marks.length === 1}
-					<span class="cite"
-						>{#if !one}[{/if}{#each seg.marks as m, j (m.ref)}{#if j > 0},
-							{/if}<a
-								href="#{resultAnchorId(m.ref)}"
-								class={{ on: active === m }}
-								aria-label={markLabel(m)}
-								onfocus={() => choose(m)}
-								onclick={(e) => choose(m, e.currentTarget)}>{one ? `[${m.ref}]` : m.ref}</a
-							>{/each}{#if !one}]{/if}</span
-					>
-				{:else}
-					{seg.text}
-				{/if}
-			{/each}
-		</p>
-		{#if claims.length > 0}
-			<ul class="claims" aria-label="Claims checked">
-				{#each claims as c, i (i)}
-					{@const r = c.ref !== null ? results[c.ref - 1] : undefined}
-					{@const cm = claimMark(c, marks)}
-					<li>
-						<span class="flag" data-state={c.state}>
-							{c.state === 'verified' ? 'Verified' : 'Unsupported'}
-						</span>
-						<span class="claim">{c.text}</span>
-						{#if c.ref !== null && r}
-							{@const ref = c.ref}
-							<!-- No box for this claim: say so, and open its page unmarked. -->
-							<a
-								class="loc"
-								href="#{resultAnchorId(ref)}"
-								onclick={(e) =>
-									choose(
-										cm ?? {
-											ref,
-											kind: 'page',
-											boxes: [],
-											quote: null,
-											text: c.text,
-											status: c.state
-										},
-										e.currentTarget
-									)}>[{ref}] p.{r.page_number}{cm?.boxes.length ? '' : ' · page'}</a
-							>
-						{/if}
-					</li>
-				{/each}
-			</ul>
+{#if steps.length > 0}
+	<section class="band trail" aria-labelledby="trail-heading">
+		<TrailHeader
+			{title}
+			{steps}
+			{stored}
+			email={data.user?.email ?? ''}
+			context={stored ? orgName(stored.org_id) : contextName}
+			notice={actionNotice}
+		/>
+		{#if !data.history && canRefine}
+			<p class="note">
+				This org doesn't keep search history. The trail ends when you leave the page.
+			</p>
 		{/if}
-		<p class="readout">
-			{#if summaryPages > 0}<span
-					>summary from <b>{summaryPages}</b> {plural(summaryPages, 'page')}</span
-				>{/if}
-			{#if answer.generation_ms > 0}
-				<span>drafted <b>{seconds(answer.generation_ms)}</b> s</span>
-			{/if}
-			{#if answer.verify_ms > 0}
-				<span>checked <b>{seconds(answer.verify_ms)}</b> s</span>
-			{/if}
-			<span>model <b>{answer.model}</b></span>
-		</p>
-	</section>
-{:else if answerNotice}
-	<section class="band summary" aria-label="Generated summary">
-		<p class="notice" role="status">{answerNotice}</p>
+		{#if contextNote}<p class="note">{contextNote}</p>{/if}
+
+		<ol class="steps">
+			{#each steps as s (s.created_at)}
+				{@const isSelected = s === selected}
+				{@const waiting = live?.key === s.created_at ? live.clock : null}
+				{@const readout = stepReadout(s)}
+				{@const showReadout = s.readout.search !== null && (s.readout.finished || !s.wants_answer)}
+				{@const indexed = indexedDay(s)}
+				<li
+					class={['step', !isSelected && 'earlier']}
+					data-step={s.created_at}
+					aria-current={isSelected ? 'step' : undefined}
+					data-step-done={s.readout.finished ? '' : undefined}
+				>
+					<h3>
+						<button
+							type="button"
+							class="open"
+							aria-label={isSelected ? undefined : `Open step ${stepNumber(s.n)}: ${s.query}`}
+							onclick={() => openStep(s.n)}
+						>
+							<span class="num">{stepNumber(s.n)}</span>
+							<span class="q">{s.query}</span>
+						</button>
+					</h3>
+					{#if isNarrowed(s, allIds) || s.builds_on !== null || !s.rewrite}
+						<p class="chips">
+							{#if isNarrowed(s, allIds)}<span>scope: {scopeLabel(s)}</span>{/if}
+							{#if s.builds_on !== null}<span>builds on {stepNumber(s.builds_on)}</span>{/if}
+							{#if !s.rewrite}<span>exactly as typed</span>{/if}
+						</p>
+					{/if}
+					{#if s.resolved_query !== s.query}
+						<p class="as">Searched as: {s.resolved_query}</p>
+					{/if}
+
+					<div class="body">
+						{#if waiting && (s.readout.search === null || (s.wants_answer && !s.answer))}
+							<WaitingBar clock={waiting} {now} />
+						{/if}
+						{#if s.answer}
+							<StepSummary
+								step={{ ...s, answer: s.answer }}
+								active={isSelected ? active : null}
+								dim={!isSelected}
+								onchoose={(m, from) => choose(s, m, from)}
+							>
+								{#if canWiden(s)}{@render widenAction(s)}{/if}
+							</StepSummary>
+						{/if}
+						{#if s.readout.search !== null && summaryProblem(s)}
+							<p class="problem">{summaryProblem(s)}</p>
+						{/if}
+						{#if showReadout}
+							<p class="readout">
+								{#each readout as r, i (i)}
+									<span
+										>{r.before ? `${r.before} ` : ''}<b>{r.value}</b>{r.after
+											? ` ${r.after}`
+											: ''}</span
+									>
+								{/each}
+								{#if indexed}<span>indexed {indexed}</span>{/if}
+							</p>
+						{/if}
+						{#if canWiden(s) && !s.answer?.abstained}{@render widenAction(s)}{/if}
+					</div>
+
+					{#if isSelected && canRefine}
+						<form class="refine" onsubmit={refineSearch}>
+							<div class="query">
+								<label for="refine" class="sr-only">Refine step {stepNumber(s.n)}</label>
+								<input
+									id="refine"
+									type="search"
+									name="refine"
+									bind:value={refineQuery}
+									autocomplete="off"
+									placeholder="Refine, or start a new search…"
+								/>
+								<button type="submit">Search</button>
+							</div>
+							<label class="check">
+								<input type="checkbox" name="exact" bind:checked={exact} />
+								Search exactly as typed
+							</label>
+							{@render searchProblem('refine')}
+						</form>
+					{/if}
+				</li>
+			{/each}
+		</ol>
 	</section>
 {/if}
 
-{#if outcome}
-	<section class="band evidence" aria-labelledby="evidence-heading" aria-busy={searching}>
+{#if selected && selected.readout.search !== null}
+	<section class="band evidence" aria-labelledby="evidence-heading">
 		<div class="evidence-head">
-			<h2 id="evidence-heading">Pages</h2>
+			<h2 id="evidence-heading">
+				Pages <span class="loc">step {stepNumber(selected.n)}</span>
+			</h2>
 			{#if results.length > 1}
 				<p class="keys muted">
 					<span><kbd>J</kbd> <kbd>K</kbd> next and previous</span>
@@ -516,12 +761,13 @@
 								</button>
 							{/if}
 							<div class="hit">
-								<h3><span class="rank">{i + 1}</span>{r.document_title}</h3>
+								<h3 class="loc"><span class="rank">{i + 1}</span>{locator(r).join(' · ')}</h3>
 								<p class="meta">
-									<span class="loc">p.{r.page_number}</span>
 									{#if sourceNames.get(r.data_source_id) !== r.document_title}
 										<span class="muted"
-											>{sourceNames.get(r.data_source_id) ?? r.data_source_id}</span
+											>{sourceNames.get(r.data_source_id) ??
+												selected.scope.data_source_names[r.data_source_id] ??
+												r.data_source_id}</span
 										>
 									{/if}
 									<a class="loc" href={pdfHref(r)} target="_blank" rel="external noopener"
@@ -592,11 +838,7 @@
 <p class="copied readout" role="status">{copyStatus}</p>
 
 <style>
-	.page-head .waiting {
-		margin: 0;
-	}
-
-	/* ---- Query form ---- */
+	/* ---- Query forms ---- */
 	form.search {
 		display: grid;
 		gap: 1rem;
@@ -668,61 +910,118 @@
 		margin: 0;
 	}
 
-	/* ---- Generated summary ---- */
-	.summary h2 {
-		margin-bottom: 0.5rem;
-	}
-	.summary h2 .muted {
-		font-size: 0.9375rem;
-		font-weight: 400;
-	}
-	.status {
+	/* ---- The trail ---- */
+	.note {
 		margin: 0 0 0.75rem;
+		font: 400 0.8125rem/1.5 var(--font-mono);
+		color: var(--color-muted);
 	}
-	.answer {
-		max-width: 68ch;
-		font-size: 1.0625rem;
-		line-height: 1.6;
-		white-space: pre-line;
-	}
-	.cite {
-		font: 500 0.8125rem/1 var(--font-mono);
-		font-variant-numeric: tabular-nums;
-		padding: 0 0.1em;
-		white-space: nowrap;
-	}
-	.claims {
+	.steps {
 		list-style: none;
-		max-width: 68ch;
-		margin: 0 0 1rem;
+		margin: 1rem 0 0;
 		padding: 0;
 		border-top: 1px solid var(--color-rule);
 	}
-	.claims li {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		grid-template-areas: 'flag loc' 'claim claim';
-		align-items: baseline;
-		gap: 0.25rem 1rem;
-		padding: 0.5rem 0;
+	.step {
+		padding: 1rem 0 1.25rem;
 		border-bottom: 1px solid var(--color-rule);
-		font-size: 0.9375rem;
 	}
-	.claims .flag {
-		grid-area: flag;
+	.step:last-child {
+		border-bottom: 0;
 	}
-	.claims .claim {
-		grid-area: claim;
+	.step h3 {
+		margin: 0 0 0.25rem;
 	}
-	.claims .loc {
-		grid-area: loc;
+	/* The step's number and query, as a heading-sized control that opens its snapshot. */
+	.open {
+		display: flex;
+		align-items: baseline;
+		gap: 0.75rem;
+		min-height: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		white-space: normal;
+		cursor: pointer;
+	}
+	.step[aria-current] .open {
+		cursor: default;
+	}
+	.num {
+		flex: none;
+		font: 500 0.9375rem/1.2 var(--font-mono);
+		font-variant-numeric: tabular-nums;
+		color: var(--color-muted);
+	}
+	.q {
+		font-size: 1.125rem;
+		font-weight: 600;
+		overflow-wrap: anywhere;
+	}
+	.earlier .q,
+	.earlier .problem {
+		color: var(--color-muted);
+	}
+	.earlier .open:hover .q {
+		color: var(--color-ink);
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 0.2em;
+	}
+	.chips,
+	.as {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.5rem;
+		margin: 0 0 0.25rem 2.25rem;
+		font: 400 0.8125rem/1.5 var(--font-mono);
+		color: var(--color-muted);
+	}
+	.chips span {
+		padding: 0 0.375rem;
+		border: 1px solid var(--color-rule);
+		border-radius: 2px;
 		white-space: nowrap;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
-	@media (min-width: 40rem) {
-		.claims li {
-			grid-template-columns: 9.5rem minmax(0, 1fr) auto;
-			grid-template-areas: 'flag claim loc';
-		}
+	.as {
+		display: block;
+		overflow-wrap: anywhere;
+	}
+	.body {
+		margin: 0.75rem 0 0 2.25rem;
+	}
+	.body :global(.waiting) {
+		margin-bottom: 0.75rem;
+	}
+	.body .readout {
+		margin-top: 0.25rem;
+	}
+	.problem {
+		margin: 0 0 0.5rem;
+		color: var(--color-muted);
+	}
+	.widen {
+		margin: 0.75rem 0 0;
+	}
+	/* Spruce outline: the widen action, a search, not a destructive or primary one. */
+	button.outline {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+	.refine {
+		display: grid;
+		gap: 0.5rem;
+		max-width: 52rem;
+		margin: 1.25rem 0 0 2.25rem;
+	}
+	.refine .query input {
+		font-size: 1rem;
 	}
 
 	/* ---- Evidence ---- */
@@ -736,6 +1035,9 @@
 	}
 	.evidence-head h2 {
 		margin: 0;
+	}
+	.evidence-head h2 .loc {
+		margin-left: 0.5rem;
 	}
 	.keys {
 		display: none;
@@ -778,12 +1080,13 @@
 		display: flex;
 		gap: 0.75rem;
 		margin-bottom: 0.25rem;
+		color: var(--color-ink);
+		overflow-wrap: anywhere;
 	}
 	.rank {
 		flex: none;
 		min-width: 1.5rem;
-		font: 500 1rem/1.2 var(--font-mono);
-		font-variant-numeric: tabular-nums;
+		font-weight: 500;
 		color: var(--color-muted);
 	}
 	.meta {
@@ -826,9 +1129,6 @@
 	}
 	.thumb .mark {
 		outline-width: 1px;
-	}
-	.cite a.on {
-		background: var(--color-highlight);
 	}
 	/* Hug the image: a grid item would otherwise stretch the frame to the row's height. */
 	.thumb {
@@ -897,6 +1197,14 @@
 		.expired {
 			padding: 1rem;
 			font-size: 0.875rem;
+		}
+	}
+	@media (max-width: 40rem) {
+		.chips,
+		.as,
+		.body,
+		.refine {
+			margin-left: 0;
 		}
 	}
 

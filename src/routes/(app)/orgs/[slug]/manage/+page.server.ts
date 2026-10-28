@@ -224,7 +224,11 @@ export const actions: Actions = {
 		if (!defaultRole) return fail(400, { error: 'Pick a role for domain sign-ups.' });
 		const { error } = await locals.supabase
 			.from('orgs')
-			.update({ log_queries: form.get('log_queries') === 'on', default_role: defaultRole })
+			.update({
+				log_queries: form.get('log_queries') === 'on',
+				conversation_history: form.get('conversation_history') === 'on',
+				default_role: defaultRole
+			})
 			.eq('id', org.id);
 		if (error) return fail(400, { error: error.message });
 		return { notice: 'Settings saved.' };

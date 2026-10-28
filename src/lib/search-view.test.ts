@@ -1,16 +1,48 @@
 import { describe, expect, it } from 'vitest';
-import { checkFlag, isTypingTarget, pagesSearched, seconds, step } from './search-view.js';
+import { checkFlag, isTypingTarget, locator, pagesSearched, seconds, step } from './search-view.js';
 
 describe('checkFlag', () => {
 	it('passes through not_found and not_checked', () => {
 		expect(checkFlag({ state: 'not_found' })).toBe('not_found');
 		expect(checkFlag({ state: 'not_checked' })).toBe('not_checked');
 	});
-	it('is verified only when every claim is', () => {
-		const v = { text: 'a', state: 'verified', ref: 1 } as const;
-		const u = { text: 'b', state: 'unsupported', ref: 2 } as const;
-		expect(checkFlag({ state: 'checked', claims: [v, v] })).toBe('verified');
-		expect(checkFlag({ state: 'checked', claims: [v, u] })).toBe('unsupported');
+	it('is verified only when every sentence is, unsupported when any is', () => {
+		const c = (verified: number, unsupported: number, total: number) =>
+			checkFlag({ state: 'checked', verified, unsupported, total });
+		expect(c(2, 0, 2)).toBe('verified');
+		expect(c(1, 1, 2)).toBe('unsupported');
+		// Partly checked, nothing unsupported: green isn't earned.
+		expect(c(1, 0, 2)).toBe('not_checked');
+	});
+});
+
+describe('locator', () => {
+	const r = (section: string | null, page_number = 12) => ({
+		document_title: 'Species at Risk Act',
+		section,
+		page_number
+	});
+	it('is title, section and page', () => {
+		expect(locator(r('Interpretation › Sections 4-7'))).toEqual([
+			'Species at Risk Act',
+			'Interpretation › Sections 4-7',
+			'P.12'
+		]);
+		expect(locator(r(null, 3))).toEqual(['Species at Risk Act', 'P.3']);
+	});
+	it('shortens long sections from the left and never drops the page', () => {
+		const long =
+			'Species at Risk Act › Part 2 › Protection Measures › Interpretation › Sections 4-7';
+		expect(locator(r(long), 40)).toEqual([
+			'Species at Risk Act',
+			'…Interpretation › Sections 4-7',
+			'P.12'
+		]);
+	});
+	it('cuts one over-long last segment at the end', () => {
+		const [, section, page] = locator(r(`Part 1 › ${'Declaration; Sanction; '.repeat(4)}`), 20);
+		expect(section).toBe('…Declaration; Sancti…');
+		expect(page).toBe('P.12');
 	});
 });
 

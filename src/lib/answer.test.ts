@@ -4,7 +4,7 @@ import {
 	answerCheckLabel,
 	answerMarks,
 	answerSegments,
-	claimMark,
+	answerSentences,
 	cleanBoxes,
 	pageOutlines,
 	resultAnchorId,
@@ -197,72 +197,129 @@ describe('citation status', () => {
 			])
 		).toEqual(['verified', 'unsupported']);
 	});
-
-	it('is not checked when an older engine sends none, never verified', () => {
-		const old: Partial<Citation> = cite(text, '[1]', 1);
-		delete old.status;
-		expect(statuses([old as Citation])).toEqual(['not_checked']);
-	});
 });
 
-describe('claimMark', () => {
-	const marks: Mark[] = [
-		{
-			ref: 1,
-			kind: 'text',
-			boxes: [line],
-			quote: null,
-			text: 'Fines reach $1 million',
-			status: 'verified'
-		},
-		{ ref: 2, kind: 'page', boxes: [], quote: null, text: 'Notice is required', status: 'verified' }
+describe('answerSentences', () => {
+	// Two cited sentences with plain text before, between and after.
+	const text = 'Intro. Fines reach $1 million [1]. Also [2]. Notice is required [1, 2]. End.';
+	const span = (sentence: string) => {
+		const start = text.indexOf(sentence);
+		return { start, end: start + sentence.length };
+	};
+	const s1 = span('Fines reach $1 million [1].');
+	const s2 = span('Notice is required [1, 2].');
+	const citations = [
+		cite(text, '[1]', 1, {}, { sentence: { ...s1, status: 'verified' }, status: 'verified' }),
+		cite(text, '[2]', 2, {}, { sentence: { start: 0, end: 0, status: 'verified' } }),
+		cite(text, '[1, 2]', 1, {}, { sentence: { ...s2, status: 'verified' }, status: 'unsupported' }),
+		cite(text, '[1, 2]', 2, {}, { sentence: { ...s2, status: 'verified' }, status: 'verified' })
 	];
-	it('finds the mark whose sentence is the claim, on the same ref', () => {
-		expect(claimMark({ text: ' fines reach  $1 million ', ref: 1 }, marks)).toBe(marks[0]);
-		expect(claimMark({ text: 'Fines reach $1 million', ref: 2 }, marks)).toBeNull();
+	const shape = (runs: ReturnType<typeof answerSentences>) =>
+		runs.map((r) => ({
+			status: r.status,
+			parts: r.segments.map((s) =>
+				s.kind === 'text' ? s.text : s.marks.map((m) => `${m.ref}:${m.status}`).join(' ')
+			)
+		}));
+
+	it('groups segments by cited sentence, with the text between them unmarked', () => {
+		expect(shape(answerSentences({ text, citations }, results))).toEqual([
+			{ status: null, parts: ['Intro. '] },
+			{ status: 'verified', parts: ['Fines reach $1 million ', '1:verified', '.'] },
+			// A marker whose sentence offsets are unusable still renders, outside any sentence.
+			{ status: null, parts: [' Also ', '2:not_checked', '. '] },
+			{
+				status: 'verified',
+				parts: ['Notice is required ', '1:unsupported 2:verified', '.']
+			},
+			{ status: null, parts: [' End.'] }
+		]);
 	});
-	it('never guesses another sentence from the same source', () => {
-		expect(claimMark({ text: 'Something else', ref: 1 }, marks)).toBeNull();
-		expect(claimMark({ text: 'Notice is required', ref: null }, marks)).toBeNull();
+
+	it('keeps all of the text, in order', () => {
+		const joined = answerSentences({ text, citations }, results)
+			.flatMap((r) => r.segments)
+			.map((s) => (s.kind === 'text' ? s.text : '#'))
+			.join('');
+		expect(joined).toBe('Intro. Fines reach $1 million #. Also #. Notice is required #. End.');
+	});
+
+	it('keeps a marker with its sentence when it runs past the sentence end', () => {
+		const t = 'Fines apply [1].';
+		const c = cite(t, '[1]', 1, {}, { sentence: { start: 0, end: 13, status: 'unsupported' } });
+		expect(shape(answerSentences({ text: t, citations: [c] }, results))).toEqual([
+			{ status: 'unsupported', parts: ['Fines apply ', '1:not_checked'] },
+			{ status: null, parts: ['.'] }
+		]);
+	});
+
+	it('is one unmarked run when abstained', () => {
+		const t = 'Not found in the pages searched.';
+		expect(answerSentences({ text: t, citations: [] }, results)).toEqual([
+			{ status: null, segments: [{ kind: 'text', text: t }] }
+		]);
 	});
 });
 
 describe('answerCheck', () => {
-	const claim = (supported: boolean, ref: number | null = 1) => ({ claim: 'c', supported, ref });
+	const readout = (sentences: number, sentences_verified: number) => ({
+		pages_used: 1,
+		sentences,
+		sentences_verified,
+		generation_ms: 1,
+		verify_ms: 1,
+		total_ms: 2
+	});
+	const verification = { supported: 0, total: 0, claims: [] };
+	const unsupportedSentence = cite(
+		'x [1]',
+		'[1]',
+		1,
+		{},
+		{
+			sentence: { start: 0, end: 5, status: 'unsupported' }
+		}
+	);
 
-	it('is not found when the engine abstained, whatever the verifier said', () => {
+	it('is not found when the engine abstained, whatever the check said', () => {
 		const check = answerCheck({
 			abstained: true,
-			verification: { supported: 1, total: 1, claims: [claim(true)] }
+			verification,
+			readout: readout(1, 1),
+			citations: []
 		});
 		expect(check).toEqual({ state: 'not_found' });
 		expect(answerCheckLabel(check)).toBe('Not found in the pages searched');
 	});
 
-	it('is not checked, never verified, when the verifier did not run', () => {
-		const check = answerCheck({ abstained: false, verification: null });
+	it('is not checked, never verified, when the check did not run', () => {
+		const check = answerCheck({
+			abstained: false,
+			verification: null,
+			readout: readout(2, 0),
+			citations: []
+		});
 		expect(check).toEqual({ state: 'not_checked' });
 		expect(answerCheckLabel(check)).toBe('Not checked');
 	});
 
-	it('is not checked when no claims were checked', () => {
+	it('is not checked when no sentence carries a citation', () => {
 		expect(
-			answerCheck({ abstained: false, verification: { supported: 0, total: 0, claims: [] } }).state
+			answerCheck({ abstained: false, verification, readout: readout(0, 0), citations: [] }).state
 		).toBe('not_checked');
 	});
 
-	it('marks each claim verified or unsupported', () => {
+	it('counts verified and unsupported sentences', () => {
 		const check = answerCheck({
 			abstained: false,
-			verification: { supported: 1, total: 2, claims: [claim(true), claim(false, null)] }
+			verification,
+			readout: readout(2, 1),
+			citations: [unsupportedSentence, unsupportedSentence]
 		});
-		expect(check).toEqual({
-			state: 'checked',
-			claims: [
-				{ text: 'c', state: 'verified', ref: 1 },
-				{ text: 'c', state: 'unsupported', ref: null }
-			]
-		});
-		expect(answerCheckLabel(check)).toBe('1 of 2 claims verified');
+		expect(check).toEqual({ state: 'checked', verified: 1, unsupported: 1, total: 2 });
+		expect(answerCheckLabel(check)).toBe('1 of 2 sentences verified');
+		expect(answerCheckLabel({ state: 'checked', verified: 1, unsupported: 0, total: 1 })).toBe(
+			'1 of 1 sentence verified'
+		);
 	});
 });

@@ -2,6 +2,7 @@
 // Never blocks or fails the user's request — a logging failure is logged and dropped.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { waitUntil } from '@vercel/functions';
+import type { EngineFailure } from '#lib/failure.js';
 import type { Database, SearchStatus } from '#lib/supabase/types.js';
 import type { SearchResponse } from './engine.types';
 
@@ -14,9 +15,18 @@ export interface SearchEventInput {
 	topK: number;
 	rerank: boolean;
 	status: SearchStatus;
-	response?: SearchResponse;
+	/** The results (the stream's `results` event, or a whole SearchResponse); absent on failure. */
+	response?: Pick<SearchResponse, 'results' | 'retrieval_ms' | 'reranked'>;
 	error?: string;
 }
+
+/** search_events.status for each engine failure. */
+export const FAILURE_STATUS: Record<EngineFailure['kind'], SearchStatus> = {
+	timeout: 'timeout',
+	unreachable: 'unreachable',
+	unavailable: 'unavailable',
+	error: 'engine_error'
+};
 
 /** Build the row; `logQueries=false` keeps the length but drops the text. */
 export function buildSearchEvent(

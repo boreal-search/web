@@ -66,8 +66,14 @@ page, C copy citation (title · page · permanent PDF link).
 ## Waiting
 
 No skeleton screens, spinners, shimmer or typing dots. Show nothing for the first ~300 ms,
-then a thin bar and a seconds counter; label stages only when the engine reports them. On
-completion the bar becomes the readout (pages used, pages searched, time).
+then a 4 px bar of three segments (search, reading, checking; 0.6 : 1.2 : 1.2, 3 px gaps,
+Rule track, Basalt fill, never green) and a seconds counter. Each segment fills linearly over
+its typical time (~0.6 s, ~1.5 s, ~2 s) and sits full if the stage runs long: no percentages,
+no stalling short of full; reduced motion steps instead of sliding. Label a stage in mono only
+once the engine reports it ("Searching 6,214 pages", "Reading 5 pages", "Checking 2
+sentences"). Results render as soon as they arrive; the bar moves to the summary slot. On
+completion the bar becomes the readout ("summary from 5 pages · 6,214 searched · 3.4 s"), with
+the index date beside it in muted.
 
 ## Components
 
@@ -88,8 +94,9 @@ layout beyond them uses Tailwind utilities from the theme.
   with the `Failure` itself: copy from `describeFailure`, neutral for engine failures, never red.
 - Tables: hairline `table` by default; `.table-wrap` to scroll sideways on phones, or
   `table.stacked` with `data-label` on each `td`; `.num` for right-aligned figures.
-- States: `.flag[data-state]` (see Answer states). Waiting: `.waiting` > `.progress`
-  (`style:--value` 0–1) + `.readout` seconds counter. Pages: `.sheet` (dims in dark, `.zoomed`
+- States: `.flag[data-state]` (see Answer states). Waiting: `.waiting` > `.progress` > one `<span>`
+  per segment (`style:--weight`, `style:--value` 0–1) + `.readout` counter (`WaitingBar.svelte`,
+  values from `#lib/step-view.js`). Pages: `.sheet` (dims in dark, `.zoomed`
   is full brightness).
 - A11y: `.sr-only` hides text visually but keeps it for screen readers.
 

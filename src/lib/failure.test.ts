@@ -9,6 +9,7 @@ const all: Failure[] = [
 	{ kind: 'not_found', what: 'page' },
 	{ kind: 'not_found', what: 'data_source' },
 	{ kind: 'not_found', what: 'org' },
+	{ kind: 'not_found', what: 'trail' },
 	{ kind: 'forbidden', gate: 'platform_admin' },
 	{ kind: 'forbidden', gate: 'org_admin', org: 'Acme' },
 	{ kind: 'forbidden', gate: null },

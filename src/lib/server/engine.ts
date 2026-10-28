@@ -1,9 +1,8 @@
 // Server-only client for the boreal engine API. The bearer token never leaves the server:
 // this module lives under lib/server so SvelteKit refuses to bundle it for the browser.
 import { ENGINE_SERVICE_TOKEN, ENGINE_URL } from '$app/env/private';
-import { describeFailure, type EngineFailure } from '#lib/failure.js';
+import type { EngineFailure } from '#lib/failure.js';
 import type {
-	Answer,
 	DataSource,
 	Document,
 	DocumentPage,
@@ -11,11 +10,10 @@ import type {
 	Health,
 	Job,
 	JobStatus,
-	SearchRequest,
-	SearchResponse
+	SearchRequest
 } from './engine.types';
 
-export type { Answer, Claim, SearchResponse, SearchResult, Verification } from './engine.types';
+export type { Answer, SearchResponse, SearchResult } from './engine.types';
 
 export class EngineError extends Error {
 	constructor(
@@ -27,21 +25,20 @@ export class EngineError extends Error {
 	}
 }
 
-/**
- * Per-call engine timeouts (ms). Drafting an answer runs an LLM on the workstation, so it gets
- * the longest; a plain search is embeddings + vector search + rerank.
- */
-export const ENGINE_TIMEOUT_MS = { read: 8_000, search: 12_000, answer: 25_000 } as const;
+/** Engine call timeout (ms) for reads: data sources, documents, jobs, health. */
+export const ENGINE_TIMEOUT_MS = { read: 8_000 } as const;
 
-async function request<T>(
-	path: string,
-	init: RequestInit = {},
-	fetchFn: typeof fetch = fetch,
-	timeoutMs: number = ENGINE_TIMEOUT_MS.read
-) {
+/**
+ * Deadline (ms) for a whole /search/stream, results and summary. Drafting and checking a
+ * summary run an LLM on the workstation; while Daud is ingesting it can take minutes.
+ */
+export const STREAM_DEADLINE_MS = { answer: 180_000, search: 60_000 } as const;
+
+/** Fetch an engine path with the service token; throws EngineError on a non-2xx. */
+async function call(path: string, init: RequestInit, fetchFn: typeof fetch, signal: AbortSignal) {
 	const res = await fetchFn(new URL(path, ENGINE_URL), {
 		...init,
-		signal: AbortSignal.timeout(timeoutMs),
+		signal,
 		headers: {
 			accept: 'application/json',
 			authorization: `Bearer ${ENGINE_SERVICE_TOKEN}`,
@@ -59,8 +56,26 @@ async function request<T>(
 		}
 		throw new EngineError(res.status, detail);
 	}
+	return res;
+}
+
+async function request<T>(path: string, fetchFn: typeof fetch = fetch) {
+	const res = await call(path, {}, fetchFn, AbortSignal.timeout(ENGINE_TIMEOUT_MS.read));
 	return (await res.json()) as T;
 }
+
+/**
+ * POST /search/stream. Resolves once the engine starts streaming (its 200): the body is NDJSON
+ * `EngineEvent`s. Request errors (400/404/422, 503) throw EngineError with the engine's detail.
+ * `signal` is the caller's: the overall deadline and the browser going away.
+ */
+export const searchStream = (body: SearchRequest, fetchFn: typeof fetch, signal: AbortSignal) =>
+	call(
+		'/search/stream',
+		{ method: 'POST', body: JSON.stringify(body), headers: { accept: 'application/x-ndjson' } },
+		fetchFn,
+		signal
+	);
 
 /** Statuses the Cloudflare tunnel returns when the engine behind it is down. */
 const TUNNEL_DOWN = new Set([502, 504, 530]);
@@ -88,85 +103,6 @@ export const FAILURE_HTTP_STATUS: Record<EngineFailure['kind'], number> = {
 	error: 502
 };
 
-/** The drafted answer, when one was requested. */
-export type AnswerOutcome =
-	| { kind: 'off' }
-	| { kind: 'ok'; answer: Answer }
-	/** The engine answered that the results don't cover the question. */
-	| { kind: 'abstained'; answer: Answer }
-	/** 400: the engine has no LLM configured. */
-	| { kind: 'disabled'; detail: string }
-	/** The answer request failed; the results were fetched again without it. */
-	| { kind: 'failed'; failure: EngineFailure };
-
-interface SearchResults {
-	response: SearchResponse;
-	answer: AnswerOutcome;
-}
-
-/** `no_results` is a 200 with nothing matched: not an error, the user should broaden. */
-export type SearchOutcome =
-	({ kind: 'ok' } & SearchResults) | ({ kind: 'no_results' } & SearchResults) | EngineFailure;
-
-/** Notice for an answer that was asked for but isn't shown; null otherwise. */
-export function answerNotice(a: AnswerOutcome): string | null {
-	if (a.kind === 'disabled')
-		return 'Answer drafting is turned off on this engine; showing results only.';
-	if (a.kind !== 'failed') return null;
-	if (a.failure.kind === 'timeout') {
-		return 'Drafting the answer took too long; showing results only. Try again, or untick "Draft an answer".';
-	}
-	const { title, readout } = describeFailure(a.failure);
-	const why = [title.charAt(0).toLowerCase() + title.slice(1), ...readout.map((r) => r.value)];
-	return `The answer could not be drafted (${why.join(': ')}); showing results only.`;
-}
-
-const answerOf = (r: SearchResponse): AnswerOutcome =>
-	r.answer ? { kind: r.answer.abstained ? 'abstained' : 'ok', answer: r.answer } : { kind: 'off' };
-
-/**
- * POST /search; never throws. The answer is optional, the search isn't: if the answer request
- * fails for any reason other than the engine being unreachable, retry without `answer` so the
- * user still gets results, and report what happened to the answer.
- */
-export async function search(
-	body: SearchRequest,
-	fetchFn: typeof fetch = fetch
-): Promise<SearchOutcome> {
-	const post = (b: SearchRequest, timeoutMs: number) =>
-		request<SearchResponse>(
-			'/search',
-			{ method: 'POST', body: JSON.stringify(b) },
-			fetchFn,
-			timeoutMs
-		);
-	const done = (response: SearchResponse, answer: AnswerOutcome): SearchOutcome =>
-		response.results.length > 0
-			? { kind: 'ok', response, answer }
-			: { kind: 'no_results', response, answer };
-	const resultsOnly = async (answer: AnswerOutcome) => {
-		try {
-			return done(await post({ ...body, answer: false }, ENGINE_TIMEOUT_MS.search), answer);
-		} catch (e) {
-			return classifyEngineError(e);
-		}
-	};
-
-	if (!body.answer) return resultsOnly({ kind: 'off' });
-	try {
-		const response = await post(body, ENGINE_TIMEOUT_MS.answer);
-		return done(response, answerOf(response));
-	} catch (e) {
-		const failure = classifyEngineError(e);
-		if (failure.kind === 'unreachable') return failure;
-		return resultsOnly(
-			failure.kind === 'error' && failure.status === 400
-				? { kind: 'disabled', detail: failure.detail }
-				: { kind: 'failed', failure }
-		);
-	}
-}
-
 function query(params: Record<string, string | number | undefined>) {
 	const qs = new URLSearchParams();
 	for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v));
@@ -180,26 +116,22 @@ function query(params: Record<string, string | number | undefined>) {
  */
 export function engine(fetchFn: typeof fetch = fetch) {
 	return {
-		health: () => request<Health>('/health', {}, fetchFn),
+		health: () => request<Health>('/health', fetchFn),
 
-		listDataSources: () => request<DataSource[]>('/data-sources', {}, fetchFn),
+		listDataSources: () => request<DataSource[]>('/data-sources', fetchFn),
 
 		getDataSource: (id: string) =>
-			request<DataSource>(`/data-sources/${encodeURIComponent(id)}`, {}, fetchFn),
+			request<DataSource>(`/data-sources/${encodeURIComponent(id)}`, fetchFn),
 
 		listDocuments: (dataSourceId: string, opts: { limit?: number; offset?: number } = {}) =>
 			request<DocumentPage>(
 				`/data-sources/${encodeURIComponent(dataSourceId)}/documents${query(opts)}`,
-				{},
 				fetchFn
 			),
 
-		getDocument: (id: string) =>
-			request<Document>(`/documents/${encodeURIComponent(id)}`, {}, fetchFn),
-
-		search: (body: SearchRequest) => search(body, fetchFn),
+		getDocument: (id: string) => request<Document>(`/documents/${encodeURIComponent(id)}`, fetchFn),
 
 		listJobs: (opts: { data_source_id?: string; status?: JobStatus; limit?: number } = {}) =>
-			request<Job[]>(`/jobs${query(opts)}`, {}, fetchFn)
+			request<Job[]>(`/jobs${query(opts)}`, fetchFn)
 	};
 }

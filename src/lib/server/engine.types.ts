@@ -13,6 +13,10 @@ export type Job = Schemas['JobOut'];
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed';
 
 export type SearchRequest = Schemas['SearchRequest'];
+export type ContextStep = Schemas['ContextStep'];
+export type Scope = Schemas['Scope'];
+export type SearchReadout = Schemas['SearchReadout'];
+export type AnswerReadout = Schemas['AnswerReadout'];
 export type SearchResult = Schemas['SearchResult'];
 export type Answer = Schemas['AnswerOut'];
 export type AnswerSource = Schemas['AnswerSource'];
@@ -22,7 +26,6 @@ export type CitationStatus = Citation['status'];
 export type Sentence = Schemas['SentenceOut'];
 export type Highlight = Schemas['HighlightOut'];
 export type Verification = Schemas['VerificationOut'];
-export type Claim = Schemas['ClaimOut'];
 /** `answer` is present only when the request had `answer: true` (SearchAnswerResponse). */
 export type SearchResponse = Schemas['SearchResponse'] & { answer?: Answer };
 

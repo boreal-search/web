@@ -366,6 +366,22 @@
 					the data sources, result count, top score, time and outcome. Applies to new searches.
 				</span>
 			</div>
+			<div class="field">
+				<label class="check">
+					<input
+						type="checkbox"
+						name="conversation_history"
+						checked={data.org.conversation_history}
+						aria-describedby="conversation-history-help"
+					/>
+					Keep search trails
+				</label>
+				<span class="help" id="conversation-history-help">
+					Members' searches are kept as trails they can reread, share and export. When off, a trail
+					lasts only while the page is open. Applies to new searches; existing trails stay until
+					their owners delete them.
+				</span>
+			</div>
 			{@render feedback('settings')}
 			<div class="actions">
 				<button type="submit" class="primary">Save settings</button>

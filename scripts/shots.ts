@@ -38,10 +38,9 @@ async function visit(page: Page, route: string) {
 	await page.goto(`${base}${url.pathname}`, { waitUntil: 'networkidle' });
 	if (query) {
 		await page.fill('input[name=query]', query);
-		const done = page.waitForResponse((r) => r.request().method() === 'POST', { timeout: 90_000 });
 		await page.click('main button[type=submit]');
-		await done;
-		await page.waitForSelector('main button[type=submit]:not([disabled])', { timeout: 90_000 });
+		// The step streams in; it carries data-step-done once its summary and readout are final.
+		await page.waitForSelector('[data-step-done]', { timeout: 180_000 });
 		// Let the page render the result, then let lazy page images load.
 		await page.waitForTimeout(500);
 		for (const img of await page.locator('main img').all()) await img.scrollIntoViewIfNeeded();

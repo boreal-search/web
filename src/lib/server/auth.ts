@@ -60,7 +60,7 @@ export async function requireOrgAdmin(slug: string) {
 	const { locals } = getRequestEvent();
 	const { data: org, error: e } = await locals.supabase
 		.from('orgs')
-		.select('id, slug, name, log_queries, default_role')
+		.select('id, slug, name, log_queries, conversation_history, default_role')
 		.eq('slug', slug)
 		.maybeSingle();
 	if (e) throw e;

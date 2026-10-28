@@ -13,7 +13,7 @@
                 .notice[data-tone='partial'] (done, with a caveat)
      Tables     .table-wrap (horizontal scroll)  table.stacked (cards on phones; td[data-label])  .num
      States     .flag[data-state=verified|unsupported|not_checked|not_found]
-     Waiting    .waiting > .progress (style:--value 0..1) + .readout seconds counter
+     Waiting    .waiting > .progress > span (style:--weight, --value 0..1) + .readout counter
      Pages      .sheet (page-render frame; never inverted; dimmed in dark; .zoomed = full)
      A11y       .sr-only (visually hidden, still read aloud) */
 @import 'tailwindcss/theme.css' layer(theme);
@@ -592,9 +592,12 @@ caption {
 }
 
 /* ---- Waiting ----------------------------------------------------------------------------- */
-/* No spinners or skeletons. After ~300 ms show:
-   <div class="waiting" role="status"><span class="progress" style:--value={0.4}></span>
-   <span class="readout">Searching · <b>2.1</b> s</span></div>. Omit --value for a plain bar. */
+/* No spinners, skeletons or shimmer. After ~300 ms show the segmented bar and a counter:
+   <div class="waiting" role="status">
+     <span class="progress"><span style:--weight={0.6} style:--value={0.4}></span>…</span>
+     <span class="readout">Searching 6,214 pages · <b>0.4</b> s</span></div>
+   Segments (search, reading, checking: 0.6 : 1.2 : 1.2) fill linearly in Basalt, never green,
+   and sit full when a stage runs long. The bar becomes the .readout when the step is done. */
 
 .waiting {
 	display: grid;
@@ -603,21 +606,25 @@ caption {
 	margin-bottom: 1.5rem;
 }
 .progress {
-	display: block;
-	height: 3px;
+	display: flex;
+	gap: 3px;
+	height: 4px;
+}
+.progress > span {
+	flex: var(--weight, 1) 1 0;
 	background: var(--color-rule);
 	overflow: hidden;
 }
-.progress::before {
+.progress > span::before {
 	content: '';
 	display: block;
 	height: 100%;
 	width: calc(var(--value, 0) * 100%);
 	background: var(--color-ink);
-	transition: width 200ms linear;
+	transition: width 100ms linear;
 }
 @media (prefers-reduced-motion: reduce) {
-	.progress::before {
+	.progress > span::before {
 		transition: none;
 	}
 }

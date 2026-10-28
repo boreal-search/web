@@ -14,7 +14,7 @@ export type EngineFailure =
 	| { kind: 'error'; status: number | null; detail: string };
 
 /** What a 404 was about. "Doesn't exist" and "not in your current context" read the same. */
-export type Missing = 'page' | 'data_source' | 'org';
+export type Missing = 'page' | 'data_source' | 'org' | 'trail';
 
 /** Who may open a role-gated page. */
 export type Gate = 'platform_admin' | 'org_admin';
@@ -109,6 +109,14 @@ export function describeFailure(f: Failure, ctx: FailureContext = {}): FailureCo
 					title: 'Page not found',
 					cause: 'The address may be mistyped, or the page may have moved.',
 					next: 'Check the address, or start again from your data sources.'
+				};
+			}
+			if (f.what === 'trail') {
+				return {
+					...base,
+					title: 'Trail not found',
+					cause: "It may have been deleted, or it isn't shared with you.",
+					next: 'Go to your trails, or start a new search.'
 				};
 			}
 			if (f.what === 'org') {
