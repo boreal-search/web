@@ -2,8 +2,9 @@
 // Regenerate with `supabase gen types typescript --linked > src/lib/supabase/types.ts`
 // once the project is linked; keep the shape in sync with the migrations.
 
-export type OrgRole = 'owner' | 'member';
-export type SearchStatus = 'ok' | 'forbidden' | 'engine_error';
+export type OrgRole = 'admin' | 'member';
+export type SearchStatus =
+	'ok' | 'forbidden' | 'timeout' | 'unreachable' | 'unavailable' | 'engine_error';
 /** `add_org_member` result: the email had an account (member row) or not (pending invite). */
 export type AddMemberResult = 'added' | 'invited';
 
@@ -71,6 +72,12 @@ export interface Database {
 					}
 				];
 			};
+			public_data_sources: {
+				Row: { data_source_id: string; created_at: string };
+				Insert: { data_source_id: string; created_at?: string };
+				Update: Record<string, never>;
+				Relationships: [];
+			};
 			platform_admins: {
 				Row: { user_id: string; created_at: string };
 				Insert: { user_id: string; created_at?: string };
@@ -120,7 +127,8 @@ export interface Database {
 			search_events: {
 				Row: {
 					id: string;
-					org_id: string;
+					/** null: a search in the Public context. */
+					org_id: string | null;
 					user_id: string | null;
 					data_source_ids: string[];
 					query: string | null;
@@ -137,7 +145,7 @@ export interface Database {
 				};
 				Insert: {
 					id?: string;
-					org_id: string;
+					org_id?: string | null;
 					user_id?: string | null;
 					data_source_ids: string[];
 					query?: string | null;
@@ -159,7 +167,8 @@ export interface Database {
 		Views: {
 			org_search_daily: {
 				Row: {
-					org_id: string;
+					/** null: the Public context (visible to platform admins only). */
+					org_id: string | null;
 					day: string;
 					searches: number;
 					ok: number;
@@ -175,7 +184,7 @@ export interface Database {
 		Functions: {
 			is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
 			is_org_member: { Args: { p_org_id: string }; Returns: boolean };
-			is_org_owner: { Args: { p_org_id: string }; Returns: boolean };
+			is_org_admin: { Args: { p_org_id: string }; Returns: boolean };
 			add_org_member: {
 				Args: { p_org_id: string; p_email: string; p_role: OrgRole };
 				Returns: AddMemberResult;

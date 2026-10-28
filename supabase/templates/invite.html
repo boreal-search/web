@@ -1,0 +1,17 @@
+<h2>You've been invited to Boreal Search</h2>
+<p>Follow this link to accept and sign in:</p>
+<!-- Dashboard invites: RedirectTo is usually SiteURL. Same token_hash shape as the other
+     templates; the default {{ .ConfirmationURL }} returns tokens in a #fragment the server
+     never sees, which loops the user back to /login. -->
+{{ if eq .RedirectTo .SiteURL }}
+<p>
+	<a href="{{ .SiteURL }}/auth/confirm?next=/&token_hash={{ .TokenHash }}&type=invite"
+		>Accept invitation</a
+	>
+</p>
+{{ else }}
+<p>
+	<a href="{{ printf `%s&token_hash=%s&type=invite` .RedirectTo .TokenHash }}">Accept invitation</a>
+</p>
+{{ end }}
+<p>To sign in with a password later, use "Forgot password" on the sign-in page to set one.</p>

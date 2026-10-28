@@ -1,20 +1,36 @@
+import { CONTEXT_COOKIE, contextLabel, contextValue, getAccess } from '#lib/server/access.js';
 import { isPlatformAdmin } from '#lib/server/auth.js';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ locals }) => {
+/**
+ * Signed in: the user's access for this request (current context and searchable set; (app)
+ * pages read it via `parent()`) plus nav. Every admin/manage route re-checks its own access.
+ */
+export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 	const { session, user, supabase } = locals;
-	if (!user) return { session, user, nav: { isAdmin: false, ownedOrgs: [] } };
+	if (!user) return { session, user, access: null, nav: null };
 
-	// Nav links only; every admin/manage route re-checks its own access server-side.
-	const [isAdmin, owned] = await Promise.all([
+	const [platformAdmin, access] = await Promise.all([
 		isPlatformAdmin(supabase),
-		supabase
-			.from('org_members')
-			.select('orgs(slug, name)')
-			.eq('user_id', user.id)
-			.eq('role', 'owner')
+		getAccess(supabase, user.id, cookies.get(CONTEXT_COOKIE))
 	]);
-	if (owned.error) throw owned.error;
-	const ownedOrgs = owned.data.flatMap((m) => (m.orgs ? [m.orgs] : []));
-	return { session, user, nav: { isAdmin, ownedOrgs } };
+	const current = contextValue(access.context);
+	return {
+		session,
+		user,
+		access,
+		nav: {
+			isPlatformAdmin: platformAdmin,
+			adminOrgs: access.memberships.filter((m) => m.role === 'admin'),
+			// Switcher only when there is a choice: 2+ orgs, or an org plus public corpora.
+			contexts:
+				access.contexts.length > 1
+					? access.contexts.map((c) => ({
+							value: contextValue(c),
+							label: contextLabel(c),
+							current: contextValue(c) === current
+						}))
+					: []
+		}
+	};
 };

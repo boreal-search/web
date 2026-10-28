@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -8,6 +9,10 @@
 </script>
 
 <h1>Log in</h1>
+
+{#if data.linkError && !form}
+	<p class="error" role="alert">{data.linkError}</p>
+{/if}
 
 {#if form?.sent}
 	<p>Check <strong>{form.email}</strong> for a sign-in link. You can close this tab.</p>
@@ -48,4 +53,8 @@
 			{/if}
 		</button>
 	</form>
+	<p>
+		<a href={resolve('/forgot')}>Forgot your password?</a> · No account?
+		<a href={resolve('/signup')}>Sign up</a>
+	</p>
 {/if}

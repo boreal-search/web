@@ -1,0 +1,14 @@
+<h2>Sign in to Boreal Search</h2>
+<p>Follow this link to sign in. It works once:</p>
+<!-- token_hash instead of {{ .ConfirmationURL }}: a PKCE code only works in the browser that
+     requested it, so opening the email elsewhere failed. -->
+{{ if eq .RedirectTo .SiteURL }}
+<p>
+	<a href="{{ .SiteURL }}/auth/confirm?next=/&token_hash={{ .TokenHash }}&type=magiclink"
+		>Sign in</a
+	>
+</p>
+{{ else }}
+<p><a href="{{ printf `%s&token_hash=%s&type=magiclink` .RedirectTo .TokenHash }}">Sign in</a></p>
+{{ end }}
+<p>If you didn't ask to sign in, you can ignore this email.</p>

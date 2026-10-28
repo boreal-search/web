@@ -1,0 +1,16 @@
+<h2>Confirm your email</h2>
+<p>Follow this link to confirm your email address and sign in to Boreal Search:</p>
+<!-- RedirectTo is our /auth/confirm?next=… URL (SiteURL when none was allowed). One printf
+     action, because html/template rejects {{ .TokenHash }} after a URL of unknown shape. -->
+{{ if eq .RedirectTo .SiteURL }}
+<p>
+	<a href="{{ .SiteURL }}/auth/confirm?next=/&token_hash={{ .TokenHash }}&type=email"
+		>Confirm your email</a
+	>
+</p>
+{{ else }}
+<p>
+	<a href="{{ printf `%s&token_hash=%s&type=email` .RedirectTo .TokenHash }}">Confirm your email</a>
+</p>
+{{ end }}
+<p>If you didn't sign up for Boreal Search, you can ignore this email.</p>

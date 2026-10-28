@@ -41,7 +41,7 @@ export const variables = defineEnvVars({
 	},
 	EMAIL_FROM: {
 		description:
-			'Sender for app emails, e.g. `Boreal Search <no-reply@borealsearch.app>`. Optional.',
+			'Sender for app emails, e.g. `Boreal Search <support@borealsearch.app>`. Optional.',
 		schema: optional
 	}
 });

@@ -36,7 +36,7 @@ const auth: Handle = async ({ event, resolve }) => {
 	event.locals.session = session;
 	event.locals.user = user;
 
-	if (user && event.url.pathname === '/login') {
+	if (user && (event.url.pathname === '/login' || event.url.pathname === '/signup')) {
 		redirect(303, '/');
 	}
 

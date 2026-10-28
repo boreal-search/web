@@ -1,21 +1,24 @@
 import { fail } from '@sveltejs/kit';
-import { requireOrgManager } from '#lib/server/auth.js';
+import { requireOrgAdmin } from '#lib/server/auth.js';
 import { EmailError, sendEmail } from '#lib/server/email.js';
 import { engine, engineErrorMessage } from '#lib/server/engine.js';
 import {
 	inviteEmail,
+	isPublicEmailDomain,
 	parseDomain,
 	parseEmail,
 	parseRole,
 	planGrantChanges
 } from '#lib/server/orgs.js';
+import { ROLE_LABELS } from '#lib/roles.js';
 import type { Actions, PageServerLoad } from './$types';
 
-// Admins and owners both reach this page; RLS and add_org_member enforce the same split
-// in the database, these checks just return a clear message instead of a silent no-op.
+// The org admin page. Org admins and platform admins both reach it; platform-admin-only
+// sections and actions are gated here and, authoritatively, by RLS and add_org_member.
+// These checks just return a clear message instead of a silent no-op.
 
 export const load: PageServerLoad = async ({ params, locals, fetch }) => {
-	const { org, isAdmin } = await requireOrgManager(params.slug);
+	const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
 	const db = locals.supabase;
 
 	const [members, invites] = await Promise.all([
@@ -29,8 +32,8 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 	if (members.error) throw members.error;
 	if (invites.error) throw invites.error;
 
-	let admin = null;
-	if (isAdmin) {
+	let platform = null;
+	if (isPlatformAdmin) {
 		const [grants, domains, sources] = await Promise.all([
 			db.from('org_data_sources').select('data_source_id').eq('org_id', org.id),
 			db.from('org_domains').select('domain').eq('org_id', org.id).order('domain'),
@@ -41,7 +44,7 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 		]);
 		if (grants.error) throw grants.error;
 		if (domains.error) throw domains.error;
-		admin = {
+		platform = {
 			grantedIds: grants.data.map((g) => g.data_source_id),
 			domains: domains.data.map((d) => d.domain),
 			dataSources: sources.list.map((ds) => ({ id: ds.id, name: ds.name })),
@@ -58,15 +61,15 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 			displayName: m.profiles?.display_name ?? null
 		})),
 		invites: invites.data,
-		admin
+		platform
 	};
 };
 
-const adminOnly = () => fail(403, { error: 'Only platform admins can change this.' });
+const platformAdminOnly = () => fail(403, { error: 'Only platform admins can change this.' });
 
 export const actions: Actions = {
 	addMember: async ({ params, request, locals, url, fetch }) => {
-		const { org } = await requireOrgManager(params.slug);
+		const { org } = await requireOrgAdmin(params.slug);
 		const form = await request.formData();
 		const email = parseEmail(form.get('email'));
 		const role = parseRole(form.get('role'));
@@ -78,21 +81,23 @@ export const actions: Actions = {
 			p_role: role
 		});
 		if (error) return fail(400, { error: error.message });
-		if (result === 'added') return { notice: `${email} is now a ${role}.` };
+		if (result === 'added') return { notice: `Added ${email} as ${ROLE_LABELS[role]}.` };
 
 		try {
 			await sendEmail(inviteEmail(email, org.name, `${url.origin}/login`), fetch);
-			return { notice: `Invited ${email}; they join when they sign in.` };
+			return {
+				notice: `Invited ${email}. They join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
+			};
 		} catch (e) {
 			const reason = e instanceof EmailError ? e.message : String(e);
 			return {
-				notice: `Invite for ${email} saved, but the email was not sent (${reason}). They join when they sign in at ${url.origin}/login.`
+				notice: `Invite for ${email} saved, but the email was not sent (${reason}). They join once they sign up at ${url.origin}/login and confirm that address.`
 			};
 		}
 	},
 
 	setRole: async ({ params, request, locals }) => {
-		const { org } = await requireOrgManager(params.slug);
+		const { org } = await requireOrgAdmin(params.slug);
 		const form = await request.formData();
 		const email = parseEmail(form.get('email'));
 		const role = parseRole(form.get('role'));
@@ -105,11 +110,11 @@ export const actions: Actions = {
 			p_role: role
 		});
 		if (error) return fail(400, { error: error.message });
-		return { notice: `${email} is now a ${role}.` };
+		return { notice: `${email} is now ${ROLE_LABELS[role]}.` };
 	},
 
 	removeMember: async ({ params, request, locals }) => {
-		const { org } = await requireOrgManager(params.slug);
+		const { org } = await requireOrgAdmin(params.slug);
 		const userId = String((await request.formData()).get('user_id') ?? '');
 		const { error, count } = await locals.supabase
 			.from('org_members')
@@ -122,7 +127,7 @@ export const actions: Actions = {
 	},
 
 	revokeInvite: async ({ params, request, locals }) => {
-		const { org } = await requireOrgManager(params.slug);
+		const { org } = await requireOrgAdmin(params.slug);
 		const email = parseEmail((await request.formData()).get('email'));
 		if (!email) return fail(400, { error: 'Invalid email.' });
 		const { error } = await locals.supabase
@@ -135,8 +140,8 @@ export const actions: Actions = {
 	},
 
 	saveGrants: async ({ params, request, locals, fetch }) => {
-		const { org, isAdmin } = await requireOrgManager(params.slug);
-		if (!isAdmin) return adminOnly();
+		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
+		if (!isPlatformAdmin) return platformAdminOnly();
 		const desired = (await request.formData()).getAll('data_source_id').map(String);
 
 		let known: string[];
@@ -170,14 +175,19 @@ export const actions: Actions = {
 				.in('data_source_id', remove);
 			if (error) return fail(400, { error: error.message });
 		}
-		return { notice: 'Corpus access saved.' };
+		return { notice: 'Data source access saved.' };
 	},
 
 	addDomain: async ({ params, request, locals }) => {
-		const { org, isAdmin } = await requireOrgManager(params.slug);
-		if (!isAdmin) return adminOnly();
+		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
+		if (!isPlatformAdmin) return platformAdminOnly();
 		const domain = parseDomain((await request.formData()).get('domain'));
 		if (!domain) return fail(400, { error: 'Enter a domain like acme.com.' });
+		if (isPublicEmailDomain(domain)) {
+			return fail(400, {
+				error: `${domain} is a public email provider: anyone with an address there would join ${org.name}. Add those people by email instead.`
+			});
+		}
 		const { error } = await locals.supabase.from('org_domains').insert({ org_id: org.id, domain });
 		if (error) {
 			const message =
@@ -188,8 +198,8 @@ export const actions: Actions = {
 	},
 
 	removeDomain: async ({ params, request, locals }) => {
-		const { org, isAdmin } = await requireOrgManager(params.slug);
-		if (!isAdmin) return adminOnly();
+		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
+		if (!isPlatformAdmin) return platformAdminOnly();
 		const domain = parseDomain((await request.formData()).get('domain'));
 		if (!domain) return fail(400, { error: 'Invalid domain.' });
 		const { error } = await locals.supabase
@@ -202,8 +212,8 @@ export const actions: Actions = {
 	},
 
 	saveSettings: async ({ params, request, locals }) => {
-		const { org, isAdmin } = await requireOrgManager(params.slug);
-		if (!isAdmin) return adminOnly();
+		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
+		if (!isPlatformAdmin) return platformAdminOnly();
 		const form = await request.formData();
 		const defaultRole = parseRole(form.get('default_role'));
 		if (!defaultRole) return fail(400, { error: 'Pick a default role.' });

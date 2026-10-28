@@ -6,7 +6,8 @@ import type { Database, SearchStatus } from '#lib/supabase/types.js';
 import type { SearchResponse } from './engine.types';
 
 export interface SearchEventInput {
-	orgId: string;
+	/** The current org, or null for a search in the Public context. */
+	orgId: string | null;
 	userId: string;
 	query: string;
 	dataSourceIds: string[];
@@ -40,6 +41,18 @@ export function buildSearchEvent(
 	};
 }
 
+/** The org's `log_queries` switch. Public searches have no org and always keep the text. */
+async function logsQueries(supabase: SupabaseClient<Database>, orgId: string | null) {
+	if (orgId === null) return true;
+	const { data, error } = await supabase
+		.from('orgs')
+		.select('log_queries')
+		.eq('id', orgId)
+		.single();
+	if (error) throw error;
+	return data.log_queries;
+}
+
 /**
  * Record a search. On Vercel the insert goes to `waitUntil` so it runs after the response is
  * sent; elsewhere (dev, `vite preview`, tests) it is awaited, because `waitUntil` is a no-op
@@ -51,16 +64,9 @@ export async function recordSearchEvent(
 ): Promise<void> {
 	const work = (async () => {
 		try {
-			const { data: org, error: orgErr } = await supabase
-				.from('orgs')
-				.select('log_queries')
-				.eq('id', input.orgId)
-				.single();
-			if (orgErr) throw orgErr;
-
 			const { error } = await supabase
 				.from('search_events')
-				.insert(buildSearchEvent(input, org.log_queries));
+				.insert(buildSearchEvent(input, await logsQueries(supabase, input.orgId)));
 			if (error) throw error;
 		} catch (e) {
 			console.error('search_events insert failed', e);
