@@ -57,6 +57,11 @@ content_path = "./supabase/templates/invite.html"
 subject = "Sign in to Boreal Search"
 content_path = "./supabase/templates/magic_link.html"
 
+[auth.email.notification.password_changed]
+enabled = true
+subject = "Your Boreal Search password was changed"
+content_path = "./supabase/templates/password_changed.html"
+
 # Local dev captures auth email in Inbucket (below). To send real mail through Resend instead,
 # uncomment and export RESEND_API_KEY. The hosted project sets the same values in
 # Dashboard → Auth → SMTP Settings.
