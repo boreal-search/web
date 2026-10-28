@@ -21,9 +21,6 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Legacy wrangler secrets file; safe to delete locally
-.dev.vars
-
 # Supabase
 supabase/.temp
 supabase/.branches
