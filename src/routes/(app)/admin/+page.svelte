@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { day } from '#lib/format.js';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
+	import AdminNav from './AdminNav.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -29,6 +30,7 @@
 </svelte:head>
 
 <div class="page-head">
+	<AdminNav />
 	<h1>Platform admin</h1>
 	<p class="readout">
 		<span><b>{data.orgs.length}</b> {data.orgs.length === 1 ? 'org' : 'orgs'}</span>

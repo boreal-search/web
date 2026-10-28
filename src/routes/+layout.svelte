@@ -72,7 +72,9 @@
 					{/each}
 					{#if data.nav.isPlatformAdmin}
 						<li>
-							<a href={resolve('/(app)/admin')} aria-current={current(resolve('/(app)/admin'))}
+							<a
+								href={resolve('/(app)/admin')}
+								aria-current={current(resolve('/(app)/admin'), route.startsWith('/(app)/admin/'))}
 								>Platform admin</a
 							>
 						</li>

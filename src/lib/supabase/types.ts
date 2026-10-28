@@ -241,6 +241,10 @@ export interface Database {
 				Args: { p_org_id: string; p_email: string; p_role: OrgRole };
 				Returns: AddMemberResult;
 			};
+			admin_last_sign_ins: {
+				Args: { p_user_ids: string[] };
+				Returns: { user_id: string; last_sign_in_at: string | null }[];
+			};
 		};
 		Enums: { org_role: OrgRole; search_status: SearchStatus };
 		CompositeTypes: Record<string, never>;
