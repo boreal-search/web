@@ -1,19 +1,23 @@
 // Screenshot pages as the test user, light and dark, desktop and phone, against a running dev server.
 //   bun scripts/shots.ts [route ...]      e.g. bun scripts/shots.ts / /search "/search?q=fish habitat" /admin
 // A route `/search?q=…` submits the search form with that query. Routes starting with `anon:` are
-// shot logged out (`anon:/login`). Needs TEST_USER_EMAIL / TEST_USER_PASSWORD in .env (bun loads it).
-// Output: .shots/<route>-<scheme>-<width>.png (git-ignored).
+// shot logged out (`anon:/login`). Logs in as SHOTS_AS=platform-admin|org-admin|member (default
+// org-admin) with TEST_<ROLE>_EMAIL / TEST_<ROLE>_PASSWORD from .env (bun loads it).
+// Output: .shots/<role>/<route>-<scheme>-<width>.png (git-ignored).
 import { chromium, type Page } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const base = process.env.SHOTS_BASE ?? 'http://localhost:5173';
-const out = '.shots';
+const out = `.shots/${(process.env.SHOTS_AS ?? 'org-admin').toLowerCase()}`;
 const routes = process.argv.slice(2);
 if (routes.length === 0)
 	routes.push('anon:/login', 'anon:/signup', 'anon:/forgot', '/', '/search', '/account', '/admin');
 
-const { TEST_USER_EMAIL: email, TEST_USER_PASSWORD: password } = process.env;
-if (!email || !password) throw new Error('Set TEST_USER_EMAIL and TEST_USER_PASSWORD in .env');
+const role = (process.env.SHOTS_AS ?? 'org-admin').toUpperCase().replace('-', '_');
+const email = process.env[`TEST_${role}_EMAIL`];
+const password = process.env[`TEST_${role}_PASSWORD`];
+if (!email || !password)
+	throw new Error(`Set TEST_${role}_EMAIL and TEST_${role}_PASSWORD in .env`);
 
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome' });

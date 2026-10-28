@@ -71,5 +71,5 @@ Guidance, not hard rules (adapted from Lauren Tan's pstack):
   `reviewer`. Proceed and let the user course-correct; confirm only irreversible actions.
 
 Verify: `bun run check && bun run lint && bun run test`, then the real page in `bun run dev`, light and dark.
-Test login: `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` in `.env` (password form; never commit them).
+Test logins: `TEST_{PLATFORM_ADMIN,ORG_ADMIN,MEMBER}_{EMAIL,PASSWORD}` in `.env`; `SHOTS_AS=member bun run shots /`.
 For `.svelte` files use the `svelte` skill / autofixer. Decisions and context: `docs/`.
