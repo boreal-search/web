@@ -44,10 +44,10 @@ export async function requirePlatformAdmin() {
 }
 
 /**
- * Guard for /orgs/[slug]/manage: a platform admin or an owner of that org. 404 when the org
- * isn't visible to the user (RLS), 403 when it is but they're a plain member.
+ * Guard for /orgs/[slug]/manage: an org admin of that org, or a platform admin. 404 when the
+ * org isn't visible to the user (RLS), 403 when it is but they're a plain member.
  */
-export async function requireOrgManager(slug: string) {
+export async function requireOrgAdmin(slug: string) {
 	const user = requireUser();
 	const { locals } = getRequestEvent();
 	const { data: org, error: e } = await locals.supabase
@@ -58,10 +58,10 @@ export async function requireOrgManager(slug: string) {
 	if (e) throw e;
 	if (!org) error(404, 'Org not found');
 
-	const [isAdmin, role] = await Promise.all([
+	const [platformAdmin, role] = await Promise.all([
 		isPlatformAdmin(locals.supabase),
 		getOrgRole(locals.supabase, org.id, user.id)
 	]);
-	if (!isAdmin && role !== 'owner') error(403, 'Only org owners can manage members');
-	return { user, org, isAdmin };
+	if (!platformAdmin && role !== 'admin') error(403, 'Only org admins can manage this org');
+	return { user, org, isPlatformAdmin: platformAdmin };
 }

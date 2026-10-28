@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	inviteEmail,
+	isPublicEmailDomain,
 	parseDomain,
 	parseEmail,
 	parseRole,
@@ -33,6 +34,31 @@ describe('parseDomain', () => {
 	);
 });
 
+describe('isPublicEmailDomain', () => {
+	it.each([
+		'gmail.com',
+		'googlemail.com',
+		'outlook.com',
+		'hotmail.com',
+		'hotmail.co.uk',
+		'yahoo.com',
+		'yahoo.co.jp',
+		'icloud.com',
+		'proton.me',
+		'protonmail.com',
+		'gmx.de',
+		'aol.com'
+	])('flags %j', (d) => {
+		expect(isPublicEmailDomain(d)).toBe(true);
+	});
+	it.each(['acme.com', 'mail.acme.com', 'gmail.acme.com', 'live.acme.co.uk', 'boreal.ca'])(
+		'allows %j',
+		(d) => {
+			expect(isPublicEmailDomain(d)).toBe(false);
+		}
+	);
+});
+
 describe('parseSlug', () => {
 	it('accepts the orgs.slug format, lower-casing', () => {
 		expect(parseSlug(' Acme-Corp ')).toBe('acme-corp');
@@ -44,9 +70,9 @@ describe('parseSlug', () => {
 
 describe('parseRole', () => {
 	it('accepts the enum values only', () => {
-		expect(parseRole('owner')).toBe('owner');
+		expect(parseRole('admin')).toBe('admin');
 		expect(parseRole('member')).toBe('member');
-		expect(parseRole('admin')).toBeNull();
+		expect(parseRole('owner')).toBeNull();
 		expect(parseRole(null)).toBeNull();
 	});
 });

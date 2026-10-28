@@ -1,14 +1,24 @@
 import { fail } from '@sveltejs/kit';
-import { findForbiddenDataSources, getAccessGrants, resolveSearchOrg } from '#lib/server/access.js';
+import { findForbiddenDataSources, getAccess, resolveSearchOrg } from '#lib/server/access.js';
 import { recordSearchEvent } from '#lib/server/analytics.js';
 import { requireUser } from '#lib/server/auth.js';
-import { engine, engineErrorMessage, type SearchResponse } from '#lib/server/engine.js';
+import {
+	answerNotice,
+	engine,
+	engineErrorMessage,
+	engineFailureMessage,
+	FAILURE_HTTP_STATUS,
+	type EngineFailure,
+	type SearchResponse
+} from '#lib/server/engine.js';
+import type { SearchStatus } from '#lib/supabase/types.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const MAX_TOP_K = 50;
 
 export const load: PageServerLoad = async ({ parent, fetch }) => {
 	const { accessibleDataSourceIds } = await parent();
+	if (accessibleDataSourceIds.length === 0) return { dataSources: [], engineError: null };
 	const allowed = new Set(accessibleDataSourceIds);
 
 	try {
@@ -17,6 +27,14 @@ export const load: PageServerLoad = async ({ parent, fetch }) => {
 	} catch (e) {
 		return { dataSources: [], engineError: engineErrorMessage(e) };
 	}
+};
+
+/** search_events.status for each engine failure. */
+const FAILURE_STATUS: Record<EngineFailure['kind'], SearchStatus> = {
+	timeout: 'timeout',
+	unreachable: 'unreachable',
+	unavailable: 'unavailable',
+	error: 'engine_error'
 };
 
 export const actions: Actions = {
@@ -35,16 +53,13 @@ export const actions: Actions = {
 		}
 
 		// Re-check access on every search; never trust the ids posted by the form.
-		const grants = await getAccessGrants(locals.supabase, user.id);
-		const accessible = [...new Set(grants.map((g) => g.data_source_id))];
-		const forbidden = findForbiddenDataSources(requested, accessible);
-		const orgId = resolveSearchOrg(requested, grants);
+		const access = await getAccess(locals.supabase, user.id);
+		const forbidden = findForbiddenDataSources(requested, access.dataSourceIds);
+		const orgId = resolveSearchOrg(requested, access.grants);
 
 		// Analytics: fire-and-forget on Vercel (waitUntil); awaited in dev/tests. See analytics.ts.
-		const record = (
-			status: 'ok' | 'forbidden' | 'engine_error',
-			extra: { response?: SearchResponse; error?: string }
-		) => {
+		// Searches without an org (a future public tier) are not recorded.
+		const record = (status: SearchStatus, extra: { response?: SearchResponse; error?: string }) => {
 			if (!orgId) return Promise.resolve();
 			return recordSearchEvent(locals.supabase, {
 				orgId,
@@ -64,24 +79,41 @@ export const actions: Actions = {
 				query,
 				requested,
 				answer,
-				error: `No access to data source(s): ${forbidden.join(', ')}`
+				error: `You don't have access to: ${forbidden.join(', ')}. Reload the page to see what you can search.`
 			});
 		}
 
-		try {
-			const { response, answerError } = await engine(fetch).search({
-				query,
-				data_source_ids: requested,
-				top_k: topK,
-				rerank,
-				answer
+		const outcome = await engine(fetch).search({
+			query,
+			data_source_ids: requested,
+			top_k: topK,
+			rerank,
+			answer
+		});
+
+		if (outcome.kind === 'ok' || outcome.kind === 'no_results') {
+			const a = outcome.answer;
+			await record('ok', {
+				response: outcome.response,
+				error:
+					a.kind === 'failed'
+						? `answer failed: ${a.failure.kind}`
+						: a.kind === 'disabled'
+							? 'answer disabled'
+							: undefined
 			});
-			await record('ok', { response });
-			return { query, requested, answer, response, answerError };
-		} catch (e) {
-			const message = engineErrorMessage(e);
-			await record('engine_error', { error: message });
-			return fail(502, { query, requested, answer, error: message });
+			return { query, requested, answer, outcome, answerNotice: answerNotice(a) };
 		}
+
+		const detail = 'detail' in outcome ? outcome.detail : undefined;
+		await record(FAILURE_STATUS[outcome.kind], {
+			error: detail ? `${outcome.kind}: ${detail}` : outcome.kind
+		});
+		return fail(FAILURE_HTTP_STATUS[outcome.kind], {
+			query,
+			requested,
+			answer,
+			error: engineFailureMessage(outcome)
+		});
 	}
 };

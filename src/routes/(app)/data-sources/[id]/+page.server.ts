@@ -1,5 +1,11 @@
 import { error } from '@sveltejs/kit';
-import { engine, EngineError } from '#lib/server/engine.js';
+import {
+	classifyEngineError,
+	engine,
+	engineFailureMessage,
+	EngineError,
+	FAILURE_HTTP_STATUS
+} from '#lib/server/engine.js';
 import type { PageServerLoad } from './$types';
 
 const PAGE_SIZE = 50;
@@ -21,7 +27,7 @@ export const load: PageServerLoad = async ({ params, url, parent, fetch }) => {
 		return { dataSource, documents, jobs, offset, pageSize: PAGE_SIZE };
 	} catch (e) {
 		if (e instanceof EngineError && e.status === 404) error(404, 'Data source not found');
-		const message = e instanceof EngineError ? `${e.status} ${e.message}` : 'Engine unreachable';
-		error(502, message);
+		const failure = classifyEngineError(e);
+		error(FAILURE_HTTP_STATUS[failure.kind], engineFailureMessage(failure));
 	}
 };

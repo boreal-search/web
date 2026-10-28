@@ -7,14 +7,24 @@ export interface AccessGrant {
 	data_source_id: string;
 }
 
+/** What the current user may search. The one place that decides it. */
+export interface Access {
+	/** Orgs the user belongs to (empty: show the "not in an org yet" state). */
+	orgIds: string[];
+	/** Every (org, data source) grant via those memberships; used to attribute searches. */
+	grants: AccessGrant[];
+	/** Data source ids the user may query. A public tier would add its ids here. */
+	dataSourceIds: string[];
+}
+
 /**
- * Every (org, data source) grant the user holds via their org memberships.
- * RLS already scopes the query to the user's orgs; the explicit user filter is belt-and-braces.
+ * Load the user's access. RLS already scopes both queries to the user's orgs; the explicit
+ * user filter is belt-and-braces.
  */
-export async function getAccessGrants(
+export async function getAccess(
 	supabase: SupabaseClient<Database>,
 	userId: string
-): Promise<AccessGrant[]> {
+): Promise<Access> {
 	const { data: memberships, error: mErr } = await supabase
 		.from('org_members')
 		.select('org_id')
@@ -22,24 +32,15 @@ export async function getAccessGrants(
 	if (mErr) throw mErr;
 
 	const orgIds = memberships.map((m) => m.org_id);
-	if (orgIds.length === 0) return [];
+	if (orgIds.length === 0) return { orgIds, grants: [], dataSourceIds: [] };
 
-	const { data: links, error: lErr } = await supabase
+	const { data: grants, error: lErr } = await supabase
 		.from('org_data_sources')
 		.select('org_id, data_source_id')
 		.in('org_id', orgIds);
 	if (lErr) throw lErr;
 
-	return links;
-}
-
-/** Data source ids the current user may query, across all their orgs. */
-export async function getAccessibleDataSourceIds(
-	supabase: SupabaseClient<Database>,
-	userId: string
-): Promise<string[]> {
-	const grants = await getAccessGrants(supabase, userId);
-	return [...new Set(grants.map((g) => g.data_source_id))];
+	return { orgIds, grants, dataSourceIds: [...new Set(grants.map((g) => g.data_source_id))] };
 }
 
 /**

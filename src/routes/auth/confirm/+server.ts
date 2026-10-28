@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { EmailOtpType } from '@supabase/supabase-js';
+import { hasRecentRecovery } from '#lib/server/credentials.js';
 import type { RequestHandler } from './$types';
 
 const OTP_TYPES: EmailOtpType[] = [
@@ -12,9 +13,10 @@ const OTP_TYPES: EmailOtpType[] = [
 ];
 
 /**
- * Target of the magic-link email: exchanges the link's credential for a session cookie, then
- * redirects. Accepts both `?code=` (PKCE, Supabase's default {{ .ConfirmationURL }} template) and
- * `?token_hash=&type=` (custom template).
+ * Target of every auth email: exchanges the link's credential for a session cookie, then
+ * redirects. Accepts `?token_hash=&type=` (our templates in supabase/templates) and `?code=`
+ * (PKCE, Supabase's default {{ .ConfirmationURL }} template). Reset links always land on
+ * /account/password, whatever `next` says; any failure goes to /login with a message.
  */
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const code = url.searchParams.get('code');
@@ -23,13 +25,20 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const nextParam = url.searchParams.get('next') ?? '/';
 	const next = nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '/';
 
-	if (code) {
-		const { error } = await locals.supabase.auth.exchangeCodeForSession(code);
-		if (!error) redirect(303, next);
-	} else if (tokenHash && type && OTP_TYPES.includes(type)) {
-		const { error } = await locals.supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-		if (!error) redirect(303, next);
+	// Recovery token_hash: verified on /account/password when the new password is submitted,
+	// because the resulting session is indistinguishable from a magic-link one.
+	if (tokenHash && type === 'recovery') {
+		redirect(303, `/account/password?${new URLSearchParams({ token_hash: tokenHash })}`);
 	}
 
-	redirect(303, '/login?error=invalid_link');
+	let ok = false;
+	if (code) {
+		ok = !(await locals.supabase.auth.exchangeCodeForSession(code)).error;
+	} else if (tokenHash && type && OTP_TYPES.includes(type)) {
+		ok = !(await locals.supabase.auth.verifyOtp({ type, token_hash: tokenHash })).error;
+	}
+	if (!ok) redirect(303, '/login?error=invalid_link');
+
+	// A PKCE code doesn't say what the link was for; the new session's AMR does.
+	redirect(303, (await hasRecentRecovery(locals.supabase)) ? '/account/password' : next);
 };

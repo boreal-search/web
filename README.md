@@ -63,11 +63,23 @@ bun run deploy                     # optional manual deploy; git push is the nor
 ```
 
 `RESEND_API_KEY` / `EMAIL_FROM` (`Boreal Search <no-reply@borealsearch.app>`) are optional; without
-them `sendEmail` throws. Magic-link emails are sent by Supabase: set Auth → SMTP Settings to
-`smtp.resend.com:465`, user `resend`, password = a Resend API key.
+them `sendEmail` throws. Auth emails (sign-in, confirm, reset) are sent by Supabase: set Auth →
+SMTP Settings to `smtp.resend.com:465`, user `resend`, password = a Resend API key.
 
-Add the deployed origin (`https://<project>.vercel.app/auth/confirm`, plus the custom domain) to
-the Supabase project's Auth → Redirect URLs.
+> **Required: Auth → Providers → Email → "Confirm email" ON.** Password sign-up is only safe
+> with it: invites and domain auto-joins are claimed on email confirmation, so without it
+> anyone could sign up with a customer's address and join their org. The app can't check this.
+
+Hosted Supabase Auth settings (mirror `supabase/config.toml`):
+
+- Providers → Email: Confirm email **on**, Secure password change **on**, minimum password
+  length **8**.
+- URL Configuration: Site URL `https://www.borealsearch.app`; Redirect URLs
+  `https://www.borealsearch.app/auth/confirm**` and `https://boreal-app.vercel.app/auth/confirm**`.
+  Keep the `**`: links carry `?next=…`, an exact entry doesn't match, and Supabase then quietly
+  uses the Site URL.
+- Email Templates: paste `supabase/templates/confirmation.html` into "Confirm signup" and
+  `supabase/templates/recovery.html` into "Reset password" (subjects are in `config.toml`).
 
 ## More
 

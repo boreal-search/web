@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { authErrorMessage } from '#lib/server/credentials.js';
 import type { Actions, PageServerLoad } from './$types';
 
 // Only allow same-origin relative paths as a post-login destination.
@@ -8,7 +9,14 @@ function safeRedirect(value: FormDataEntryValue | string | null): string {
 }
 
 export const load: PageServerLoad = ({ url }) => {
-	return { redirectTo: safeRedirect(url.searchParams.get('redirectTo')) };
+	return {
+		redirectTo: safeRedirect(url.searchParams.get('redirectTo')),
+		// Set by /auth/confirm when an email link (sign-in, sign-up or reset) can't be used.
+		linkError:
+			url.searchParams.get('error') === 'invalid_link'
+				? 'That link is invalid or has expired. Request a new one.'
+				: null
+	};
 };
 
 export const actions: Actions = {
@@ -25,7 +33,7 @@ export const actions: Actions = {
 		// Password set: sign in directly (users created in the Supabase dashboard have one).
 		if (password) {
 			const { error } = await locals.supabase.auth.signInWithPassword({ email, password });
-			if (error) return fail(400, { email, error: error.message });
+			if (error) return fail(400, { email, error: authErrorMessage(error) });
 			redirect(303, redirectTo);
 		}
 
@@ -39,7 +47,7 @@ export const actions: Actions = {
 		});
 
 		if (error) {
-			return fail(500, { email, error: error.message });
+			return fail(400, { email, error: authErrorMessage(error) });
 		}
 		return { sent: true, email };
 	}

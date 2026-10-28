@@ -23,15 +23,31 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173/auth/confirm", "http://localhost:4173/auth/confirm"]
+additional_redirect_urls = ["http://localhost:5173/auth/confirm**", "http://localhost:4173/auth/confirm**"]
 enable_signup = true
+# Keep in sync with MIN_PASSWORD_LENGTH in src/lib/server/credentials.ts and the hosted project.
+minimum_password_length = 8
 
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
-enable_confirmations = false
-# Magic links hit /auth/confirm with token_hash (see src/routes/auth/confirm).
+# Required: invites and domain auto-joins are claimed on email confirmation, so password
+# sign-up without it would let anyone claim someone else's address (docs/decisions.md).
+enable_confirmations = true
+# Password changes need a session younger than 24h (or a reauthentication nonce).
+secure_password_change = true
 otp_expiry = 3600
+max_frequency = "1s"
+
+# Links point at /auth/confirm with token_hash (see src/routes/auth/confirm). The hosted
+# project needs the same templates pasted into Dashboard → Auth → Email Templates.
+[auth.email.template.confirmation]
+subject = "Confirm your email for Boreal Search"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Boreal Search password"
+content_path = "./supabase/templates/recovery.html"
 
 # Local dev captures auth email in Inbucket (below). To send real mail through Resend instead,
 # uncomment and export RESEND_API_KEY. The hosted project sets the same values in

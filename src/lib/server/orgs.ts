@@ -1,5 +1,6 @@
 // Org management: form-input normalisation and the invite email. Pure; the database
 // (RLS + `add_org_member`) is the authority, these only give users an early, clear error.
+import { ORG_ROLES } from '#lib/roles.js';
 import type { OrgRole } from '#lib/supabase/types.js';
 import type { Email } from './email.js';
 
@@ -9,8 +10,6 @@ const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 /** Mirrors `org_domains.domain`. */
 const DOMAIN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
-
-const ROLES: readonly OrgRole[] = ['owner', 'member'];
 
 export function parseSlug(value: FormDataEntryValue | null): string | null {
 	const slug = String(value ?? '')
@@ -35,8 +34,29 @@ export function parseDomain(value: FormDataEntryValue | null): string | null {
 	return DOMAIN.test(domain) ? domain : null;
 }
 
+/** Free/consumer mail providers, matched on any country TLD (`yahoo.co.uk`, `gmx.de`). */
+const PUBLIC_PROVIDER =
+	/^(gmail|googlemail|outlook|hotmail|live|msn|yahoo|ymail|aol|gmx|yandex|mail|zoho|proton|protonmail|tutanota|qq|163)\.(com?\.)?[a-z]{2,3}$/;
+const PUBLIC_DOMAINS = new Set([
+	'icloud.com',
+	'me.com',
+	'mac.com',
+	'pm.me',
+	'fastmail.com',
+	'hey.com',
+	'web.de'
+]);
+
+/**
+ * True for well-known public email providers. Claiming one for domain auto-join would let
+ * anyone with a free address join the org, so the domain form refuses them.
+ */
+export function isPublicEmailDomain(domain: string): boolean {
+	return PUBLIC_DOMAINS.has(domain) || PUBLIC_PROVIDER.test(domain);
+}
+
 export function parseRole(value: FormDataEntryValue | null): OrgRole | null {
-	return ROLES.find((r) => r === value) ?? null;
+	return ORG_ROLES.find((r) => r === value) ?? null;
 }
 
 /**

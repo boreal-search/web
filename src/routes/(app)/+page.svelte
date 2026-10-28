@@ -7,16 +7,17 @@
 
 <h1>Data sources</h1>
 
-{#if data.engineError}
-	<p class="error" role="alert">Could not reach the engine: {data.engineError}</p>
-{/if}
-
-{#if data.dataSources.length === 0}
+{#if !data.inOrg}
+	<p>You're not in an org yet. Ask your org admin for an invite.</p>
+{:else if data.accessibleDataSourceIds.length === 0}
+	<p>
+		Your org doesn't have access to any data sources yet. Ask a platform admin to grant it some.
+	</p>
+{:else if data.engineError}
+	<p class="error" role="alert">{data.engineError}</p>
+{:else if data.dataSources.length === 0}
 	<p class="muted">
-		No data sources are available to your organisation yet.
-		{#if data.accessibleDataSourceIds.length === 0}
-			Ask an admin to grant your org access.
-		{/if}
+		The data sources your org has access to aren't available on the engine right now.
 	</p>
 {:else}
 	<table>

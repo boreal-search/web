@@ -2,8 +2,9 @@
 // Regenerate with `supabase gen types typescript --linked > src/lib/supabase/types.ts`
 // once the project is linked; keep the shape in sync with the migrations.
 
-export type OrgRole = 'owner' | 'member';
-export type SearchStatus = 'ok' | 'forbidden' | 'engine_error';
+export type OrgRole = 'admin' | 'member';
+export type SearchStatus =
+	'ok' | 'forbidden' | 'timeout' | 'unreachable' | 'unavailable' | 'engine_error';
 /** `add_org_member` result: the email had an account (member row) or not (pending invite). */
 export type AddMemberResult = 'added' | 'invited';
 
@@ -175,7 +176,7 @@ export interface Database {
 		Functions: {
 			is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
 			is_org_member: { Args: { p_org_id: string }; Returns: boolean };
-			is_org_owner: { Args: { p_org_id: string }; Returns: boolean };
+			is_org_admin: { Args: { p_org_id: string }; Returns: boolean };
 			add_org_member: {
 				Args: { p_org_id: string; p_email: string; p_role: OrgRole };
 				Returns: AddMemberResult;
