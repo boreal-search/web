@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resultAnchorId, splitCitations, verificationBadge } from './answer';
+import { answerCheck, answerCheckLabel, resultAnchorId, splitCitations } from './answer';
 
 describe('splitCitations', () => {
 	it('splits text and in-range refs', () => {
@@ -39,35 +39,42 @@ describe('splitCitations', () => {
 	});
 });
 
-describe('verificationBadge', () => {
-	it('treats null as unverified, never verified', () => {
-		expect(verificationBadge(null)).toEqual({
-			state: 'unverified',
-			label: 'Unverified',
-			unsupported: []
+describe('answerCheck', () => {
+	const claim = (supported: boolean, ref: number | null = 1) => ({ claim: 'c', supported, ref });
+
+	it('is not found when the engine abstained, whatever the verifier said', () => {
+		const check = answerCheck({
+			abstained: true,
+			verification: { supported: 1, total: 1, claims: [claim(true)] }
 		});
+		expect(check).toEqual({ state: 'not_found' });
+		expect(answerCheckLabel(check)).toBe('Not found in the pages searched');
 	});
 
-	it('is verified when every claim is supported', () => {
-		const b = verificationBadge({
-			supported: 1,
-			total: 1,
-			claims: [{ claim: 'a', supported: true, ref: 1 }]
-		});
-		expect(b).toEqual({ state: 'verified', label: '1/1 claims verified', unsupported: [] });
+	it('is not checked, never verified, when the verifier did not run', () => {
+		const check = answerCheck({ abstained: false, verification: null });
+		expect(check).toEqual({ state: 'not_checked' });
+		expect(answerCheckLabel(check)).toBe('Not checked');
 	});
 
-	it('is partial and lists unsupported claims when supported < total', () => {
-		const bad = { claim: 'b', supported: false, ref: null };
-		const b = verificationBadge({
-			supported: 1,
-			total: 2,
-			claims: [{ claim: 'a', supported: true, ref: 1 }, bad]
-		});
-		expect(b).toEqual({ state: 'partial', label: '1/2 claims verified', unsupported: [bad] });
+	it('is not checked when no claims were checked', () => {
+		expect(
+			answerCheck({ abstained: false, verification: { supported: 0, total: 0, claims: [] } }).state
+		).toBe('not_checked');
 	});
 
-	it('does not call zero checked claims verified', () => {
-		expect(verificationBadge({ supported: 0, total: 0, claims: [] }).state).toBe('unverified');
+	it('marks each claim verified or unsupported', () => {
+		const check = answerCheck({
+			abstained: false,
+			verification: { supported: 1, total: 2, claims: [claim(true), claim(false, null)] }
+		});
+		expect(check).toEqual({
+			state: 'checked',
+			claims: [
+				{ text: 'c', state: 'verified', ref: 1 },
+				{ text: 'c', state: 'unsupported', ref: null }
+			]
+		});
+		expect(answerCheckLabel(check)).toBe('1 of 2 claims verified');
 	});
 });

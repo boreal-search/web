@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import '@fontsource-variable/schibsted-grotesk';
+	import '@fontsource-variable/source-serif-4';
+	import '@fontsource-variable/jetbrains-mono';
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';

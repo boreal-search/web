@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { resultAnchorId, splitCitations, verificationBadge } from '#lib/answer.js';
+	import { answerCheck, answerCheckLabel, resultAnchorId, splitCitations } from '#lib/answer.js';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -13,7 +13,10 @@
 	let answerOn = $derived(form?.answer ?? true);
 	let answer = $derived(results?.answer ?? null);
 	let segments = $derived(answer ? splitCitations(answer.text, results?.results.length ?? 0) : []);
-	let badge = $derived(answer ? verificationBadge(answer.verification) : null);
+	let check = $derived(answer ? answerCheck(answer) : null);
+	let unsupported = $derived(
+		check?.state === 'checked' ? check.claims.filter((c) => c.state === 'unsupported') : []
+	);
 </script>
 
 <h1>Search</h1>
@@ -83,14 +86,18 @@
 	{/if}
 </form>
 
-{#if answer && badge}
+{#if answer && check}
 	<section aria-labelledby="answer-heading">
-		<h2 id="answer-heading">Answer</h2>
-		<p class={['verification', badge.state]}>
-			<strong>{badge.label}</strong>
-			{#if answer.abstained}
-				<span class="muted">· the sources don't cover this question</span>
-			{/if}
+		<h2 id="answer-heading">Generated summary</h2>
+		<p>
+			<span
+				class="flag"
+				data-state={check.state === 'checked'
+					? unsupported.length > 0
+						? 'unsupported'
+						: 'verified'
+					: check.state}>{answerCheckLabel(check)}</span
+			>
 		</p>
 		<p class="answer">
 			{#each segments as seg, i (i)}
@@ -101,15 +108,16 @@
 				{/if}
 			{/each}
 		</p>
-		{#if badge.unsupported.length > 0}
+		{#if unsupported.length > 0}
 			<details>
 				<summary>
-					{badge.unsupported.length} unsupported claim{badge.unsupported.length === 1 ? '' : 's'}
+					{unsupported.length} unsupported claim{unsupported.length === 1 ? '' : 's'}
 				</summary>
 				<ul>
-					{#each badge.unsupported as c, i (i)}
+					{#each unsupported as c, i (i)}
 						<li>
-							{c.claim}
+							<span class="flag" data-state="unsupported">Unsupported</span>
+							{c.text}
 							{#if c.ref !== null}<span class="muted">(cited [{c.ref}])</span>{/if}
 						</li>
 					{/each}
@@ -164,9 +172,6 @@
 {/if}
 
 <style>
-	.verification.partial {
-		color: var(--warn, #a15c00);
-	}
 	.answer {
 		white-space: pre-line;
 	}

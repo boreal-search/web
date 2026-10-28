@@ -7,7 +7,8 @@ service, reached server-side only. Contract: `boreal-search/infra/docs/architect
 ## Stack
 
 SvelteKit 3 · Svelte 5 (runes only) · TypeScript strict · bun · Vercel Hobby
-(`adapter-vercel`, Node) · Supabase (Auth + control-plane Postgres via `@supabase/ssr`) · Resend · vitest.
+(`adapter-vercel`, Node) · Supabase (Auth + control-plane Postgres via `@supabase/ssr`) · Resend · vitest ·
+Tailwind v4 (theme only, no preflight) · Fontsource (self-hosted fonts).
 
 ## Commands
 
@@ -28,6 +29,8 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 ## Layout
 
+- `src/app.css` — the theme: every colour and font token, light and dark. `docs/ui.md` — how to use them.
+- `src/lib/answer.ts` — answer parsing and `AnswerCheck`, the answer-state vocabulary.
 - `src/env.ts` — declared env vars (`defineEnvVars`); import from `$app/env/private|public`.
 - `src/hooks.server.ts` — Supabase client + validated session on `locals`.
 - `src/lib/server/` — server-only: `engine.ts` (API client), `access.ts` (org ↔ data source checks), `analytics.ts` (search_events), `auth.ts` (session + admin/owner guards), `orgs.ts` (org-management input parsing, invite email), `email.ts` (Resend; app emails only).
@@ -41,7 +44,9 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 - Every search/data-source request re-checks org access (`findForbiddenDataSources`); never trust ids from the client.
 - Every search records a `search_events` row (ok / forbidden / engine_error). Keep that when changing the search path.
 - Svelte 5 runes (`$state`, `$derived`, `$props`), `PageProps`/`LayoutProps` types, `resolve()` from `$app/paths` for internal links, `rel="external"` for signed engine `/files/` URLs.
-- `#lib/...` imports use a `.js` extension (`#lib/server/engine.js`). No `any`. Keep markup semantic; design pass is a separate effort.
+- `#lib/...` imports use a `.js` extension (`#lib/server/engine.js`). No `any`.
+- UI follows `docs/ui.md`: semantic markup, Tailwind classes from the theme roles, no literal colours, no red in
+  search. Answer states come from `AnswerCheck`; never add a parallel status vocabulary.
 - Supabase schema changes = new migration file + update `src/lib/supabase/types.ts`.
 - Authorization lives in RLS/RPCs with the user's session; no service-role key in the app.
 
@@ -65,5 +70,5 @@ Guidance, not hard rules (adapted from Lauren Tan's pstack):
   work to `implementer` (opus), small/mechanical to `quick-implementer` (sonnet), second reads to
   `reviewer`. Proceed and let the user course-correct; confirm only irreversible actions.
 
-Verify: `bun run check && bun run lint && bun run test`, then the real page in `bun run dev`.
+Verify: `bun run check && bun run lint && bun run test`, then the real page in `bun run dev`, light and dark.
 For `.svelte` files use the `svelte` skill / autofixer. Decisions and context: `docs/`.

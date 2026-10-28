@@ -1,6 +1,6 @@
 // Pure helpers for rendering an engine answer. `answer.text` is model output: callers render
 // the segments as text, never as HTML.
-import type { Claim, Verification } from '#lib/server/engine.types.js';
+import type { Answer } from '#lib/server/engine.types.js';
 
 export type AnswerSegment = { kind: 'text'; text: string } | { kind: 'cite'; ref: number };
 
@@ -30,18 +30,39 @@ export function splitCitations(text: string, resultCount: number): AnswerSegment
 	return segments;
 }
 
-export interface VerificationBadge {
-	state: 'unverified' | 'verified' | 'partial';
-	label: string;
-	unsupported: Claim[];
+/**
+ * How far an answer was checked against its pages (docs/ui.md, "Answer states").
+ * `not_found`: the engine abstained. `not_checked`: the verifier didn't run, its reply was
+ * unparseable, or it found no claims; never treated as verified.
+ */
+export type AnswerCheck =
+	{ state: 'not_found' } | { state: 'not_checked' } | { state: 'checked'; claims: CheckedClaim[] };
+
+export interface CheckedClaim {
+	text: string;
+	state: 'verified' | 'unsupported';
+	/** Cited result (1-based), if the claim carried one. */
+	ref: number | null;
 }
 
-/** `null` means the verifier didn't run or its reply was unparseable: unverified, never verified. */
-export function verificationBadge(v: Verification | null): VerificationBadge {
-	if (!v) return { state: 'unverified', label: 'Unverified', unsupported: [] };
-	if (v.total === 0)
-		return { state: 'unverified', label: 'Unverified (no claims checked)', unsupported: [] };
-	const unsupported = v.claims.filter((c) => !c.supported);
-	const label = `${v.supported}/${v.total} claims verified`;
-	return { state: v.supported >= v.total ? 'verified' : 'partial', label, unsupported };
+export function answerCheck(answer: Pick<Answer, 'abstained' | 'verification'>): AnswerCheck {
+	if (answer.abstained) return { state: 'not_found' };
+	const claims = answer.verification?.claims ?? [];
+	if (claims.length === 0) return { state: 'not_checked' };
+	return {
+		state: 'checked',
+		claims: claims.map((c) => ({
+			text: c.claim,
+			state: c.supported ? 'verified' : 'unsupported',
+			ref: c.ref
+		}))
+	};
+}
+
+/** The one-line status shown with an answer. */
+export function answerCheckLabel(check: AnswerCheck): string {
+	if (check.state === 'not_found') return 'Not found in the pages searched';
+	if (check.state === 'not_checked') return 'Not checked';
+	const verified = check.claims.filter((c) => c.state === 'verified').length;
+	return `${verified} of ${check.claims.length} claims verified`;
 }
