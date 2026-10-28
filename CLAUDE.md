@@ -30,10 +30,10 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 - `src/env.ts` — declared env vars (`defineEnvVars`); import from `$app/env/private|public`.
 - `src/hooks.server.ts` — Supabase client + validated session on `locals`.
-- `src/lib/server/` — server-only: `engine.ts` (API client), `access.ts` (org ↔ data source checks), `analytics.ts` (search_events), `auth.ts`, `email.ts` (Resend; app emails only).
+- `src/lib/server/` — server-only: `engine.ts` (API client), `access.ts` (org ↔ data source checks), `analytics.ts` (search_events), `auth.ts` (session + admin/owner guards), `orgs.ts` (org-management input parsing, invite email), `email.ts` (Resend; app emails only).
 - `src/lib/supabase/` — SSR client factory and hand-written `Database` types.
-- `src/routes/(app)/` — authenticated pages; `+layout.server.ts` guards and loads `accessibleDataSourceIds`.
-- `supabase/migrations/` — control-plane schema with RLS.
+- `src/routes/(app)/` — authenticated pages; `+layout.server.ts` guards and loads `accessibleDataSourceIds`. `admin/` (platform admins), `orgs/[slug]/manage/` (admins + owners).
+- `supabase/migrations/` — control-plane schema with RLS; roles in `*_admin_roles.sql`. `supabase/tests/` — pgTAP (`supabase test db`).
 
 ## Conventions
 
@@ -43,6 +43,7 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 - Svelte 5 runes (`$state`, `$derived`, `$props`), `PageProps`/`LayoutProps` types, `resolve()` from `$app/paths` for internal links, `rel="external"` for signed engine `/files/` URLs.
 - `#lib/...` imports use a `.js` extension (`#lib/server/engine.js`). No `any`. Keep markup semantic; design pass is a separate effort.
 - Supabase schema changes = new migration file + update `src/lib/supabase/types.ts`.
+- Authorization lives in RLS/RPCs with the user's session; no service-role key in the app.
 
 ## How to work here
 

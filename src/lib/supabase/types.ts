@@ -4,6 +4,8 @@
 
 export type OrgRole = 'owner' | 'member';
 export type SearchStatus = 'ok' | 'forbidden' | 'engine_error';
+/** `add_org_member` result: the email had an account (member row) or not (pending invite). */
+export type AddMemberResult = 'added' | 'invited';
 
 export interface Database {
 	public: {
@@ -15,28 +17,105 @@ export interface Database {
 				Relationships: [];
 			};
 			orgs: {
-				Row: { id: string; slug: string; name: string; log_queries: boolean; created_at: string };
+				Row: {
+					id: string;
+					slug: string;
+					name: string;
+					log_queries: boolean;
+					default_role: OrgRole;
+					created_at: string;
+				};
 				Insert: {
 					id?: string;
 					slug: string;
 					name: string;
 					log_queries?: boolean;
+					default_role?: OrgRole;
 					created_at?: string;
 				};
-				Update: { slug?: string; name?: string; log_queries?: boolean };
+				Update: { slug?: string; name?: string; log_queries?: boolean; default_role?: OrgRole };
 				Relationships: [];
 			};
 			org_members: {
 				Row: { org_id: string; user_id: string; role: OrgRole; created_at: string };
 				Insert: { org_id: string; user_id: string; role?: OrgRole; created_at?: string };
 				Update: { role?: OrgRole };
-				Relationships: [];
+				Relationships: [
+					{
+						foreignKeyName: 'org_members_org_id_fkey';
+						columns: ['org_id'];
+						isOneToOne: false;
+						referencedRelation: 'orgs';
+						referencedColumns: ['id'];
+					},
+					{
+						foreignKeyName: 'org_members_user_id_fkey';
+						columns: ['user_id'];
+						isOneToOne: false;
+						referencedRelation: 'profiles';
+						referencedColumns: ['id'];
+					}
+				];
 			};
 			org_data_sources: {
 				Row: { org_id: string; data_source_id: string; created_at: string };
 				Insert: { org_id: string; data_source_id: string; created_at?: string };
 				Update: Record<string, never>;
+				Relationships: [
+					{
+						foreignKeyName: 'org_data_sources_org_id_fkey';
+						columns: ['org_id'];
+						isOneToOne: false;
+						referencedRelation: 'orgs';
+						referencedColumns: ['id'];
+					}
+				];
+			};
+			platform_admins: {
+				Row: { user_id: string; created_at: string };
+				Insert: { user_id: string; created_at?: string };
+				Update: Record<string, never>;
 				Relationships: [];
+			};
+			org_invites: {
+				Row: {
+					org_id: string;
+					email: string;
+					role: OrgRole;
+					invited_by: string | null;
+					created_at: string;
+				};
+				Insert: {
+					org_id: string;
+					email: string;
+					role?: OrgRole;
+					invited_by?: string | null;
+					created_at?: string;
+				};
+				Update: { role?: OrgRole };
+				Relationships: [
+					{
+						foreignKeyName: 'org_invites_org_id_fkey';
+						columns: ['org_id'];
+						isOneToOne: false;
+						referencedRelation: 'orgs';
+						referencedColumns: ['id'];
+					}
+				];
+			};
+			org_domains: {
+				Row: { org_id: string; domain: string; created_at: string };
+				Insert: { org_id: string; domain: string; created_at?: string };
+				Update: Record<string, never>;
+				Relationships: [
+					{
+						foreignKeyName: 'org_domains_org_id_fkey';
+						columns: ['org_id'];
+						isOneToOne: false;
+						referencedRelation: 'orgs';
+						referencedColumns: ['id'];
+					}
+				];
 			};
 			search_events: {
 				Row: {
@@ -93,7 +172,15 @@ export interface Database {
 				Relationships: [];
 			};
 		};
-		Functions: Record<string, never>;
+		Functions: {
+			is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+			is_org_member: { Args: { p_org_id: string }; Returns: boolean };
+			is_org_owner: { Args: { p_org_id: string }; Returns: boolean };
+			add_org_member: {
+				Args: { p_org_id: string; p_email: string; p_role: OrgRole };
+				Returns: AddMemberResult;
+			};
+		};
 		Enums: { org_role: OrgRole; search_status: SearchStatus };
 		CompositeTypes: Record<string, never>;
 	};

@@ -18,6 +18,12 @@
 		{#if data.user}
 			<a href={resolve('/(app)')}>Data sources</a>
 			<a href={resolve('/(app)/search')}>Search</a>
+			{#each data.nav.ownedOrgs as org (org.slug)}
+				<a href={resolve('/(app)/orgs/[slug]/manage', { slug: org.slug })}>Manage {org.name}</a>
+			{/each}
+			{#if data.nav.isAdmin}
+				<a href={resolve('/(app)/admin')}>Admin</a>
+			{/if}
 		{/if}
 	</nav>
 	{#if data.user}

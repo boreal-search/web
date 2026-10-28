@@ -2,6 +2,27 @@
 
 Short, dated records of choices that aren't obvious from the code. Newest first.
 
+## 2026-10-28 — Platform admins, owner-managed members, invites and domain auto-join
+
+Roles: platform admin (`platform_admins`, global), org `owner`, org `member`. Admins do
+everything; owners add/remove members and invites in their org (and may grant `owner`, so
+ownership can be handed over); members only search. An org always keeps one owner while users
+manage it (`keep_last_owner` trigger; admins and SQL sessions are exempt).
+
+Enforced in Postgres with RLS and one security-definer RPC, `add_org_member(org, email, role)`:
+an existing account becomes a member, any other email an `org_invites` row; calling it again
+changes the role. The web keeps the anon key + user session, so a bug in a route can't exceed
+what the user may do, and there is no service-role key to leak from Vercel. Routes still guard
+(`requirePlatformAdmin`, `requireOrgManager`) to give a 403 instead of a silent no-op.
+
+Invites and `org_domains` auto-join (with `orgs.default_role`) are claimed in
+`handle_new_user` only once the email is confirmed, so signing up as someone else's address
+claims nothing. Domains apply to new sign-ups only; existing users are added by email.
+
+Seats are membership rows; per-seat pricing later = count `org_members` (a cap would be
+`orgs.seat_limit`, checked in `add_org_member` and the auto-join). One session per seat is
+Supabase Auth's "single session per user" setting (Pro plan), not code.
+
 ## 2026-10-27 — Vercel Hobby over Cloudflare Workers
 
 Supersedes "Cloudflare Workers over Render" (2026-10-20). Deployed with `adapter-vercel` on the

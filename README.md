@@ -26,15 +26,14 @@ supabase link --project-ref <ref>
 supabase db push                   # applies supabase/migrations
 ```
 
-Grant an org access to a data source (until there's an admin UI, do it in SQL):
+Make yourself a platform admin once (after signing in at least once), then manage orgs,
+members, corpus grants and email domains at `/admin`:
 
 ```sql
-insert into orgs (slug, name) values ('acme', 'Acme Environmental');
-insert into org_members (org_id, user_id, role)
-  select id, '<auth.users.id>', 'owner' from orgs where slug = 'acme';
-insert into org_data_sources (org_id, data_source_id)
-  select id, 'bc-regs' from orgs where slug = 'acme';
+insert into platform_admins (user_id) select id from profiles where email = '<your email>';
 ```
+
+Policy tests: `supabase start && supabase test db` (pgTAP, `supabase/tests/`).
 
 ## Scripts
 
