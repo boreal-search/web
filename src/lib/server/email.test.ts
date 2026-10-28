@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const env = vi.hoisted(() => ({
 	RESEND_API_KEY: 're_test_key' as string | undefined,
-	EMAIL_FROM: 'Boreal Search <no-reply@borealsearch.app>' as string | undefined
+	EMAIL_FROM: 'Boreal Search <support@borealsearch.app>' as string | undefined
 }));
 vi.mock('$app/env/private', () => env);
 
@@ -25,7 +25,7 @@ describe('sendEmail', () => {
 			'content-type': 'application/json'
 		});
 		expect(JSON.parse(init.body as string)).toEqual({
-			from: 'Boreal Search <no-reply@borealsearch.app>',
+			from: 'Boreal Search <support@borealsearch.app>',
 			to: 'a@example.com',
 			subject: 'Hi',
 			html: '<p>Hi</p>',

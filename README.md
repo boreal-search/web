@@ -62,7 +62,7 @@ done
 bun run deploy                     # optional manual deploy; git push is the normal path
 ```
 
-`RESEND_API_KEY` / `EMAIL_FROM` (`Boreal Search <no-reply@borealsearch.app>`) are optional; without
+`RESEND_API_KEY` / `EMAIL_FROM` (`Boreal Search <support@borealsearch.app>`) are optional; without
 them `sendEmail` throws. Auth emails (sign-in, confirm, reset) are sent by Supabase: set Auth →
 SMTP Settings to `smtp.resend.com:465`, user `resend`, password = a Resend API key.
 

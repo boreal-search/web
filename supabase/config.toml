@@ -71,7 +71,7 @@ content_path = "./supabase/templates/password_changed.html"
 # port = 465
 # user = "resend"
 # pass = "env(RESEND_API_KEY)"
-# admin_email = "no-reply@borealsearch.app"
+# admin_email = "support@borealsearch.app"
 # sender_name = "Boreal Search"
 
 [inbucket]
