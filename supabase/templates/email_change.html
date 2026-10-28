@@ -1,0 +1,14 @@
+<h2>Confirm your new email</h2>
+<p>
+	Someone asked to change the email for your Boreal Search account:<br />
+	{{ .Email }} → {{ .NewEmail }}
+</p>
+<p>
+	<a href="{{ .SiteURL }}/auth/confirm?next=/account&token_hash={{ .TokenHash }}&type=email_change"
+		>Confirm the change</a
+	>
+</p>
+<p>
+	If this wasn't you, don't follow the link,
+	<a href="{{ .SiteURL }}/forgot">reset your password</a>, and reply to this email.
+</p>
