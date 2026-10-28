@@ -5,7 +5,6 @@
 			"Bash(bun exec *)",
 			"Bash(bunx *)",
 			"Bash(supabase *)",
-			"Bash(wrangler *)",
 			"Bash(git diff *)",
 			"Bash(git status *)",
 			"Bash(git log *)"

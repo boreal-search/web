@@ -1,6 +1,7 @@
 // Product analytics: one search_events row per search, written after the engine responds.
 // Never blocks or fails the user's request — a logging failure is logged and dropped.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { waitUntil } from '@vercel/functions';
 import type { Database, SearchStatus } from '#lib/supabase/types.js';
 import type { SearchResponse } from './engine.types';
 
@@ -40,13 +41,13 @@ export function buildSearchEvent(
 }
 
 /**
- * Record a search. Pass `waitUntil` (from `event.platform?.context`) on Workers so the insert
- * runs after the response is sent; otherwise it is awaited.
+ * Record a search. On Vercel the insert goes to `waitUntil` so it runs after the response is
+ * sent; elsewhere (dev, `vite preview`, tests) it is awaited, because `waitUntil` is a no-op
+ * off-Vercel and the insert would be left dangling. `VERCEL=1` is a Vercel system env var.
  */
 export async function recordSearchEvent(
 	supabase: SupabaseClient<Database>,
-	input: SearchEventInput,
-	waitUntil?: (p: Promise<unknown>) => void
+	input: SearchEventInput
 ): Promise<void> {
 	const work = (async () => {
 		try {
@@ -66,6 +67,6 @@ export async function recordSearchEvent(
 		}
 	})();
 
-	if (waitUntil) waitUntil(work);
+	if (process.env.VERCEL) waitUntil(work);
 	else await work;
 }

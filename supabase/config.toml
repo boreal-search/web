@@ -33,6 +33,18 @@ enable_confirmations = false
 # Magic links hit /auth/confirm with token_hash (see src/routes/auth/confirm).
 otp_expiry = 3600
 
+# Local dev captures auth email in Inbucket (below). To send real mail through Resend instead,
+# uncomment and export RESEND_API_KEY. The hosted project sets the same values in
+# Dashboard → Auth → SMTP Settings.
+# [auth.email.smtp]
+# enabled = true
+# host = "smtp.resend.com"
+# port = 465
+# user = "resend"
+# pass = "env(RESEND_API_KEY)"
+# admin_email = "no-reply@borealsearch.app"
+# sender_name = "Boreal Search"
+
 [inbucket]
 enabled = true
 port = 54324

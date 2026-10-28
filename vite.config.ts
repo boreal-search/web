@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import adapter from '@sveltejs/adapter-cloudflare';
+import adapter from '@sveltejs/adapter-vercel';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
@@ -10,7 +10,8 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			// Node serverless functions (adapter-vercel 7 has no edge runtime).
+			adapter: adapter({ runtime: 'nodejs24.x' })
 		})
 	],
 	test: {

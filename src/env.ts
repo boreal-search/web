@@ -1,7 +1,7 @@
 import { building } from '$app/env';
 import { defineEnvVars } from '@sveltejs/kit/env';
 
-// Dev: read from `.env`. Preview (`wrangler dev`): `.dev.vars`. Prod: Workers secrets.
+// Dev/preview: read from `.env`. Prod: Vercel project env vars (Production + Preview scopes).
 // Private vars are only importable from server-only modules via `$app/env/private`.
 // Values are dynamic (read at runtime), so they are only required when the app starts, not at build.
 function required(name: string) {
@@ -11,6 +11,9 @@ function required(name: string) {
 		return value;
 	};
 }
+
+/** Unset or empty → `undefined`; the consumer decides whether that is an error. */
+const optional = (value: string | undefined): string | undefined => value || undefined;
 
 export const variables = defineEnvVars({
 	PUBLIC_SUPABASE_URL: {
@@ -30,5 +33,15 @@ export const variables = defineEnvVars({
 	ENGINE_SERVICE_TOKEN: {
 		description: 'Bearer token for engine requests. Server-only. Never send to the browser.',
 		schema: required('ENGINE_SERVICE_TOKEN')
+	},
+	RESEND_API_KEY: {
+		description:
+			'Resend API key for app emails. Server-only, optional (sendEmail throws if unset).',
+		schema: optional
+	},
+	EMAIL_FROM: {
+		description:
+			'Sender for app emails, e.g. `Boreal Search <no-reply@borealsearch.app>`. Optional.',
+		schema: optional
 	}
 });

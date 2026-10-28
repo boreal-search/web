@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const { waitUntil } = vi.hoisted(() => ({ waitUntil: vi.fn<(p: Promise<unknown>) => void>() }));
+vi.mock('@vercel/functions', () => ({ waitUntil }));
+import type { Database } from '#lib/supabase/types.js';
 import { resolveSearchOrg } from './access';
-import { buildSearchEvent } from './analytics';
+import { buildSearchEvent, recordSearchEvent } from './analytics';
 import type { SearchResponse } from './engine.types';
 
 const response: SearchResponse = {
@@ -82,5 +87,59 @@ describe('buildSearchEvent', () => {
 			retrieval_ms: null,
 			error: '502 upstream'
 		});
+	});
+});
+
+describe('recordSearchEvent', () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		waitUntil.mockReset();
+	});
+
+	const input = {
+		orgId: 'org-a',
+		userId: 'u1',
+		query: 'noise limits',
+		dataSourceIds: ['bc-regs'],
+		topK: 10,
+		rerank: true,
+		status: 'ok' as const
+	};
+
+	/** Minimal stand-in for the two queries; the org lookup waits until `release()`. */
+	function fakeSupabase() {
+		const insert = vi.fn().mockResolvedValue({ error: null });
+		const org = Promise.withResolvers<{ data: { log_queries: boolean }; error: null }>();
+		const client = {
+			from: (table: string) =>
+				table === 'orgs'
+					? { select: () => ({ eq: () => ({ single: () => org.promise }) }) }
+					: { insert }
+		};
+		const release = () => org.resolve({ data: { log_queries: true }, error: null });
+		return { insert, release, supabase: client as unknown as SupabaseClient<Database> };
+	}
+
+	it('awaits the insert off-Vercel (dev/tests)', async () => {
+		const { insert, release, supabase } = fakeSupabase();
+		const done = recordSearchEvent(supabase, input);
+		release();
+		await done;
+		expect(waitUntil).not.toHaveBeenCalled();
+		expect(insert).toHaveBeenCalledWith(expect.objectContaining({ org_id: 'org-a', status: 'ok' }));
+	});
+
+	it('hands the insert to waitUntil on Vercel instead of blocking the response', async () => {
+		vi.stubEnv('VERCEL', '1');
+		const { insert, release, supabase } = fakeSupabase();
+
+		// Resolves while the org lookup is still pending: the response is not held up.
+		await recordSearchEvent(supabase, input);
+		expect(waitUntil).toHaveBeenCalledTimes(1);
+		expect(insert).not.toHaveBeenCalled();
+
+		release();
+		await waitUntil.mock.calls[0][0];
+		expect(insert).toHaveBeenCalledTimes(1);
 	});
 });

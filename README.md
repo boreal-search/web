@@ -4,7 +4,7 @@ Dashboard for [Boreal Search](https://github.com/boreal-search): log in, see the
 your organisation can access, and run visual search over them. Results are page images with
 a link into the source PDF.
 
-This app is a thin shell on Cloudflare Workers. Corpora, embeddings and search run in the
+This app is a thin shell on Vercel. Corpora, embeddings and search run in the
 private `engine` service; this repo only handles auth, org → data-source access, and the UI.
 
 ## Local setup
@@ -12,7 +12,7 @@ private `engine` service; this repo only handles auth, org → data-source acces
 ```sh
 mise install                       # bun + node from mise.toml
 bun install
-cp .dev.vars.example .env          # vite dev reads .env
+cp .env.example .env               # vite dev / preview read .env
 # fill in PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY from your Supabase project,
 # ENGINE_URL / ENGINE_SERVICE_TOKEN from the engine you're pointing at
 bun run dev
@@ -38,29 +38,37 @@ insert into org_data_sources (org_id, data_source_id)
 
 ## Scripts
 
-| Command                             | What                                                              |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| `bun run dev`                       | dev server                                                        |
-| `bun run check`                     | type-check (`wrangler types` + `svelte-check`)                    |
-| `bun run lint` / `bun run format`   | prettier + eslint                                                 |
-| `bun run test`                      | vitest                                                            |
-| `bun run build` / `bun run preview` | Cloudflare build; preview with `wrangler dev` (reads `.dev.vars`) |
-| `bun run deploy`                    | build + `wrangler deploy`                                         |
-| `bun run gen:engine-client`         | regenerate engine types from `$ENGINE_URL/openapi.json`           |
-| `bun run gen:supabase-types`        | regenerate Supabase `Database` types                              |
+| Command                             | What                                                    |
+| ----------------------------------- | ------------------------------------------------------- |
+| `bun run dev`                       | dev server                                              |
+| `bun run check`                     | type-check (`svelte-check`)                             |
+| `bun run lint` / `bun run format`   | prettier + eslint                                       |
+| `bun run test`                      | vitest                                                  |
+| `bun run build` / `bun run preview` | Vercel build (`.vercel/output`); `vite preview`         |
+| `bun run deploy`                    | `vercel deploy --prod` (pushes to `main` also deploy)   |
+| `bun run gen:engine-client`         | regenerate engine types from `$ENGINE_URL/openapi.json` |
+| `bun run gen:supabase-types`        | regenerate Supabase `Database` types                    |
 
 ## Deploy
 
+Vercel Hobby project linked to this repo (pushes to `main` deploy production, PRs get
+preview URLs). Set env vars in the Vercel dashboard or with the CLI, for Production and Preview:
+
 ```sh
-bun exec wrangler login
-for v in PUBLIC_SUPABASE_URL PUBLIC_SUPABASE_ANON_KEY ENGINE_URL ENGINE_SERVICE_TOKEN; do
-  bun exec wrangler secret put $v
+bun x vercel login && bun x vercel link
+for v in PUBLIC_SUPABASE_URL PUBLIC_SUPABASE_ANON_KEY ENGINE_URL ENGINE_SERVICE_TOKEN \
+         RESEND_API_KEY EMAIL_FROM; do
+  bun x vercel env add $v production
 done
-bun run deploy
+bun run deploy                     # optional manual deploy; git push is the normal path
 ```
 
-Add the deployed origin (`https://boreal-web.<account>.workers.dev/auth/confirm`) to the
-Supabase project's Auth → Redirect URLs.
+`RESEND_API_KEY` / `EMAIL_FROM` (`Boreal Search <no-reply@borealsearch.app>`) are optional; without
+them `sendEmail` throws. Magic-link emails are sent by Supabase: set Auth → SMTP Settings to
+`smtp.resend.com:465`, user `resend`, password = a Resend API key.
+
+Add the deployed origin (`https://<project>.vercel.app/auth/confirm`, plus the custom domain) to
+the Supabase project's Auth → Redirect URLs.
 
 ## More
 

@@ -3,13 +3,6 @@ import type { Database } from '#lib/supabase/types.js';
 
 declare global {
 	namespace App {
-		interface Platform {
-			env: Env;
-			ctx: ExecutionContext;
-			caches: CacheStorage;
-			cf?: IncomingRequestCfProperties;
-		}
-
 		interface Locals {
 			supabase: SupabaseClient<Database>;
 			/** Validates the JWT against Supabase Auth before trusting the cookie session. */

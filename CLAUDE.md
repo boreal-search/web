@@ -6,21 +6,21 @@ service, reached server-side only. Contract: `boreal-search/infra/docs/architect
 
 ## Stack
 
-SvelteKit 3 · Svelte 5 (runes only) · TypeScript strict · bun · Cloudflare Workers
-(`adapter-cloudflare`) · Supabase (Auth + control-plane Postgres via `@supabase/ssr`) · vitest.
+SvelteKit 3 · Svelte 5 (runes only) · TypeScript strict · bun · Vercel Hobby
+(`adapter-vercel`, Node) · Supabase (Auth + control-plane Postgres via `@supabase/ssr`) · Resend · vitest.
 
 ## Commands
 
 ```
 bun install                 # deps (mise provides bun/node)
 bun run dev                 # vite dev, reads .env
-bun run check               # wrangler types + svelte-check (must be 0 errors)
+bun run check               # svelte-check (must be 0 errors)
 bun run lint                # prettier --check + eslint
 bun run format              # prettier --write
 bun run test                # vitest --run
-bun run build               # cloudflare build
-bun run preview             # wrangler dev on the built worker (reads .dev.vars)
-bun run deploy              # build + wrangler deploy
+bun run build               # vercel build → .vercel/output
+bun run preview             # vite preview (reads .env)
+bun run deploy              # vercel deploy --prod (git push to main also deploys)
 bun run gen:engine-client   # regen src/lib/server/engine.openapi.ts from $ENGINE_URL/openapi.json (curl w/ token, .env); engine.types.ts = aliases
 bun run gen:supabase-types  # regen src/lib/supabase/types.ts (needs `supabase link`)
 supabase migration new <name> && supabase db push   # schema changes live in supabase/migrations
@@ -30,7 +30,7 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 - `src/env.ts` — declared env vars (`defineEnvVars`); import from `$app/env/private|public`.
 - `src/hooks.server.ts` — Supabase client + validated session on `locals`.
-- `src/lib/server/` — server-only: `engine.ts` (API client), `access.ts` (org ↔ data source checks), `analytics.ts` (search_events), `auth.ts`.
+- `src/lib/server/` — server-only: `engine.ts` (API client), `access.ts` (org ↔ data source checks), `analytics.ts` (search_events), `auth.ts`, `email.ts` (Resend; app emails only).
 - `src/lib/supabase/` — SSR client factory and hand-written `Database` types.
 - `src/routes/(app)/` — authenticated pages; `+layout.server.ts` guards and loads `accessibleDataSourceIds`.
 - `supabase/migrations/` — control-plane schema with RLS.
@@ -47,6 +47,7 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 ## How to work here
 
 Guidance, not hard rules (adapted from Lauren Tan's pstack):
+
 - **Subtract first.** Smallest change; prefer deletion, remove dead weight before building on it.
 - **Data structures first.** Settle core types and shared state before logic. Redesign as if a
   new requirement had always been there. Eliminate sharing before serializing it.

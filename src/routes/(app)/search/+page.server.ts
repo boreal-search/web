@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ parent, fetch }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, locals, fetch, platform }) => {
+	default: async ({ request, locals, fetch }) => {
 		const user = requireUser();
 		const form = await request.formData();
 		const query = String(form.get('query') ?? '').trim();
@@ -40,27 +40,22 @@ export const actions: Actions = {
 		const forbidden = findForbiddenDataSources(requested, accessible);
 		const orgId = resolveSearchOrg(requested, grants);
 
-		// Analytics: fire-and-forget on Workers via waitUntil; awaited elsewhere (dev/tests).
-		const waitUntil = platform?.ctx ? platform.ctx.waitUntil.bind(platform.ctx) : undefined;
+		// Analytics: fire-and-forget on Vercel (waitUntil); awaited in dev/tests. See analytics.ts.
 		const record = (
 			status: 'ok' | 'forbidden' | 'engine_error',
 			extra: { response?: SearchResponse; error?: string }
 		) => {
 			if (!orgId) return Promise.resolve();
-			return recordSearchEvent(
-				locals.supabase,
-				{
-					orgId,
-					userId: user.id,
-					query,
-					dataSourceIds: requested,
-					topK,
-					rerank,
-					status,
-					...extra
-				},
-				waitUntil
-			);
+			return recordSearchEvent(locals.supabase, {
+				orgId,
+				userId: user.id,
+				query,
+				dataSourceIds: requested,
+				topK,
+				rerank,
+				status,
+				...extra
+			});
 		};
 
 		if (forbidden.length > 0) {
