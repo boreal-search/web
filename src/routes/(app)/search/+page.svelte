@@ -1,7 +1,22 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
+	import { tick } from 'svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
-	import { answerCheck, answerCheckLabel, resultAnchorId, splitCitations } from '#lib/answer.js';
+	import {
+		answerCheck,
+		answerCheckLabel,
+		answerMarks,
+		answerSegments,
+		claimMark,
+		markOutlines,
+		pageOutlines,
+		resultAnchorId,
+		type Mark,
+		type Outline
+	} from '#lib/answer.js';
+	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import { count, plural } from '#lib/format.js';
 	import { checkFlag, isTypingTarget, pagesSearched, seconds, step } from '#lib/search-view.js';
 	import type { PageProps } from './$types';
@@ -26,7 +41,8 @@
 			? outcome.answer.answer
 			: null
 	);
-	let segments = $derived(answer ? splitCitations(answer.text, results.length) : []);
+	let segments = $derived(answer ? answerSegments(answer, results) : []);
+	let marks = $derived(answerMarks(segments));
 	let check = $derived(answer ? answerCheck(answer) : null);
 	let claims = $derived(check?.state === 'checked' ? check.claims : []);
 	let summaryPages = $derived(new Set(answer?.sources.map((s) => s.ref) ?? []).size);
@@ -38,32 +54,149 @@
 		)
 	);
 
-	// The result shown large beside the list; back to the top result on every new search.
-	let current = $derived.by(() => {
-		void results;
-		return 0;
-	});
+	type Hit = (typeof results)[number];
+	/** Permanent link to the PDF at the result's page; it leaves the app (`rel="external"`). */
+	const pdfHref = (r: Hit) =>
+		`${resolve('/pdf/[ds]/[doc]', { ds: r.data_source_id, doc: r.document_id })}?page=${r.page_number}`;
+	/** The page render: the permanent link when the server can sign, else the engine's URL. */
+	const pageSrc = (r: Hit) =>
+		data.permanentLinks
+			? resolve('/pages/[ds]/[doc]/[page]', {
+					ds: r.data_source_id,
+					doc: r.document_id,
+					page: String(r.page_number)
+				})
+			: r.page_image_url;
+
+	// The result shown large beside the list: on every new search, the first result the answer
+	// cites, else the top result.
+	let current = $derived(marks.length > 0 ? marks[0].ref - 1 : 0);
 	let shown = $derived(results[current] ?? null);
-	// The large page sits beside the list only on wide screens; phones show each page in its row.
+	// The large page sits beside the list only on wide screens; phones open a page under its row.
 	const wide = new MediaQuery('min-width: 64rem', false);
-	// Signed image URLs expire after ~4 h; a failed render shows a plain line instead.
+	// Phone thumbnails become expand buttons only once JS runs; until then they stay PDF links.
+	let interactive = $state(false);
+	onMount(() => {
+		interactive = true;
+	});
+	// Engine-signed URLs expire; a render that fails to load shows a plain line instead.
 	const failed = new SvelteSet<string>();
+	let failedText = $derived(
+		data.permanentLinks
+			? "Page image couldn't be loaded."
+			: 'Page image expired. Search again to refresh.'
+	);
+	// Space: the large page at full brightness and wider.
+	let zoomed = $state(false);
+
+	// Phones: the result whose page is open large under its row, and what opened it (focus
+	// returns there on close). Closed by a new search.
+	let expanded = $derived.by<number | null>(() => {
+		void results;
+		return null;
+	});
+	let opener: HTMLElement | null = null;
+
+	async function expand(i: number, from: HTMLElement | null, toggle = true) {
+		if (toggle && expanded === i) return collapse();
+		expanded = i;
+		opener = from;
+		await tick();
+		const panel = document.getElementById(`page-${i + 1}`);
+		(panel?.querySelector('.mark') ?? panel)?.scrollIntoView({ block: 'nearest' });
+	}
+
+	function collapse() {
+		expanded = null;
+		opener?.focus();
+		opener = null;
+	}
+
+	// The `[n]` last chosen. Its page shows only its boxes; any other page shows every box the
+	// answer cites on it. Cleared by a new search or by moving to another result.
+	let active = $derived.by<Mark | null>(() => {
+		void results;
+		return null;
+	});
+	const boxesOn = (ref: number) =>
+		active?.ref === ref ? markOutlines(active) : pageOutlines(marks, ref);
+	let shownBoxes = $derived(boxesOn(current + 1));
 
 	function select(i: number, focus = false) {
 		current = i;
+		if (active && active.ref !== i + 1) active = null;
 		if (!focus) return;
 		const el = document.getElementById(resultAnchorId(i + 1));
 		el?.focus({ preventScroll: true });
 		el?.scrollIntoView({ block: 'nearest' });
 	}
 
+	/**
+	 * Show mark `m`: select its result. Activated (`from` the link chosen): move focus there and
+	 * scroll its first box into view; on phones, open its page large under the row.
+	 */
+	async function choose(m: Mark, from: HTMLElement | null = null) {
+		select(m.ref - 1, from !== null);
+		active = m;
+		if (!from) return;
+		if (!wide.current) return expand(m.ref - 1, from, false);
+		await tick();
+		document.querySelector('.viewer .mark')?.scrollIntoView({ block: 'nearest' });
+	}
+
+	const markLabel = (m: Mark) =>
+		`Result ${m.ref}, page ${results[m.ref - 1]?.page_number}` +
+		(m.boxes.length > 0 ? ', cited text outlined' : '');
+
+	// "Citation copied", announced and shown briefly.
+	let copyStatus = $state('');
+	let copyTimer: ReturnType<typeof setTimeout> | undefined;
+
+	async function copyCitation(r: Hit) {
+		const link = new URL(pdfHref(r), location.href);
+		try {
+			await navigator.clipboard.writeText(`${r.document_title} · p.${r.page_number} · ${link}`);
+			copyStatus = 'Citation copied';
+		} catch {
+			copyStatus = "Couldn't copy the citation";
+		}
+		clearTimeout(copyTimer);
+		copyTimer = setTimeout(() => (copyStatus = ''), 2500);
+	}
+
+	/** Space activates buttons and toggles details: leave it to them. */
+	const usesSpace = (t: EventTarget | null) =>
+		t instanceof HTMLElement && ['BUTTON', 'SUMMARY'].includes(t.tagName);
+
 	function onkeydown(e: KeyboardEvent) {
 		if (results.length === 0 || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target))
 			return;
-		const delta = e.key === 'j' ? 1 : e.key === 'k' ? -1 : 0;
-		if (delta === 0) return;
-		e.preventDefault();
-		select(step(current, delta, results.length), true);
+		const r = results[current];
+		switch (e.key) {
+			case 'j':
+			case 'k':
+				e.preventDefault();
+				select(step(current, e.key === 'j' ? 1 : -1, results.length), true);
+				return;
+			case 'o':
+				e.preventDefault();
+				window.open(new URL(pdfHref(r), location.href), '_blank', 'noopener');
+				return;
+			case 'c':
+				e.preventDefault();
+				copyCitation(r);
+				return;
+			case ' ':
+				if (usesSpace(e.target)) return;
+				e.preventDefault();
+				if (wide.current) zoomed = !zoomed;
+				else expand(current, document.getElementById(resultAnchorId(current + 1)));
+				return;
+			case 'Escape':
+				if (expanded === null) return;
+				e.preventDefault();
+				collapse();
+		}
 	}
 
 	// Waiting: nothing for 300 ms, then a bar and a seconds counter (docs/ui.md, "Waiting").
@@ -78,6 +211,41 @@
 </script>
 
 <svelte:window {onkeydown} />
+
+<!-- Cited text on a page render: page fractions as percentages of the frame (.sheet). -->
+{#snippet outline(outlines: Outline[])}
+	{#each outlines as { box: [x0, y0, x1, y1], status }, i (i)}
+		<span
+			class="mark"
+			data-status={status}
+			aria-hidden="true"
+			style:left="{x0 * 100}%"
+			style:top="{y0 * 100}%"
+			style:width="{(x1 - x0) * 100}%"
+			style:height="{(y1 - y0) * 100}%"
+		></span>
+	{/each}
+{/snippet}
+
+<!-- A page render with its outlines; width/height are an aspect hint only, to reserve space. -->
+{#snippet render(r: Hit, outlines: Outline[], lazy = false)}
+	{#if failed.has(pageSrc(r))}
+		<span class="expired">{failedText}</span>
+	{:else}
+		<span class="frame">
+			<img
+				src={pageSrc(r)}
+				alt="Page {r.page_number} of {r.document_title}"
+				width="935"
+				height="1210"
+				loading={lazy ? 'lazy' : 'eager'}
+				decoding="async"
+				onerror={() => failed.add(pageSrc(r))}
+			/>
+			{@render outline(outlines)}
+		</span>
+	{/if}
+{/snippet}
 
 <div class="page-head">
 	<h1>Search</h1>
@@ -113,8 +281,11 @@
 		{/if}
 	</p>
 {:else}
-	{#if data.engineError}
-		<p class="notice" role="status">{data.engineError}</p>
+	{#if data.engineFailure}
+		<FailureNotice
+			failure={data.engineFailure}
+			effect="Data source names and page counts can't be loaded."
+		/>
 	{/if}
 	<form
 		method="POST"
@@ -197,7 +368,9 @@
 			</details>
 		</div>
 
-		{#if form?.error}
+		{#if form && 'failure' in form && form.failure}
+			<FailureNotice failure={form.failure} />
+		{:else if form?.error}
 			<p class="notice" role="status">{form.error}</p>
 		{/if}
 	</form>
@@ -221,11 +394,16 @@
 		<p class="answer">
 			{#each segments as seg, i (i)}
 				{#if seg.kind === 'cite'}
-					<a
-						class="cite"
-						href="#{resultAnchorId(seg.ref)}"
-						aria-label="Result {seg.ref}"
-						onclick={() => select(seg.ref - 1, true)}>[{seg.ref}]</a
+					{@const one = seg.marks.length === 1}
+					<span class="cite"
+						>{#if !one}[{/if}{#each seg.marks as m, j (m.ref)}{#if j > 0},
+							{/if}<a
+								href="#{resultAnchorId(m.ref)}"
+								class={{ on: active === m }}
+								aria-label={markLabel(m)}
+								onfocus={() => choose(m)}
+								onclick={(e) => choose(m, e.currentTarget)}>{one ? `[${m.ref}]` : m.ref}</a
+							>{/each}{#if !one}]{/if}</span
 					>
 				{:else}
 					{seg.text}
@@ -236,17 +414,30 @@
 			<ul class="claims" aria-label="Claims checked">
 				{#each claims as c, i (i)}
 					{@const r = c.ref !== null ? results[c.ref - 1] : undefined}
+					{@const cm = claimMark(c, marks)}
 					<li>
 						<span class="flag" data-state={c.state}>
 							{c.state === 'verified' ? 'Verified' : 'Unsupported'}
 						</span>
 						<span class="claim">{c.text}</span>
 						{#if c.ref !== null && r}
+							{@const ref = c.ref}
+							<!-- No box for this claim: say so, and open its page unmarked. -->
 							<a
 								class="loc"
-								href="#{resultAnchorId(c.ref)}"
-								onclick={() => c.ref !== null && select(c.ref - 1, true)}
-								>[{c.ref}] p.{r.page_number}</a
+								href="#{resultAnchorId(ref)}"
+								onclick={(e) =>
+									choose(
+										cm ?? {
+											ref,
+											kind: 'page',
+											boxes: [],
+											quote: null,
+											text: c.text,
+											status: c.state
+										},
+										e.currentTarget
+									)}>[{ref}] p.{r.page_number}{cm?.boxes.length ? '' : ' · page'}</a
 							>
 						{/if}
 					</li>
@@ -278,7 +469,10 @@
 			<h2 id="evidence-heading">Pages</h2>
 			{#if results.length > 1}
 				<p class="keys muted">
-					<kbd>J</kbd> <kbd>K</kbd> next and previous result
+					<span><kbd>J</kbd> <kbd>K</kbd> next and previous</span>
+					<span><kbd>Space</kbd> zoom page</span>
+					<span><kbd>O</kbd> open PDF at page</span>
+					<span><kbd>C</kbd> copy citation</span>
 				</p>
 			{/if}
 		</div>
@@ -287,7 +481,7 @@
 				Nothing matched in the pages searched. Try other wording, or tick more data sources.
 			</p>
 		{:else}
-			<div class="layout">
+			<div class={['layout', zoomed && 'zoomed']}>
 				<ol class="hits">
 					{#each results as r, i (`${r.document_id}:${r.page_number}`)}
 						<!-- Click anywhere on a row to show its page; keyboard users have J/K and focus. -->
@@ -299,28 +493,28 @@
 							onclick={() => select(i)}
 							onfocusin={() => select(i)}
 						>
-							<a
-								class="sheet thumb"
-								href={r.pdf_url}
-								target="_blank"
-								rel="external noopener"
-								aria-label="Open page {r.page_number} of {r.document_title} (PDF)"
-							>
-								{#if failed.has(r.page_image_url)}
-									<span class="expired">Page image expired. Search again to refresh.</span>
-								{:else}
-									<!-- width/height are an aspect hint only, to reserve space; the real ratio takes over on load. -->
-									<img
-										src={r.page_image_url}
-										alt="Page {r.page_number} of {r.document_title}"
-										width="935"
-										height="1210"
-										loading={i < 10 ? 'eager' : 'lazy'}
-										decoding="async"
-										onerror={() => failed.add(r.page_image_url)}
-									/>
-								{/if}
-							</a>
+							{#if wide.current || !interactive}
+								<a
+									class="sheet thumb"
+									href={pdfHref(r)}
+									target="_blank"
+									rel="external noopener"
+									aria-label="Open page {r.page_number} of {r.document_title} (PDF)"
+								>
+									{@render render(r, boxesOn(i + 1), i >= 10)}
+								</a>
+							{:else}
+								<button
+									type="button"
+									class="sheet thumb"
+									aria-expanded={expanded === i}
+									aria-controls="page-{i + 1}"
+									aria-label="Show page {r.page_number} of {r.document_title} large"
+									onclick={(e) => expand(i, e.currentTarget)}
+								>
+									{@render render(r, boxesOn(i + 1), i >= 10)}
+								</button>
+							{/if}
 							<div class="hit">
 								<h3><span class="rank">{i + 1}</span>{r.document_title}</h3>
 								<p class="meta">
@@ -330,7 +524,7 @@
 											>{sourceNames.get(r.data_source_id) ?? r.data_source_id}</span
 										>
 									{/if}
-									<a class="loc" href={r.pdf_url} target="_blank" rel="external noopener"
+									<a class="loc" href={pdfHref(r)} target="_blank" rel="external noopener"
 										>PDF p.{r.page_number} ↗</a
 									>
 								</p>
@@ -338,6 +532,25 @@
 									<blockquote class="source">{snippetText(r.snippet)}</blockquote>
 								{/if}
 							</div>
+							{#if expanded === i && !wide.current}
+								<figure
+									class="expanded"
+									id="page-{i + 1}"
+									aria-label="Page {r.page_number} of {r.document_title}"
+								>
+									<figcaption>
+										<span class="loc">{i + 1} · p.{r.page_number}</span>
+										<a class="loc" href={pdfHref(r)} target="_blank" rel="external noopener"
+											>PDF p.{r.page_number} ↗</a
+										>
+										<button type="button" class="quiet" onclick={collapse}>Close</button>
+									</figcaption>
+									<div class="sheet zoomed">{@render render(r, boxesOn(i + 1))}</div>
+									{#if active?.ref === i + 1 && active.quote}
+										<p class="sr-only">Outlined on the page: {active.quote}</p>
+									{/if}
+								</figure>
+							{/if}
 						</li>
 					{/each}
 				</ol>
@@ -345,29 +558,27 @@
 				{#if shown && wide.current}
 					<figure class="viewer" aria-label="Selected page">
 						<a
-							class="sheet"
-							href={shown.pdf_url}
+							class={['sheet', zoomed && 'zoomed']}
+							href={pdfHref(shown)}
 							target="_blank"
 							rel="external noopener"
 							aria-label="Open page {shown.page_number} of {shown.document_title} (PDF)"
 						>
-							{#if failed.has(shown.page_image_url)}
-								<span class="expired">Page image expired. Search again to refresh.</span>
-							{:else}
-								<!-- Aspect hint only (see above). -->
-								<img
-									src={shown.page_image_url}
-									alt="Page {shown.page_number} of {shown.document_title}"
-									width="935"
-									height="1210"
-									onerror={() => shown && failed.add(shown.page_image_url)}
-								/>
-							{/if}
+							{@render render(shown, shownBoxes)}
 						</a>
 						<figcaption>
 							<span class="loc">{current + 1} · {shown.document_title} · p.{shown.page_number}</span
 							>
-							<a class="loc" href={shown.pdf_url} target="_blank" rel="external noopener"
+							{#if active?.ref === current + 1 && active.quote}
+								<span class="sr-only">Outlined on the page: {active.quote}</span>
+							{/if}
+							<button
+								type="button"
+								class="quiet zoom"
+								aria-pressed={zoomed}
+								onclick={() => (zoomed = !zoomed)}>Zoom</button
+							>
+							<a class="loc" href={pdfHref(shown)} target="_blank" rel="external noopener"
 								>PDF p.{shown.page_number} ↗</a
 							>
 						</figcaption>
@@ -377,6 +588,8 @@
 		{/if}
 	</section>
 {/if}
+
+<p class="copied readout" role="status">{copyStatus}</p>
 
 <style>
 	.page-head .waiting {
@@ -526,12 +739,14 @@
 	}
 	.keys {
 		display: none;
+		flex-wrap: wrap;
+		gap: 0 1rem;
 		margin: 0;
 		font-size: 0.8125rem;
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.keys {
-			display: block;
+			display: flex;
 		}
 	}
 	.layout {
@@ -587,10 +802,82 @@
 		max-width: 68ch;
 		font-size: 1rem;
 	}
+	/* The frame the cited-text boxes are placed in: exactly the image's box. */
+	.frame {
+		display: block;
+		position: relative;
+	}
+	/* Moss wash multiplied onto the paper so the words stay black; a light edge by check status
+	   (same in both themes), on the box itself so it doesn't run into the lines around it. */
+	.mark {
+		position: absolute;
+		pointer-events: none;
+		background: var(--color-sheet-mark);
+		mix-blend-mode: multiply;
+		outline: 1.5px solid var(--color-sheet-mark-not-checked);
+		outline-offset: 0;
+		border-radius: 2px;
+	}
+	.mark[data-status='verified'] {
+		outline-color: var(--color-sheet-mark-verified);
+	}
+	.mark[data-status='unsupported'] {
+		outline-color: var(--color-sheet-mark-unsupported);
+	}
+	.thumb .mark {
+		outline-width: 1px;
+	}
+	.cite a.on {
+		background: var(--color-highlight);
+	}
+	/* Hug the image: a grid item would otherwise stretch the frame to the row's height. */
 	.thumb {
+		align-self: start;
 		width: 100%;
 		color: inherit;
 		text-decoration: none;
+	}
+	button.thumb {
+		min-height: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: var(--color-sheet);
+		cursor: zoom-in;
+	}
+	button.thumb[aria-expanded='true'] {
+		cursor: zoom-out;
+	}
+	/* Phones: the page opened large under its row, full width. */
+	.expanded {
+		grid-column: 1 / -1;
+		display: grid;
+		gap: 0.5rem;
+		margin: 0;
+	}
+	.expanded figcaption {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0 1rem;
+	}
+	.expanded figcaption button {
+		margin-left: auto;
+	}
+	.copied {
+		position: fixed;
+		bottom: 1rem;
+		left: 50%;
+		transform: translateX(-50%);
+		margin: 0;
+		padding: 0.375rem 0.75rem;
+		border: 1px solid var(--color-edge);
+		border-radius: 3px;
+		background: var(--color-surface);
+	}
+	.copied:empty {
+		padding: 0;
+		border: 0;
 	}
 	.expired {
 		display: block;
@@ -650,6 +937,16 @@
 			max-width: 100%;
 			max-height: calc(100vh - 5rem);
 		}
+		/* Zoomed: the selected page takes most of the width, at full size. */
+		.layout.zoomed {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+		}
+		.layout.zoomed .viewer {
+			position: static;
+		}
+		.layout.zoomed .viewer .sheet img {
+			max-height: none;
+		}
 		.viewer .expired {
 			padding: 1.5rem;
 			font-size: 0.875rem;
@@ -657,8 +954,17 @@
 		figcaption {
 			display: flex;
 			flex-wrap: wrap;
-			justify-content: space-between;
+			align-items: baseline;
 			gap: 0 1rem;
+		}
+		/* A control shaped like the locators beside it. */
+		.zoom {
+			min-height: 0;
+			margin-left: auto;
+			padding: 0;
+			font: 500 0.8125rem/1.5 var(--font-mono);
+			letter-spacing: 0.02em;
+			text-transform: uppercase;
 		}
 	}
 </style>

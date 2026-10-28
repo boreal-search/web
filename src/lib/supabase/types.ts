@@ -7,14 +7,31 @@ export type SearchStatus =
 	'ok' | 'forbidden' | 'timeout' | 'unreachable' | 'unavailable' | 'engine_error';
 /** `add_org_member` result: the email had an account (member row) or not (pending invite). */
 export type AddMemberResult = 'added' | 'invited';
+export type AccessRequestStatus = 'open' | 'done';
 
 export interface Database {
 	public: {
 		Tables: {
 			profiles: {
-				Row: { id: string; email: string; display_name: string | null; created_at: string };
-				Insert: { id: string; email: string; display_name?: string | null; created_at?: string };
-				Update: { email?: string; display_name?: string | null };
+				Row: {
+					id: string;
+					email: string;
+					display_name: string | null;
+					theme: 'system' | 'light' | 'dark';
+					created_at: string;
+				};
+				Insert: {
+					id: string;
+					email: string;
+					display_name?: string | null;
+					theme?: 'system' | 'light' | 'dark';
+					created_at?: string;
+				};
+				Update: {
+					email?: string;
+					display_name?: string | null;
+					theme?: 'system' | 'light' | 'dark';
+				};
 				Relationships: [];
 			};
 			orgs: {
@@ -120,6 +137,41 @@ export interface Database {
 						columns: ['org_id'];
 						isOneToOne: false;
 						referencedRelation: 'orgs';
+						referencedColumns: ['id'];
+					}
+				];
+			};
+			access_requests: {
+				Row: {
+					id: string;
+					user_id: string;
+					/** Copied from the requester's profile at insert. */
+					email: string;
+					organization: string;
+					role: string | null;
+					use_case: string;
+					status: AccessRequestStatus;
+					created_at: string;
+				};
+				/** `user_id` defaults to the caller; `email` and `created_at` are set by a trigger. */
+				Insert: {
+					id?: string;
+					user_id?: string;
+					email?: string;
+					organization: string;
+					role?: string | null;
+					use_case: string;
+					status?: 'open';
+					created_at?: string;
+				};
+				/** Platform admins only, and only `status`. */
+				Update: { status?: AccessRequestStatus };
+				Relationships: [
+					{
+						foreignKeyName: 'access_requests_user_id_fkey';
+						columns: ['user_id'];
+						isOneToOne: false;
+						referencedRelation: 'profiles';
 						referencedColumns: ['id'];
 					}
 				];

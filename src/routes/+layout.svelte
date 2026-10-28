@@ -13,6 +13,11 @@
 	let menuOpen = $state(false);
 	afterNavigate(() => (menuOpen = false));
 
+	// SSR sets <html data-theme>; keep it in step when the theme changes without a reload.
+	$effect(() => {
+		document.documentElement.dataset.theme = data.theme;
+	});
+
 	// Back to the same page after switching; a data source page may not exist in the new context.
 	let switchBackTo = $derived(
 		page.route.id === '/(app)/data-sources/[id]' ? '/' : page.url.pathname

@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { requireOrgAdmin } from '#lib/server/auth.js';
 import { EmailError, sendEmail } from '#lib/server/email.js';
-import { engine, engineErrorMessage } from '#lib/server/engine.js';
+import { classifyEngineError, engine, FAILURE_HTTP_STATUS } from '#lib/server/engine.js';
 import {
 	inviteEmail,
 	isPublicEmailDomain,
@@ -39,8 +39,8 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 			db.from('org_domains').select('domain').eq('org_id', org.id).order('domain'),
 			engine(fetch)
 				.listDataSources()
-				.then((list) => ({ list, error: null }))
-				.catch((e: unknown) => ({ list: [], error: engineErrorMessage(e) }))
+				.then((list) => ({ list, failure: null }))
+				.catch((e: unknown) => ({ list: [], failure: classifyEngineError(e) }))
 		]);
 		if (grants.error) throw grants.error;
 		if (domains.error) throw domains.error;
@@ -48,7 +48,7 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 			grantedIds: grants.data.map((g) => g.data_source_id),
 			domains: domains.data.map((d) => d.domain),
 			dataSources: sources.list.map((ds) => ({ id: ds.id, name: ds.name })),
-			engineError: sources.error
+			engineFailure: sources.failure
 		};
 	}
 
@@ -152,7 +152,8 @@ export const actions: Actions = {
 		try {
 			known = (await engine(fetch).listDataSources()).map((ds) => ds.id);
 		} catch (e) {
-			return fail(502, { error: `Access not saved. ${engineErrorMessage(e)}` });
+			const failure = classifyEngineError(e);
+			return fail(FAILURE_HTTP_STATUS[failure.kind], { failure, effect: 'Access not saved.' });
 		}
 		const current = await locals.supabase
 			.from('org_data_sources')

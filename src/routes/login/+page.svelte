@@ -32,7 +32,8 @@
 		</div>
 	{:else if data.redirectTo !== '/' && !form}
 		<p class="notice" role="status">
-			Log in to continue to <code>{data.redirectTo}</code>.
+			Log in to continue to <code>{data.redirectTo}</code>. If you were logged in, your session has
+			ended.
 		</p>
 	{/if}
 

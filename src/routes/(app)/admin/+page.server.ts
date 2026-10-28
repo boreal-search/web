@@ -1,12 +1,13 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { isMissingTable } from '#lib/server/access-requests.js';
 import { requirePlatformAdmin } from '#lib/server/auth.js';
-import { engine, engineErrorMessage } from '#lib/server/engine.js';
+import { classifyEngineError, engine, FAILURE_HTTP_STATUS } from '#lib/server/engine.js';
 import { parseSlug, planGrantChanges } from '#lib/server/orgs.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, fetch }) => {
 	await requirePlatformAdmin();
-	const [{ data, error }, pub, sources] = await Promise.all([
+	const [{ data, error }, pub, sources, requests] = await Promise.all([
 		locals.supabase
 			.from('orgs')
 			.select('id, slug, name, org_members(count), org_data_sources(data_source_id)')
@@ -14,16 +15,24 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 		locals.supabase.from('public_data_sources').select('data_source_id'),
 		engine(fetch)
 			.listDataSources()
-			.then((list) => ({ list, error: null }))
-			.catch((e: unknown) => ({ list: [], error: engineErrorMessage(e) }))
+			.then((list) => ({ list, failure: null }))
+			.catch((e: unknown) => ({ list: [], failure: classifyEngineError(e) })),
+		locals.supabase
+			.from('access_requests')
+			.select('id, email, organization, role, use_case, created_at')
+			.eq('status', 'open')
+			.order('created_at')
 	]);
 	if (error) throw error;
 	if (pub.error) throw pub.error;
+	// Null until the access_requests migration is applied; the band says so.
+	if (requests.error && !isMissingTable(requests.error)) throw requests.error;
 	return {
+		accessRequests: requests.error ? null : requests.data,
 		publicCorpora: {
 			publicIds: pub.data.map((p) => p.data_source_id),
 			dataSources: sources.list.map((ds) => ({ id: ds.id, name: ds.name })),
-			engineError: sources.error
+			engineFailure: sources.failure
 		},
 		orgs: data.map((o) => ({
 			id: o.id,
@@ -44,7 +53,8 @@ export const actions: Actions = {
 		try {
 			known = (await engine(fetch).listDataSources()).map((ds) => ds.id);
 		} catch (e) {
-			return fail(502, { publicError: `Public data sources not saved. ${engineErrorMessage(e)}` });
+			const publicFailure = classifyEngineError(e);
+			return fail(FAILURE_HTTP_STATUS[publicFailure.kind], { publicFailure });
 		}
 		const current = await locals.supabase.from('public_data_sources').select('data_source_id');
 		if (current.error) return fail(400, { publicError: current.error.message });
@@ -68,6 +78,22 @@ export const actions: Actions = {
 			if (error) return fail(400, { publicError: error.message });
 		}
 		return { publicNotice: 'Public data sources saved.' };
+	},
+
+	markRequestDone: async ({ request, locals }) => {
+		await requirePlatformAdmin();
+		const id = String((await request.formData()).get('id') ?? '');
+		const { data, error } = await locals.supabase
+			.from('access_requests')
+			.update({ status: 'done' })
+			.eq('id', id)
+			.eq('status', 'open')
+			.select('email');
+		if (error) return fail(400, { requestError: error.message });
+		// Already done (another tab) reads the same: the reloaded list no longer has it.
+		return {
+			requestNotice: data[0] ? `Request from ${data[0].email} marked done.` : 'Request marked done.'
+		};
 	},
 
 	createOrg: async ({ request, locals }) => {

@@ -9,12 +9,22 @@ import type { SearchResponse } from './engine.types';
 
 const response: SearchResponse = {
 	query: 'noise limits',
+	resolved_query: 'noise limits',
+	scope: { data_source_ids: ['bc-regs'], document_ids: null, inferred_documents: [] },
+	readout: {
+		pages_searched: 100,
+		documents_searched: 1,
+		pages_returned: 1,
+		retrieval_ms: 42,
+		total_ms: 42
+	},
 	results: [
 		{
 			document_id: 'd1',
 			document_title: 'Reg 12/2018',
 			data_source_id: 'bc-regs',
 			page_number: 4,
+			section: null,
 			score: 0.83,
 			page_image_url: 'https://r2/p.webp',
 			pdf_url: 'https://r2/d.pdf#page=4',

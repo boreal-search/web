@@ -26,7 +26,8 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 - No red in search results or answer states. `danger` is for destructive actions and
   system errors elsewhere.
 - Green (`verified`, `accent`) is never decorative.
-- Light and dark follow `prefers-color-scheme`; both are defined for every role.
+- Light and dark follow `prefers-color-scheme` unless the user picks one on `/account`
+  (`<html data-theme>`); every colour role is one `light-dark(light, dark)` value.
 
 ## Type
 
@@ -53,6 +54,14 @@ locator (`VOL 3 · §12.6 · P.412`), and a locator opens the PDF at that page.
 Query, then the generated summary (labelled as generated, each sentence cited) with one status
 line and one readout, then the evidence: the selected page render large enough to read beside
 the ranked results. Show rank only; engine scores are not confidence.
+The large page opens on the first result the answer cites. Choosing `[n]` shows that result's
+page with only that sentence's cited text outlined (`sheet-mark` wash multiplied on the paper,
+a 1.5 px edge by check status: `sheet-mark-verified` / `-unsupported` / `-not-checked`, light
+values in both themes); otherwise each page outlines everything the answer cites on it, and a
+citation the engine couldn't place opens its page unmarked, its locator saying "page". Phones
+have no side viewer: a `[n]` or a thumbnail opens the page full width under its row (Close or
+Escape returns focus). Keys: J K next/previous, Space zoom page (`.sheet.zoomed`), O open PDF at
+page, C copy citation (title · page · permanent PDF link).
 
 ## Waiting
 
@@ -75,6 +84,8 @@ layout beyond them uses Tailwind utilities from the theme.
   (destructive only); `a.button` for a link shaped like a button.
 - Notices: `.notice` with `role="status"`; `data-tone="error"` with `role="alert"` (never in
   search: engine problems there are plain notices); `data-tone="partial"` for done-with-a-caveat.
+  Engine and system failures render `FailureNotice` (`#lib/components/FailureNotice.svelte`)
+  with the `Failure` itself: copy from `describeFailure`, neutral for engine failures, never red.
 - Tables: hairline `table` by default; `.table-wrap` to scroll sideways on phones, or
   `table.stacked` with `data-label` on each `td`; `.num` for right-aligned figures.
 - States: `.flag[data-state]` (see Answer states). Waiting: `.waiting` > `.progress`

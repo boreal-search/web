@@ -7,15 +7,15 @@ import {
 } from '#lib/server/access.js';
 import { recordSearchEvent } from '#lib/server/analytics.js';
 import { requireUser } from '#lib/server/auth.js';
+import type { EngineFailure } from '#lib/failure.js';
 import {
 	answerNotice,
+	classifyEngineError,
 	engine,
-	engineErrorMessage,
-	engineFailureMessage,
 	FAILURE_HTTP_STATUS,
-	type EngineFailure,
 	type SearchResponse
 } from '#lib/server/engine.js';
+import { canSign } from '#lib/server/files.js';
 import type { SearchStatus } from '#lib/supabase/types.js';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -26,25 +26,33 @@ interface PickerGroup {
 	dataSources: { id: string; name: string; pages: number | null }[];
 }
 
-/** Picker groups ("<Org name>", "Public"). If the engine listing fails, ids stand in for names. */
+/**
+ * Picker groups ("<Org name>", "Public"). If the engine listing fails, ids stand in for names.
+ * `permanentLinks`: page images go through `/pages/…` (web signs); else the engine's URLs.
+ */
 export const load: PageServerLoad = async ({
 	parent,
 	fetch
-}): Promise<{ groups: PickerGroup[]; engineError: string | null }> => {
+}): Promise<{
+	groups: PickerGroup[];
+	engineFailure: EngineFailure | null;
+	permanentLinks: boolean;
+}> => {
 	const { access } = await parent();
+	const permanentLinks = canSign();
 	try {
 		const list = access.dataSourceIds.length > 0 ? await engine(fetch).listDataSources() : [];
 		const groups = withDataSources(access.groups, list).map((g) => ({
 			label: g.label,
 			dataSources: g.dataSources.map((ds) => ({ id: ds.id, name: ds.name, pages: ds.page_count }))
 		}));
-		return { groups, engineError: null };
+		return { groups, engineFailure: null, permanentLinks };
 	} catch (e) {
 		const groups = access.groups.map((g) => ({
 			label: g.label,
 			dataSources: g.ids.map((id) => ({ id, name: id, pages: null }))
 		}));
-		return { groups, engineError: engineErrorMessage(e) };
+		return { groups, engineFailure: classifyEngineError(e), permanentLinks };
 	}
 };
 
@@ -145,7 +153,7 @@ export const actions: Actions = {
 			answer,
 			topK,
 			rerank,
-			error: engineFailureMessage(outcome)
+			failure: outcome
 		});
 	}
 };

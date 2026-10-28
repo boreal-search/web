@@ -16,6 +16,11 @@ export type SearchRequest = Schemas['SearchRequest'];
 export type SearchResult = Schemas['SearchResult'];
 export type Answer = Schemas['AnswerOut'];
 export type AnswerSource = Schemas['AnswerSource'];
+export type Citation = Schemas['CitationOut'];
+/** Whether the check found the cited page supports the sentence. */
+export type CitationStatus = Citation['status'];
+export type Sentence = Schemas['SentenceOut'];
+export type Highlight = Schemas['HighlightOut'];
 export type Verification = Schemas['VerificationOut'];
 export type Claim = Schemas['ClaimOut'];
 /** `answer` is present only when the request had `answer: true` (SearchAnswerResponse). */

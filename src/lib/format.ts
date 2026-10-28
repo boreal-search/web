@@ -15,3 +15,6 @@ export const humanise = (s: string) => {
 /** A timestamp in UTC: "2026-10-28 00:50 UTC". */
 export const stamp = (iso: string) =>
 	`${new Date(iso).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+
+/** The UTC date of a timestamp: "2026-10-28". */
+export const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);

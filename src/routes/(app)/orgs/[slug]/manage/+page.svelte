@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
+	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import { plural, stamp } from '#lib/format.js';
 	import { ORG_ROLES, ROLE_LABELS } from '#lib/roles.js';
 	import type { PageProps } from './$types';
@@ -31,7 +32,9 @@
 
 {#snippet feedback(slot: Slot | null)}
 	{#if form && from === slot}
-		{#if form.error}
+		{#if form.failure}
+			<FailureNotice failure={form.failure} effect={form.effect} />
+		{:else if form.error}
 			<p class="notice" data-tone="error" role="alert">{form.error}</p>
 		{:else if form.notice}
 			<p class="notice" data-tone={form.partial ? 'partial' : undefined} role="status">
@@ -228,16 +231,16 @@
 	<section class="band" aria-labelledby="grants-heading">
 		<h2 id="grants-heading">Data source access</h2>
 		{@render scope()}
-		{#if data.platform.engineError}
-			<p class="notice" data-tone="error" role="alert">
-				The data source list can't be loaded, so access can't be changed right now.
-				{data.platform.engineError}
-			</p>
+		{#if data.platform.engineFailure}
+			<FailureNotice
+				failure={data.platform.engineFailure}
+				effect="The data source list can't be loaded, so access can't be changed."
+			/>
 			<p class="readout">
 				<span>granted <b>{data.platform.grantedIds.join(', ') || 'none'}</b></span>
 			</p>
 		{:else if data.platform.dataSources.length === 0}
-			<p class="empty">The engine has no data sources.</p>
+			<p class="empty">The search engine has no data sources.</p>
 		{:else}
 			<form method="POST" action="?/saveGrants" class="stack" use:enhance={submit('grants', false)}>
 				<fieldset aria-describedby="grants-help">

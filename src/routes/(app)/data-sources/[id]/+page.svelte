@@ -1,153 +1,172 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import { count, humanise, plural, stamp } from '#lib/format.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	let ds = $derived(data.dataSource);
-	let total = $derived(data.documents.total);
-	let shownCount = $derived(data.documents.items.length);
-	let here = $derived(resolve('/(app)/data-sources/[id]', { id: ds.id }));
+	// Null when the search engine is down: the head shows what web knows (id, granting group).
+	let detail = $derived(data.detail);
+	let ds = $derived(detail?.dataSource ?? null);
+	let documents = $derived(detail?.documents.items ?? []);
+	let jobs = $derived(detail?.jobs ?? []);
+	let total = $derived(detail?.documents.total ?? 0);
+	let shownCount = $derived(documents.length);
+	let here = $derived(resolve('/(app)/data-sources/[id]', { id: data.id }));
 	let nextOffset = $derived(data.offset + data.pageSize);
 	let prevOffset = $derived(Math.max(data.offset - data.pageSize, 0));
 	let hasPrev = $derived(data.offset > 0 && shownCount > 0);
 	let hasNext = $derived(nextOffset < total);
-	let active = $derived(
-		data.jobs.filter((j) => j.status === 'queued' || j.status === 'running').length
-	);
-	let failed = $derived(data.jobs.filter((j) => j.status === 'failed').length);
+	let active = $derived(jobs.filter((j) => j.status === 'queued' || j.status === 'running').length);
+	let failed = $derived(jobs.filter((j) => j.status === 'failed').length);
 </script>
 
 <p class="back"><a href={resolve('/(app)')}>← Data sources</a></p>
 
+<svelte:head>
+	<title>{ds?.name ?? data.id} · Boreal Search</title>
+</svelte:head>
+
 <header class="page-head">
-	<h1>{ds.name}</h1>
-	{#if ds.description}<p class="muted">{ds.description}</p>{/if}
+	<h1>{ds?.name ?? data.id}</h1>
+	{#if ds?.description}<p class="muted">{ds.description}</p>{/if}
 	<p class="readout">
-		<span><b>{humanise(ds.status)}</b></span>
-		<span
-			><b>{count(ds.document_count)}</b>
-			{plural(ds.document_count, 'document', 'documents')}</span
-		>
-		<span><b>{count(ds.page_count)}</b> {plural(ds.page_count, 'page', 'pages')}</span>
+		{#if ds}
+			<span><b>{humanise(ds.status)}</b></span>
+			<span
+				><b>{count(ds.document_count)}</b>
+				{plural(ds.document_count, 'document', 'documents')}</span
+			>
+			<span><b>{count(ds.page_count)}</b> {plural(ds.page_count, 'page', 'pages')}</span>
+		{:else}
+			{#if data.group}<span>in <b>{data.group}</b></span>{/if}
+			<span>details <b>unavailable</b></span>
+		{/if}
 	</p>
 </header>
 
-<section class="band" aria-labelledby="documents">
-	<div class="band-head">
-		<h2 id="documents">Documents</h2>
-		{#if shownCount > 0}
-			<p class="readout">
-				<span
-					>Showing <b>{count(data.offset + 1)}–{count(data.offset + shownCount)}</b>
-					of <b>{count(total)}</b></span
-				>
-			</p>
-		{/if}
-	</div>
+{#if data.engineFailure}
+	<FailureNotice
+		failure={data.engineFailure}
+		effect="Documents and ingestion jobs for this data source can't be loaded."
+	/>
+{:else}
+	<section class="band" aria-labelledby="documents">
+		<div class="band-head">
+			<h2 id="documents">Documents</h2>
+			{#if shownCount > 0}
+				<p class="readout">
+					<span
+						>Showing <b>{count(data.offset + 1)}–{count(data.offset + shownCount)}</b>
+						of <b>{count(total)}</b></span
+					>
+				</p>
+			{/if}
+		</div>
 
-	{#if total === 0}
-		<p class="empty">No documents yet.</p>
-	{:else if shownCount === 0}
-		<p class="empty">
-			No documents past number {count(total)}.
-			<a href={here}>Back to the first page</a>
-		</p>
-	{:else}
-		<table class="stacked documents">
-			<thead>
-				<tr>
-					<th scope="col">Title</th>
-					<th scope="col">File</th>
-					<th scope="col" class="num">Pages</th>
-					<th scope="col">Status</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.documents.items as doc (doc.id)}
+		{#if total === 0}
+			<p class="empty">No documents yet.</p>
+		{:else if shownCount === 0}
+			<p class="empty">
+				No documents past number {count(total)}.
+				<a href={here}>Back to the first page</a>
+			</p>
+		{:else}
+			<table class="stacked documents">
+				<thead>
 					<tr>
-						<td class="title">
-							<a href={doc.pdf_url} target="_blank" rel="external noopener">{doc.title}</a>
-						</td>
-						<td class="file" data-label="File">{doc.filename}</td>
-						<td class="num" data-label="Pages"
-							>{doc.page_count === null ? '—' : count(doc.page_count)}</td
-						>
-						<td class="state" data-label="Status">{humanise(doc.status)}</td>
+						<th scope="col">Title</th>
+						<th scope="col">File</th>
+						<th scope="col" class="num">Pages</th>
+						<th scope="col">Status</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
-		{#if hasPrev || hasNext}
-			<nav class="actions" aria-label="Document pages">
-				{#if hasPrev}
-					<a class="button" href="{here}?offset={prevOffset}">← Previous</a>
-				{/if}
-				{#if hasNext}
-					<a class="button" href="{here}?offset={nextOffset}">Next →</a>
-				{/if}
-			</nav>
+				</thead>
+				<tbody>
+					{#each documents as doc (doc.id)}
+						<tr>
+							<td class="title">
+								<a href={doc.pdf_url} target="_blank" rel="external noopener">{doc.title}</a>
+							</td>
+							<td class="file" data-label="File">{doc.filename}</td>
+							<td class="num" data-label="Pages"
+								>{doc.page_count === null ? '—' : count(doc.page_count)}</td
+							>
+							<td class="state" data-label="Status">{humanise(doc.status)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+			{#if hasPrev || hasNext}
+				<nav class="actions" aria-label="Document pages">
+					{#if hasPrev}
+						<a class="button" href="{here}?offset={prevOffset}">← Previous</a>
+					{/if}
+					{#if hasNext}
+						<a class="button" href="{here}?offset={nextOffset}">Next →</a>
+					{/if}
+				</nav>
+			{/if}
 		{/if}
-	{/if}
-</section>
+	</section>
 
-<section class="band" aria-labelledby="jobs">
-	<div class="band-head">
-		<h2 id="jobs">Ingestion jobs</h2>
-		{#if data.jobs.length > 0}
-			<p class="readout">
-				<span>Latest <b>{data.jobs.length}</b></span>
-				{#if active > 0}<span><b>{active}</b> active</span>{/if}
-				{#if failed > 0}<span><b>{failed}</b> failed</span>{/if}
-			</p>
-		{/if}
-	</div>
+	<section class="band" aria-labelledby="jobs">
+		<div class="band-head">
+			<h2 id="jobs">Ingestion jobs</h2>
+			{#if jobs.length > 0}
+				<p class="readout">
+					<span>Latest <b>{jobs.length}</b></span>
+					{#if active > 0}<span><b>{active}</b> active</span>{/if}
+					{#if failed > 0}<span><b>{failed}</b> failed</span>{/if}
+				</p>
+			{/if}
+		</div>
 
-	{#if data.jobs.length === 0}
-		<p class="empty">No ingestion jobs recorded.</p>
-	{:else}
-		<table class="stacked jobs">
-			<thead>
-				<tr>
-					<th scope="col">Type</th>
-					<th scope="col">Status</th>
-					<th scope="col" class="num">Progress</th>
-					<th scope="col">Created</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.jobs as job (job.id)}
-					<tr class:has-error={job.error}>
-						<td class="state" data-label="Type">{humanise(job.type)}</td>
-						<td class="state" data-label="Status">{humanise(job.status)}</td>
-						<td class="num" data-label="Progress">
-							{#if job.progress}
-								{count(job.progress.done)} / {count(job.progress.total)}
-							{:else}
-								—
-							{/if}
-						</td>
-						<td class="state" data-label="Created">
-							<time datetime={job.created_at}>{stamp(job.created_at)}</time>
-						</td>
+		{#if jobs.length === 0}
+			<p class="empty">No ingestion jobs recorded.</p>
+		{:else}
+			<table class="stacked jobs">
+				<thead>
+					<tr>
+						<th scope="col">Type</th>
+						<th scope="col">Status</th>
+						<th scope="col" class="num">Progress</th>
+						<th scope="col">Created</th>
 					</tr>
-					{#if job.error}
-						<tr class="job-error">
-							<td colspan="4" class:failed={job.status === 'failed'}>
-								<span class="label">Error</span>
-								{job.error}
+				</thead>
+				<tbody>
+					{#each jobs as job (job.id)}
+						<tr class={{ 'has-error': job.error }}>
+							<td class="state" data-label="Type">{humanise(job.type)}</td>
+							<td class="state" data-label="Status">{humanise(job.status)}</td>
+							<td class="num" data-label="Progress">
+								{#if job.progress}
+									{count(job.progress.done)} / {count(job.progress.total)}
+								{:else}
+									—
+								{/if}
+							</td>
+							<td class="state" data-label="Created">
+								<time datetime={job.created_at}>{stamp(job.created_at)}</time>
 							</td>
 						</tr>
-					{/if}
-				{/each}
-			</tbody>
-		</table>
-		{#if active > 0}
-			<p class="muted note">This list doesn't refresh on its own. Reload to see progress.</p>
+						{#if job.error}
+							<tr class="job-error">
+								<td colspan="4" class={{ failed: job.status === 'failed' }}>
+									<span class="label">Error</span>
+									{job.error}
+								</td>
+							</tr>
+						{/if}
+					{/each}
+				</tbody>
+			</table>
+			{#if active > 0}
+				<p class="muted note">This list doesn't refresh on its own. Reload to see progress.</p>
+			{/if}
 		{/if}
-	{/if}
-</section>
+	</section>
+{/if}
 
 <style>
 	.back {

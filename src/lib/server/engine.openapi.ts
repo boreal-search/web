@@ -11,7 +11,11 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** Health */
+		/**
+		 * Health
+		 * @description Liveness: names the configured models without loading them, so a probe can never
+		 *     start a GPU load (b9a5a66) and doesn't fail while Qdrant or Ollama are down.
+		 */
 		get: operations['health_health_get'];
 		put?: never;
 		post?: never;
@@ -123,6 +127,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/search/stream': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Search Stream */
+		post: operations['search_stream_search_stream_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/jobs': {
 		parameters: {
 			query?: never;
@@ -134,40 +155,6 @@ export interface paths {
 		get: operations['list_jobs_jobs_get'];
 		put?: never;
 		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/internal/embed': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Embed */
-		post: operations['embed_internal_embed_post'];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	'/internal/rerank': {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/** Rerank */
-		post: operations['rerank_internal_rerank_post'];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -186,6 +173,8 @@ export interface components {
 			abstained: boolean;
 			/** Sources */
 			sources: components['schemas']['AnswerSource'][];
+			/** Citations */
+			citations: components['schemas']['CitationOut'][];
 			verification: components['schemas']['VerificationOut'] | null;
 			/** Model */
 			model: string;
@@ -193,6 +182,22 @@ export interface components {
 			generation_ms: number;
 			/** Verify Ms */
 			verify_ms: number;
+			readout: components['schemas']['AnswerReadout'];
+		};
+		/** AnswerReadout */
+		AnswerReadout: {
+			/** Pages Used */
+			pages_used: number;
+			/** Sentences */
+			sentences: number;
+			/** Sentences Verified */
+			sentences_verified: number;
+			/** Generation Ms */
+			generation_ms: number;
+			/** Verify Ms */
+			verify_ms: number;
+			/** Total Ms */
+			total_ms: number;
 		};
 		/**
 		 * AnswerSource
@@ -209,6 +214,34 @@ export interface components {
 			/** Page Number */
 			page_number: number;
 		};
+		/**
+		 * CitationOut
+		 * @description One `[n]` marker in `text` (several refs in one "[1, 2]" share start/end).
+		 */
+		CitationOut: {
+			/** Ref */
+			ref: number;
+			/** Start */
+			start: number;
+			/** End */
+			end: number;
+			/** Text */
+			text: string;
+			sentence: components['schemas']['SentenceOut'];
+			/**
+			 * Document Id
+			 * Format: uuid
+			 */
+			document_id: string;
+			/** Page Number */
+			page_number: number;
+			/**
+			 * Status
+			 * @enum {string}
+			 */
+			status: 'verified' | 'unsupported' | 'not_checked';
+			highlight: components['schemas']['HighlightOut'];
+		};
 		/** ClaimOut */
 		ClaimOut: {
 			/** Claim */
@@ -217,6 +250,24 @@ export interface components {
 			supported: boolean;
 			/** Ref */
 			ref: number | null;
+		};
+		/** ContextScope */
+		ContextScope: {
+			/** Data Source Ids */
+			data_source_ids: string[];
+			/** Document Ids */
+			document_ids?: string[] | null;
+		};
+		/**
+		 * ContextStep
+		 * @description A previous trail step. Only its queries reach the rewrite; never a summary.
+		 */
+		ContextStep: {
+			/** Query */
+			query: string;
+			/** Resolved Query */
+			resolved_query?: string | null;
+			scope?: components['schemas']['ContextScope'] | null;
 		};
 		/** DataSourceOut */
 		DataSourceOut: {
@@ -237,6 +288,12 @@ export interface components {
 			 * Format: date-time
 			 */
 			created_at: string;
+			/** Rerank Instruction */
+			rerank_instruction: string | null;
+			/** Target Language */
+			target_language: string | null;
+			/** Indexed At */
+			indexed_at: string | null;
 		};
 		/** DocumentOut */
 		DocumentOut: {
@@ -257,6 +314,8 @@ export interface components {
 			status: string;
 			/** Pdf Url */
 			pdf_url: string;
+			/** Aliases */
+			aliases: string[];
 			/**
 			 * Created At
 			 * Format: date-time
@@ -270,29 +329,15 @@ export interface components {
 			/** Total */
 			total: number;
 		};
-		/**
-		 * EmbedRequest
-		 * @description Either `images` (base64 WebP/PNG) or `query`.
-		 */
-		EmbedRequest: {
-			/** Images */
-			images?: string[] | null;
-			/** Query */
-			query?: string | null;
-		};
-		/** EmbedResponse */
-		EmbedResponse: {
-			/** Vectors */
-			vectors: number[][];
-			/** Dim */
-			dim: number;
-		};
 		/** HTTPValidationError */
 		HTTPValidationError: {
 			/** Detail */
 			detail?: components['schemas']['ValidationError'][];
 		};
-		/** Health */
+		/**
+		 * Health
+		 * @description Liveness only: never loads a model or calls Qdrant/Ollama.
+		 */
 		Health: {
 			/**
 			 * Status
@@ -301,10 +346,43 @@ export interface components {
 			status?: string;
 			/** Version */
 			version: string;
-			/** Embedder */
-			embedder: string;
-			/** Embedding Dim */
-			embedding_dim: number;
+			models: components['schemas']['HealthModels'];
+		};
+		/** HealthModels */
+		HealthModels: {
+			/** Visual */
+			visual: string;
+			/** Text */
+			text: string;
+			/** Reranker */
+			reranker: string | null;
+			/** Llm */
+			llm: string | null;
+		};
+		/**
+		 * HighlightOut
+		 * @description Where on the cited page the cited text is (grounding/highlight.py).
+		 */
+		HighlightOut: {
+			/**
+			 * Kind
+			 * @enum {string}
+			 */
+			kind: 'text' | 'table' | 'figure' | 'region' | 'page';
+			/** Boxes */
+			boxes: [number, number, number, number][];
+			/** Quote */
+			quote: string | null;
+		};
+		/** InferredDocument */
+		InferredDocument: {
+			/**
+			 * Document Id
+			 * Format: uuid
+			 */
+			document_id: string;
+			/** Title */
+			title: string;
 		};
 		/** JobOut */
 		JobOut: {
@@ -335,36 +413,14 @@ export interface components {
 			/** Total */
 			total: number;
 		};
-		/** RerankCandidate */
-		RerankCandidate: {
-			/**
-			 * Page Id
-			 * Format: uuid
-			 */
-			page_id: string;
-			/**
-			 * Document Id
-			 * Format: uuid
-			 */
-			document_id: string;
-			/** Page Number */
-			page_number: number;
-			/** Score */
-			score: number;
-			/** Text */
-			text?: string | null;
-		};
-		/** RerankRequest */
-		RerankRequest: {
-			/** Query */
-			query: string;
-			/** Candidates */
-			candidates: components['schemas']['RerankCandidate'][];
-		};
-		/** RerankResponse */
-		RerankResponse: {
-			/** Candidates */
-			candidates: components['schemas']['RerankCandidate'][];
+		/** Scope */
+		Scope: {
+			/** Data Source Ids */
+			data_source_ids: string[];
+			/** Document Ids */
+			document_ids: string[] | null;
+			/** Inferred Documents */
+			inferred_documents: components['schemas']['InferredDocument'][];
 		};
 		/**
 		 * SearchAnswerResponse
@@ -373,13 +429,30 @@ export interface components {
 		SearchAnswerResponse: {
 			/** Query */
 			query: string;
+			/** Resolved Query */
+			resolved_query: string;
+			scope: components['schemas']['Scope'];
 			/** Results */
 			results: components['schemas']['SearchResult'][];
 			/** Retrieval Ms */
 			retrieval_ms: number;
 			/** Reranked */
 			reranked: boolean;
+			readout: components['schemas']['SearchReadout'];
 			answer: components['schemas']['AnswerOut'];
+		};
+		/** SearchReadout */
+		SearchReadout: {
+			/** Pages Searched */
+			pages_searched: number;
+			/** Documents Searched */
+			documents_searched: number;
+			/** Pages Returned */
+			pages_returned: number;
+			/** Retrieval Ms */
+			retrieval_ms: number;
+			/** Total Ms */
+			total_ms: number;
 		};
 		/** SearchRequest */
 		SearchRequest: {
@@ -402,17 +475,35 @@ export interface components {
 			 * @default false
 			 */
 			answer?: boolean;
+			/** Document Ids */
+			document_ids?: string[] | null;
+			/** Context */
+			context?: components['schemas']['ContextStep'][] | null;
+			/**
+			 * Rewrite
+			 * @default true
+			 */
+			rewrite?: boolean;
+			/**
+			 * Doc Filter
+			 * @default true
+			 */
+			doc_filter?: boolean;
 		};
 		/** SearchResponse */
 		SearchResponse: {
 			/** Query */
 			query: string;
+			/** Resolved Query */
+			resolved_query: string;
+			scope: components['schemas']['Scope'];
 			/** Results */
 			results: components['schemas']['SearchResult'][];
 			/** Retrieval Ms */
 			retrieval_ms: number;
 			/** Reranked */
 			reranked: boolean;
+			readout: components['schemas']['SearchReadout'];
 		};
 		/** SearchResult */
 		SearchResult: {
@@ -427,6 +518,8 @@ export interface components {
 			data_source_id: string;
 			/** Page Number */
 			page_number: number;
+			/** Section */
+			section: string | null;
 			/** Score */
 			score: number;
 			/** Page Image Url */
@@ -435,6 +528,18 @@ export interface components {
 			pdf_url: string;
 			/** Snippet */
 			snippet: string | null;
+		};
+		/** SentenceOut */
+		SentenceOut: {
+			/** Start */
+			start: number;
+			/** End */
+			end: number;
+			/**
+			 * Status
+			 * @enum {string}
+			 */
+			status: 'verified' | 'unsupported' | 'not_checked';
 		};
 		/** ValidationError */
 		ValidationError: {
@@ -688,6 +793,45 @@ export interface operations {
 			};
 		};
 	};
+	search_stream_search_stream_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string | null;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['SearchRequest'];
+			};
+		};
+		responses: {
+			/**
+			 * @description Same body as POST /search. 200 application/x-ndjson, one JSON object per line:
+			 *     stage (rewriting | searching {pages} | reading {pages} | checking {sentences}), results
+			 *     (SearchResponse fields), summary {answer}, done {readout}; or error {status, detail}.
+			 */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/x-ndjson': unknown;
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
 	list_jobs_jobs_get: {
 		parameters: {
 			query?: {
@@ -710,76 +854,6 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['JobOut'][];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	embed_internal_embed_post: {
-		parameters: {
-			query?: never;
-			header?: {
-				authorization?: string | null;
-			};
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['EmbedRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['EmbedResponse'];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['HTTPValidationError'];
-				};
-			};
-		};
-	};
-	rerank_internal_rerank_post: {
-		parameters: {
-			query?: never;
-			header?: {
-				authorization?: string | null;
-			};
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				'application/json': components['schemas']['RerankRequest'];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					'application/json': components['schemas']['RerankResponse'];
 				};
 			};
 			/** @description Validation Error */

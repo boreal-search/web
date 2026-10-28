@@ -45,7 +45,9 @@ export async function getOrgRole(
 export async function requirePlatformAdmin() {
 	const user = requireUser();
 	const { locals } = getRequestEvent();
-	if (!(await isPlatformAdmin(locals.supabase))) error(403, 'Platform admins only');
+	if (!(await isPlatformAdmin(locals.supabase))) {
+		error(403, 'Platform admins only', { failure: { kind: 'forbidden', gate: 'platform_admin' } });
+	}
 	return user;
 }
 
@@ -62,12 +64,16 @@ export async function requireOrgAdmin(slug: string) {
 		.eq('slug', slug)
 		.maybeSingle();
 	if (e) throw e;
-	if (!org) error(404, 'Org not found');
+	if (!org) error(404, 'Org not found', { failure: { kind: 'not_found', what: 'org' } });
 
 	const [platformAdmin, role] = await Promise.all([
 		isPlatformAdmin(locals.supabase),
 		getOrgRole(locals.supabase, org.id, user.id)
 	]);
-	if (!platformAdmin && role !== 'admin') error(403, 'Only org admins can manage this org');
+	if (!platformAdmin && role !== 'admin') {
+		error(403, 'Only org admins can manage this org', {
+			failure: { kind: 'forbidden', gate: 'org_admin', org: org.name }
+		});
+	}
 	return { user, org, isPlatformAdmin: platformAdmin };
 }

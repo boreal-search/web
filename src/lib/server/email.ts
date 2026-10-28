@@ -9,7 +9,16 @@ export interface Email {
 	subject: string;
 	html: string;
 	text?: string;
+	/** Where replies go, e.g. the user who asked for access. */
+	reply_to?: string;
 }
+
+/** Escape text for an email's HTML body. */
+export const escapeHtml = (s: string) =>
+	s.replace(
+		/[&<>"']/g,
+		(c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c
+	);
 
 export class EmailError extends Error {
 	constructor(

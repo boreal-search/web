@@ -2,7 +2,7 @@
 // (RLS + `add_org_member`) is the authority, these only give users an early, clear error.
 import { ORG_ROLES } from '#lib/roles.js';
 import type { OrgRole } from '#lib/supabase/types.js';
-import type { Email } from './email.js';
+import { escapeHtml, type Email } from './email.js';
 
 /** Mirrors `orgs.slug`'s check constraint. */
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
@@ -76,12 +76,6 @@ export function planGrantChanges(
 		remove: known.filter((id) => has.has(id) && !want.has(id))
 	};
 }
-
-const escapeHtml = (s: string) =>
-	s.replace(
-		/[&<>"']/g,
-		(c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c
-	);
 
 /** Invite for an email with no account yet; signing in with it claims the membership. */
 export function inviteEmail(to: string, orgName: string, loginUrl: string): Email {

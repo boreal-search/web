@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { requireUser } from '#lib/server/auth.js';
 import { authErrorMessage, validateNewPassword } from '#lib/server/credentials.js';
+import { parseTheme, THEME_COOKIE, THEME_COOKIE_OPTIONS } from '#lib/theme.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ url }) => {
@@ -35,5 +36,19 @@ export const actions: Actions = {
 		const { error } = await locals.supabase.auth.updateUser({ password });
 		if (error) return fail(400, { error: authErrorMessage(error) });
 		return { updated: true };
+	},
+
+	/**
+	 * Theme: the profile row is the source of truth (the root layout mirrors it into the cookie on
+	 * every load), so the cookie changes only once the row is saved.
+	 */
+	theme: async ({ request, locals, cookies }) => {
+		const user = requireUser();
+		const theme = parseTheme((await request.formData()).get('theme'));
+		const { error } = await locals.supabase.from('profiles').update({ theme }).eq('id', user.id);
+		if (error) return fail(503, { themeSaved: 'failed' as const });
+		cookies.set(THEME_COOKIE, theme, THEME_COOKIE_OPTIONS);
+		locals.theme = theme;
+		return { themeSaved: 'account' as const };
 	}
 };

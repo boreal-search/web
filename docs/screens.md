@@ -18,8 +18,8 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 
 ### Error page (`+error.svelte`)
 
-- Who: all. Shows status code, message, "Back to dashboard" link.
-- Codes raised: 403 "Platform admins only" / "Only org owners can manage members"; 404 "Data source not found" / "Org not found" / unknown route; 502 engine message (data source page); 500 generic "Something went wrong."
+- Who: all. Copy from `describeFailure` (`src/lib/failure.ts`) by `App.Error.failure`, else by status: title, why, what to do; readout `Error {status}` plus mono readings (engine status/detail, `ref` + UTC time for 500s); "Try again" when it can help, always "Go to data sources".
+- Codes raised: 403 platform admin / org admin gates (says who can open it and how to get access); 404 data source (may belong to another org; suggests "Searching in" when the switcher is shown) / org / unknown route; 400 bad request; 500 "Something went wrong on Boreal's side" with a ref matching the `[boreal] ref=…` log line (`handleError` in `src/lib/server/errors.ts`).
 - [ ] 403, 404, 500, 502 variants; long message; anon 404 (link goes to dashboard, which redirects to login)
 - [ ] Redirect-to-login for anon is a 303, not an error page
 
@@ -78,20 +78,20 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 - Results card (ordered, 1-based rank, anchor `#result-n`): page image (lazy, links to PDF), document title (link to PDF `#page=n`), "#rank · Page n · {data_source_id}" (shows raw id, handover says show name), snippet (optional). Count + "{retrieval_ms} ms, reranked".
 - Answer block: heading, verification label, answer text with `[n]` as links to cards, details list of unsupported claims (with cited ref), footer "{model} · drafted in X ms · verified in Y ms".
 - Pre-search
-  - [ ] Initial (no results yet); engine error banner above form (list failed) and "None available." with submit disabled
+  - [ ] Initial (no results yet); engine listing failed: neutral `FailureNotice` above the form ("Data source names and page counts can't be loaded.", ids stand in for names, Try again)
   - [ ] No data sources in the current context / not in an org (see "No org")
   - [ ] Org context: two groups; Public context: one group; group whose corpora the engine doesn't list is hidden
 - Validation (400, inline above button)
   - [ ] "Enter a query."; "Select at least one data source."; (top_k clamped silently, no message)
 - Errors on submit
   - [ ] 403 "You don't have access to: …. Reload the page to see what you can search." (also logged as forbidden; e.g. after switching context in another tab)
-  - [ ] 502 "{status} {detail}" for engine 400/401/404/422 (e.g. unknown data sources 404); 503 reads "Search is temporarily unavailable: …"; unreachable reads "Engine unreachable"
+  - [ ] Engine failure: neutral `FailureNotice` under the form from `describeFailure` (offline / didn't respond in time / temporarily unavailable + 503 detail / couldn't complete + status and detail), with Try again; 504/502/503/502 status; never red
   - [ ] Session expired mid-use: redirect to login _(inferred)_
 - Results
   - [ ] Loading (disabled button + status text); no separate skeleton; answer and results arrive together, handover prefers results first or an answer loading state (undecided)
   - [ ] Zero results: "Nothing matched." (fewer than top_k is normal, reranker drops low pages)
   - [ ] 1 result ("1 result" singular); many (up to 50) with lazy images; long titles; missing snippet
-  - [ ] Image failed/expired (signed URL ~4 h) _(inferred; no onerror handling)_; `target=_blank` PDF opens new tab
+  - [ ] Images and PDF links use permanent `/pages/…` and `/pdf/…?page=n` routes (access checked, 302 to a signed URL); without `FILE_SIGNING_KEY` images fall back to the engine's expiring URLs ("Page image expired…" on error); `target=_blank` PDF opens new tab
   - [ ] `li:target` outline when a citation is clicked (only focus cue for it); no scroll offset rule
 - Answer states
   - [ ] Verified: label "{n}/{n} claims verified"
@@ -109,7 +109,7 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 - Purpose: corpus detail: ingestion jobs and documents.
 - Data: back link, name, description, "Status · N documents · N pages"; Ingestion jobs table (type, status, progress done/total or —, created local datetime, error in red) plus "N active" count for queued/running (last 20 jobs); Documents table (title linked to PDF, filename, pages or —, status), total count, Previous/Next links (page size 50, `?offset=`).
 - [ ] Not granted / unknown: 404 error page; engine 404: same
-- [ ] Engine error/unreachable: 502 error page (whole page lost, not a banner)
+- [ ] Engine error/unreachable: head from what web knows (id as name, granting group, "details unavailable") + `FailureNotice`; no tables
 - [ ] No jobs: "No jobs recorded."; no documents: "No documents."
 - [ ] Job states: queued, running, failed (error text, long), done; progress partial
 - [ ] Many documents: pagination first/middle/last page; offset beyond total shows empty (no "back" cue unless offset>0)
@@ -139,7 +139,7 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 - Notices (success): "{email} is now a {role}."; "Invited {email}; they join when they sign in."; "Invite for {email} saved, but the email was not sent ({reason}). They join when they sign in at {origin}/login." (partial success, treated as notice not error); "Member removed."; "Invite for {email} revoked."; "Corpus access saved."; "New sign-ups from @{domain} will join {org}."; "Removed @{domain}."; "Settings saved."
 - Errors: "Enter a valid email and role."; "Invalid email."; "No such member." (404); DB messages verbatim (e.g. last-owner trigger, RLS denial); "Only platform admins can change this." (403); "Could not reach the engine: …" (502 on save grants); "Enter a domain like acme.com."; "{domain} is already claimed by an org."; "Pick a default role."; "Invalid domain."
 - [ ] Empty states: no members (cannot normally happen), no invites (section omitted), no domains (list omitted, no empty copy), engine has no data sources: "The engine has no data sources."
-- [ ] Engine down in Corpus access: red banner + "Granted: ids or none" with the form hidden
+- [ ] Engine down in Corpus access: neutral `FailureNotice` + "Granted: ids or none" with the form hidden
 - [ ] Member row: current user's own row (can remove/demote self? last owner blocked by DB, message is raw DB text); user with no profile email shows user id
 - [ ] Destructive actions (Remove, Revoke, Remove domain) have no confirmation today
 - [ ] Many members/invites/domains; long emails; role change has separate Change button per row
@@ -183,7 +183,7 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 - Flash/notice messages: none global. Manage page uses one inline status/alert slot; login/search/admin use inline `form.error`. Define one pattern: placement, auto-dismiss or not, partial-success (invite saved, email not sent) style, success after redirect (create org shows none).
 - Form validation: server-side only, via 400 `fail` with field values echoed back (passwords never). Browser `required` / `type=email` also apply. Errors are single strings, not per-field; no `aria-invalid` or field association. Parsers: slug `^[a-z0-9][a-z0-9-]{1,62}$`, email regex, domain regex, role owner|member (normalised lowercase/trimmed). Per-field help text is requested for admin pages.
 - Progressive enhancement: forms work without JS; `use:enhance` shows busy state only on login and search.
-- Engine failures: banner pattern ("Could not reach the engine: …") on dashboard, search, manage; full error page on data source detail. 503 has friendlier copy only on search; handover says "retry later".
+- Engine failures: `EngineFailure` → `describeFailure` → `FailureNotice` (neutral, never red; status/detail as a mono readout; "Try again") on dashboard (lists granted ids), data source detail, admin, manage. Search still renders the plain-text `engineFailureMessage` (same copy).
 - Signed engine URLs (`page_image_url`, `pdf_url`): expire after ~4 h; only fix is re-searching or reloading the page. Open tab left idle will show broken images and dead PDF links; no refresh affordance exists _(inferred)_. `pdf_url` carries `#page=n`.
 - Emails (design the content/templates; Resend):
   - Invite (app-sent, only for emails without an account): subject "You're invited to {org} on Boreal Search"; body links to `/login`, "Sign in with {email} to accept". HTML + text. Send failure surfaces as a notice to the inviter.

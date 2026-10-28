@@ -1,6 +1,7 @@
 // Server-only client for the boreal engine API. The bearer token never leaves the server:
 // this module lives under lib/server so SvelteKit refuses to bundle it for the browser.
 import { ENGINE_SERVICE_TOKEN, ENGINE_URL } from '$app/env/private';
+import { describeFailure, type EngineFailure } from '#lib/failure.js';
 import type {
 	Answer,
 	DataSource,
@@ -61,17 +62,6 @@ async function request<T>(
 	return (await res.json()) as T;
 }
 
-/** Why an engine call failed, in terms the user can act on. */
-export type EngineFailure =
-	/** No response within ENGINE_TIMEOUT_MS. */
-	| { kind: 'timeout' }
-	/** Network error, or the tunnel's 502/504/530: the workstation is off or restarting. */
-	| { kind: 'unreachable' }
-	/** 503: the engine is up but Qdrant or Ollama is down. */
-	| { kind: 'unavailable'; detail: string }
-	/** Any other engine error (status null when it wasn't an HTTP error). */
-	| { kind: 'error'; status: number | null; detail: string };
-
 /** Statuses the Cloudflare tunnel returns when the engine behind it is down. */
 const TUNNEL_DOWN = new Set([502, 504, 530]);
 
@@ -90,20 +80,6 @@ export function classifyEngineError(e: unknown): EngineFailure {
 	return { kind: 'error', status: null, detail: e instanceof Error ? e.message : String(e) };
 }
 
-/** What happened and what to do, for banners and the search page. */
-export function engineFailureMessage(f: EngineFailure): string {
-	switch (f.kind) {
-		case 'timeout':
-			return 'The search engine took too long to respond. Try again in a moment.';
-		case 'unreachable':
-			return 'The search engine is offline (its server is down or restarting). Try again in a few minutes; if it stays down, contact us.';
-		case 'unavailable':
-			return `Search is temporarily unavailable (${f.detail}). Try again in a few minutes.`;
-		case 'error':
-			return `The search engine returned an error (${f.status ?? 'no response'}: ${f.detail}). Try again; if it keeps happening, contact us.`;
-	}
-}
-
 /** HTTP status a route should answer with for each failure kind. */
 export const FAILURE_HTTP_STATUS: Record<EngineFailure['kind'], number> = {
 	timeout: 504,
@@ -111,8 +87,6 @@ export const FAILURE_HTTP_STATUS: Record<EngineFailure['kind'], number> = {
 	unavailable: 503,
 	error: 502
 };
-
-export const engineErrorMessage = (e: unknown) => engineFailureMessage(classifyEngineError(e));
 
 /** The drafted answer, when one was requested. */
 export type AnswerOutcome =
@@ -142,7 +116,9 @@ export function answerNotice(a: AnswerOutcome): string | null {
 	if (a.failure.kind === 'timeout') {
 		return 'Drafting the answer took too long; showing results only. Try again, or untick "Draft an answer".';
 	}
-	return `The answer could not be drafted (${engineFailureMessage(a.failure)}); showing results only.`;
+	const { title, readout } = describeFailure(a.failure);
+	const why = [title.charAt(0).toLowerCase() + title.slice(1), ...readout.map((r) => r.value)];
+	return `The answer could not be drafted (${why.join(': ')}); showing results only.`;
 }
 
 const answerOf = (r: SearchResponse): AnswerOutcome =>

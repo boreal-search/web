@@ -34,6 +34,11 @@ export const variables = defineEnvVars({
 		description: 'Bearer token for engine requests. Server-only. Never send to the browser.',
 		schema: required('ENGINE_SERVICE_TOKEN')
 	},
+	FILE_SIGNING_KEY: {
+		description:
+			"HMAC key for engine `/files/` URLs (same value as the engine's). Server-only, optional: without it, permanent page links fall back to the engine's signed URLs.",
+		schema: optional
+	},
 	RESEND_API_KEY: {
 		description:
 			'Resend API key for app emails. Server-only, optional (sendEmail throws if unset).',

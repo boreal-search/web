@@ -5,8 +5,7 @@ vi.mock('$app/env/private', () => ({
 	ENGINE_SERVICE_TOKEN: 'test-token'
 }));
 
-const { EngineError, answerNotice, classifyEngineError, engineFailureMessage, search } =
-	await import('./engine');
+const { EngineError, answerNotice, classifyEngineError, search } = await import('./engine');
 
 const hit = {
 	document_id: 'd1',
@@ -56,16 +55,6 @@ describe('classifyEngineError', () => {
 		]
 	])('%o → %o', (e, kind) => {
 		expect(classifyEngineError(e)).toEqual(kind);
-	});
-
-	it('gives each kind its own message', () => {
-		const kinds = [
-			{ kind: 'timeout' },
-			{ kind: 'unreachable' },
-			{ kind: 'unavailable', detail: 'd' },
-			{ kind: 'error', status: 500, detail: 'd' }
-		] as const;
-		expect(new Set(kinds.map(engineFailureMessage)).size).toBe(kinds.length);
 	});
 });
 
@@ -118,6 +107,14 @@ describe('search', () => {
 			answer: { kind: 'failed', failure: { kind: 'timeout' } }
 		});
 		if (out.kind === 'ok') expect(answerNotice(out.answer)).toMatch(/too long/);
+	});
+
+	it('says why the answer failed, with the reading', () => {
+		expect(
+			answerNotice({ kind: 'failed', failure: { kind: 'unavailable', detail: 'Ollama down' } })
+		).toBe(
+			'The answer could not be drafted (search is temporarily unavailable: 503: Ollama down); showing results only.'
+		);
 	});
 
 	it('does not retry when the engine is unreachable', async () => {

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import AccessRequestSent from '#lib/components/AccessRequestSent.svelte';
+	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import { count, humanise, plural } from '#lib/format.js';
 	import type { PageProps } from './$types';
 
@@ -16,6 +18,23 @@
 		pages: all.reduce((n, ds) => n + ds.page_count, 0)
 	});
 </script>
+
+<!-- No org: request access for their organization, or the request already sent. -->
+{#snippet requestAccess()}
+	{#if data.accessRequest?.available && data.accessRequest.open}
+		<AccessRequestSent request={data.accessRequest.open} />
+	{:else if data.accessRequest?.available}
+		<p class="muted">
+			Want to search your own documents?
+			<a href={resolve('/(app)/request-access')}>Request access for your organization</a>.
+		</p>
+	{:else}
+		<p class="muted">
+			Want to search your own documents? Email
+			<a href="mailto:support@borealsearch.app">support@borealsearch.app</a>.
+		</p>
+	{/if}
+{/snippet}
 
 <header class="head">
 	<div class="page-head">
@@ -47,17 +66,29 @@
 	{#if noOrg}
 		<p class="empty">
 			You're not in an org yet, and there are no public data sources. Ask your org admin for an
-			invite, or contact us to search your own documents.
+			invite.
 		</p>
+		{@render requestAccess()}
 	{:else}
 		<p class="empty">
 			No data sources are available to {orgName ?? 'your org'} yet. Ask a platform admin to grant access.
 		</p>
 	{/if}
-{:else if data.engineError}
-	<p class="notice" role="status">
-		Data source details can't be loaded right now. {data.engineError}
-	</p>
+{:else if data.engineFailure}
+	<FailureNotice
+		failure={data.engineFailure}
+		effect="Names, statuses and counts for your data sources can't be loaded."
+	/>
+	{#each data.access.groups as group, i (group.label)}
+		<section class="band" aria-labelledby="group-{i}">
+			<h2 id="group-{i}">{group.label}</h2>
+			<ul class="ids">
+				{#each group.ids as id (id)}
+					<li><a href={resolve('/(app)/data-sources/[id]', { id })}>{id}</a></li>
+				{/each}
+			</ul>
+		</section>
+	{/each}
 {:else if shown.length === 0}
 	<p class="empty">These data sources aren't available on the search engine right now.</p>
 {:else}
@@ -92,7 +123,7 @@
 {/if}
 
 {#if noOrg && granted > 0}
-	<p class="muted">Want to search your own documents? Contact us.</p>
+	{@render requestAccess()}
 {/if}
 
 <style>
@@ -118,6 +149,19 @@
 		display: block;
 		font-size: 0.875rem;
 	}
+	/* Engine down: ids from access stand in for names. */
+	.ids {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		font-family: var(--font-mono);
+		font-size: 0.875rem;
+	}
+	.ids li {
+		padding: 0.375rem 0;
+		border-bottom: 1px solid var(--color-rule);
+	}
+
 	.state {
 		font-family: var(--font-mono);
 		font-size: 0.8125rem;

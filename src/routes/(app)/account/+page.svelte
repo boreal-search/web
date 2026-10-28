@@ -2,10 +2,18 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import { ROLE_LABELS } from '#lib/roles.js';
+	import { THEMES, type Theme } from '#lib/theme.js';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	let submitting = $state(false);
+	let savingTheme = $state(false);
+
+	const THEME_LABELS: Record<Theme, string> = {
+		system: 'System',
+		light: 'Light',
+		dark: 'Dark'
+	};
 	let orgs = $derived([...data.access.memberships].sort((a, b) => a.name.localeCompare(b.name)));
 </script>
 
@@ -54,6 +62,46 @@
 			</tbody>
 		</table>
 	{/if}
+</section>
+
+<section class="band" aria-labelledby="theme-heading">
+	<h2 id="theme-heading">Theme</h2>
+
+	<form
+		method="POST"
+		action="?/theme"
+		class="stack"
+		use:enhance={() => {
+			savingTheme = true;
+			return async ({ update }) => {
+				await update({ reset: false });
+				savingTheme = false;
+			};
+		}}
+	>
+		<fieldset aria-describedby="theme-help">
+			<legend class="sr-only">Theme</legend>
+			{#each THEMES as theme (theme)}
+				<label class="check">
+					<input type="radio" name="theme" value={theme} checked={data.theme === theme} />
+					{THEME_LABELS[theme]}
+				</label>
+			{/each}
+			<span class="help" id="theme-help">System follows your device's light or dark setting.</span>
+		</fieldset>
+		{#if form?.themeSaved === 'account'}
+			<p class="notice" role="status">Theme saved.</p>
+		{:else if form?.themeSaved === 'failed'}
+			<p class="notice" data-tone="error" role="alert">
+				Your theme couldn't be saved. Try again in a minute.
+			</p>
+		{/if}
+		<div class="actions">
+			<button type="submit" class="primary" disabled={savingTheme}>
+				{savingTheme ? 'Saving…' : 'Save theme'}
+			</button>
+		</div>
+	</form>
 </section>
 
 <section class="band" aria-labelledby="password-heading">

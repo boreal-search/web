@@ -19,22 +19,30 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
+/* Each colour is light-dark(light, dark): `color-scheme` on <html> picks the column. It follows
+   the system unless <html data-theme="light|dark"> (the user's choice, set in SSR) forces one. */
 @theme {
 	--color-*: initial;
-	--color-page: #f5f2ea; /* fog */
-	--color-surface: #fbf9f4; /* paper: raised surface */
-	--color-ink: #1d1b17; /* basalt: text */
-	--color-muted: #6a655a; /* bark: secondary text */
-	--color-rule: #e1dccf; /* hairline dividers only: 1.2:1, never a control's edge */
-	--color-edge: #6a655a; /* input and control edges: 3:1 or more */
-	--color-accent: #1e4a32; /* spruce: links, primary action, focus */
-	--color-on-accent: #f5f2ea; /* text on accent */
-	--color-verified: #1e4a32;
-	--color-unsupported: #9a5f12; /* resin */
-	--color-highlight: #dde6d5; /* moss: wash behind quoted passages */
-	--color-danger: #a2331f; /* destructive actions, system errors; never in search results */
+	--color-page: light-dark(#f5f2ea, #151411); /* fog / wet basalt */
+	--color-surface: light-dark(#fbf9f4, #1d1b18); /* paper: raised surface */
+	--color-ink: light-dark(#1d1b17, #ece7db); /* basalt: text */
+	--color-muted: light-dark(#6a655a, #9c9588); /* bark: secondary text */
+	--color-rule: light-dark(#e1dccf, #2f2c26); /* hairlines only (1.2:1), never a control edge */
+	--color-edge: light-dark(#6a655a, #9c9588); /* input and control edges: 3:1 or more */
+	--color-accent: light-dark(#1e4a32, #86b794); /* spruce: links, primary action, focus */
+	--color-on-accent: light-dark(#f5f2ea, #151411); /* text on accent */
+	--color-verified: light-dark(#1e4a32, #86b794);
+	--color-unsupported: light-dark(#9a5f12, #d9a250); /* resin */
+	--color-highlight: light-dark(#dde6d5, #23342a); /* moss: wash behind quoted passages */
+	--color-danger: light-dark(#a2331f, #e4896e); /* destructive, system errors; never in search */
 	--color-sheet: #fffefa; /* page renders: same in both themes, never inverted */
 	--color-sheet-rule: #d6d2c8; /* edge of a page render */
+	/* Cited text on a page render: sits on the paper, so the light values in both themes. Moss
+	   wash multiplied onto the page; outline by the citation's check status (answer-state roles). */
+	--color-sheet-mark: #dde6d5; /* moss wash, mix-blend-mode: multiply */
+	--color-sheet-mark-verified: #1e4a32; /* spruce */
+	--color-sheet-mark-unsupported: #9a5f12; /* resin */
+	--color-sheet-mark-not-checked: #6a655a; /* bark */
 
 	--font-*: initial;
 	--font-sans:
@@ -47,21 +55,16 @@
 	color-scheme: light dark;
 	--sheet-dim: 1;
 }
-
+:root[data-theme='light'] {
+	color-scheme: light;
+}
+/* --sheet-dim is the one non-colour token that differs in dark (light-dark() takes colours only). */
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--sheet-dim: 0.9;
+}
 @media (prefers-color-scheme: dark) {
-	:root {
-		--color-page: #151411;
-		--color-surface: #1d1b18;
-		--color-ink: #ece7db;
-		--color-muted: #9c9588;
-		--color-rule: #2f2c26;
-		--color-edge: #9c9588;
-		--color-accent: #86b794;
-		--color-on-accent: #151411;
-		--color-verified: #86b794;
-		--color-unsupported: #d9a250;
-		--color-highlight: #23342a;
-		--color-danger: #e4896e;
+	:root:not([data-theme='light']) {
 		--sheet-dim: 0.9;
 	}
 }

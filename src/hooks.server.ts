@@ -2,9 +2,11 @@ import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { sequence } from '@sveltejs/kit/hooks';
 import { createSupabaseServerClient } from '#lib/supabase/server.js';
+import { parseTheme, THEME_COOKIE } from '#lib/theme.js';
 
 /** Attach a per-request Supabase client and a validated session to `event.locals`. */
 const supabase: Handle = async ({ event, resolve }) => {
+	event.locals.theme = 'system';
 	event.locals.supabase = createSupabaseServerClient(event.cookies);
 
 	event.locals.safeGetSession = async () => {
@@ -43,4 +45,17 @@ const auth: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(supabase, auth);
+/**
+ * Render `<html data-theme>` from the theme cookie (the root layout load swaps in the signed-in
+ * user's saved choice), so a forced light/dark theme paints with no flash. `system` matches no
+ * CSS selector and follows `prefers-color-scheme`.
+ */
+const theme: Handle = async ({ event, resolve }) => {
+	event.locals.theme = parseTheme(event.cookies.get(THEME_COOKIE));
+	return resolve(event, {
+		transformPageChunk: ({ html }) => html.replace('%boreal.theme%', event.locals.theme)
+	});
+};
+
+export const handle = sequence(supabase, auth, theme);
+export { handleError } from '#lib/server/errors.js';
