@@ -46,8 +46,22 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 ## How to work here
 
-The main session is the orchestrator. Plan briefly, then delegate: non-trivial features to
-`implementer` (opus), small/mechanical edits to `quick-implementer` (sonnet). Review the diff
-yourself (or via `reviewer`), then run `bun run check && bun run lint && bun run test`
-before reporting. For `.svelte` files use the `svelte` skill / autofixer when available.
-Decisions and context: `docs/`.
+Guidance, not hard rules (adapted from Lauren Tan's pstack):
+- **Subtract first.** Smallest change; prefer deletion, remove dead weight before building on it.
+- **Data structures first.** Settle core types and shared state before logic. Redesign as if a
+  new requirement had always been there. Eliminate sharing before serializing it.
+- **Model the domain** in types, not scattered conditionals. Guard at boundaries, trust internal
+  types, keep logic pure, make operations idempotent.
+- **Converge, don't bridge.** Migrate callers and delete the old API in the same change.
+- **Minimize reader load.** Fewer layers between question and answer; collapse one-caller wrappers.
+- **Experience first.** Fewer, polished features. For open design questions, compare 2–3 prototypes.
+- **Root causes.** Fix where it first went wrong; after two failed fixes on one premise, test it.
+- **Prove it** on the real artifact, not "it compiles". Small units that each end verified; tests
+  assert observable behavior; explain a measured number before trusting it.
+- **Build the lever.** A script, codemod, lint or skill beats hand work or more prose.
+- **Delegate bulk, don't block.** The main session orchestrates and keeps summaries: non-trivial
+  work to `implementer` (opus), small/mechanical to `quick-implementer` (sonnet), second reads to
+  `reviewer`. Proceed and let the user course-correct; confirm only irreversible actions.
+
+Verify: `bun run check && bun run lint && bun run test`, then the real page in `bun run dev`.
+For `.svelte` files use the `svelte` skill / autofixer. Decisions and context: `docs/`.
