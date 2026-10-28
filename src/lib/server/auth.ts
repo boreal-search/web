@@ -3,6 +3,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getRequestEvent } from '$app/server';
 import type { Database, OrgRole } from '#lib/supabase/types.js';
 
+/** Only same-origin relative paths are allowed as a redirect target; anything else is `/`. */
+export function safeRedirect(value: FormDataEntryValue | string | null): string {
+	if (typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')) return value;
+	return '/';
+}
+
 /** Call from any server load/action: returns the validated user or redirects to /login. */
 export function requireUser() {
 	const { locals, url } = getRequestEvent();

@@ -2,6 +2,35 @@
 
 Short, dated records of choices that aren't obvious from the code. Newest first.
 
+## 2026-10-29 — Public tier and current org
+
+Migration `20261029000001_public_tier_and_current_org`. `public_data_sources (data_source_id)`
+lists corpora every signed-in user may search, with no org and no seat (readable by
+`authenticated`; insert/delete platform admins only; managed in the "Public corpora" section of
+`/admin`, saved with `planGrantChanges` like org grants). Search without login stays out.
+
+A user can be in several orgs, so a search now runs in an explicit **current context**: one of
+their orgs, or Public. It is stored per device in the `boreal_org` cookie (org slug or `public`)
+and re-validated on every request in `getAccess` (`src/lib/server/access.ts`), still the only
+place access is decided: `availableContexts` = their orgs by name, then Public (offered when public
+corpora exist; always for a user with no org); `resolveContext` takes the cookie's context if it is
+in that list, else the first. A forged cookie only ever falls back. The searchable set is the
+current org's grants ∪ public corpora (`searchableGroups`, grouped "<Org name>" / "Public"; a
+corpus that is both is listed once, under Public). In Public only public corpora count. The
+dashboard, the picker, the data-source page and the search action all use that one set, and the
+search action re-checks posted ids against it. The nav switcher (a no-JS form POST to
+`/switch-org`) shows when there are 2+ contexts; with 2+ orgs and no public corpora it omits Public
+rather than offer an empty choice. A user with no org lands in Public instead of a dead end
+("Want your own documents? Contact us."), or a clear empty state when nothing is public.
+
+`resolveSearchOrg` (guessing the org from the requested ids) is gone. Searches are logged with
+`org_id` = the current org (its `log_queries` applies), or `org_id = null` with the query text in
+Public. `search_events.org_id` is nullable; a new insert policy allows `org_id is null and user_id =
+auth.uid()`. Members' policies call `is_org_member(org_id)`, false for null, so they never see
+Public rows; a new "admin read" policy lets platform admins read every event (they had none
+before). `org_search_daily` is unchanged: Public searches roll up into an `org_id = null` row that
+only platform admins can see.
+
 ## 2026-10-28 — Password sign-up, reset and change (requires "Confirm email" ON)
 
 > **Security requirement:** password sign-up is only safe with **Auth → Providers → Email →
@@ -72,12 +101,8 @@ is `/orgs/[slug]/manage`; data source grants, email domains and org settings are
 only. Domain auto-join refuses public mail providers (`isPublicEmailDomain`), since claiming
 `gmail.com` would let anyone in.
 
-Public tier (intended, not built): a `public_data_sources` list searchable by every signed-in
-user. The accessible set becomes org grants ∪ public, computed only in `getAccess`
-(`src/lib/server/access.ts`), which every page and the search action already use. Public users
-aren't seats (seats stay `org_members` rows), and analytics already skips searches that resolve
-to no org (`resolveSearchOrg` → null), so public-only searches would need their own decision
-before being recorded.
+Public tier: built 2026-10-29 (see "Public tier and current org"). Public users aren't seats;
+seats stay `org_members` rows.
 
 Enforced in Postgres with RLS and one security-definer RPC, `add_org_member(org, email, role)`:
 an existing account becomes a member, any other email an `org_invites` row; calling it again

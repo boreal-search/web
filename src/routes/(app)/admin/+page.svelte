@@ -1,9 +1,15 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	// Keep the checkboxes; the reloaded data drives them.
+	const keep: SubmitFunction =
+		() =>
+		({ update }) =>
+			update({ reset: false });
+	let isPublic = $derived(new Set(data.publicCorpora.publicIds));
 </script>
 
 <h1>Platform admin</h1>
@@ -42,6 +48,42 @@
 				{/each}
 			</tbody>
 		</table>
+	{/if}
+</section>
+
+<section aria-labelledby="public-heading">
+	<h2 id="public-heading">Public corpora</h2>
+	{#if data.publicCorpora.engineError}
+		<p class="error" role="alert">{data.publicCorpora.engineError}</p>
+		<p class="muted">Public: {data.publicCorpora.publicIds.join(', ') || 'none'}</p>
+	{:else if data.publicCorpora.dataSources.length === 0}
+		<p class="muted">The engine has no data sources.</p>
+	{:else}
+		<form method="POST" action="?/savePublic" class="stack" use:enhance={keep}>
+			<fieldset aria-describedby="public-help">
+				<legend>Data sources anyone can search</legend>
+				<small id="public-help" class="muted">
+					Every signed-in user can search these, without an org or a seat.
+				</small>
+				{#each data.publicCorpora.dataSources as ds (ds.id)}
+					<label>
+						<input
+							type="checkbox"
+							name="data_source_id"
+							value={ds.id}
+							checked={isPublic.has(ds.id)}
+						/>
+						{ds.name}
+					</label>
+				{/each}
+			</fieldset>
+			{#if form?.publicError}
+				<p class="error" role="alert">{form.publicError}</p>
+			{:else if form?.publicNotice}
+				<p role="status">{form.publicNotice}</p>
+			{/if}
+			<button type="submit" class="primary">Save public corpora</button>
+		</form>
 	{/if}
 </section>
 

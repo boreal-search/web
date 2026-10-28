@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const { waitUntil } = vi.hoisted(() => ({ waitUntil: vi.fn<(p: Promise<unknown>) => void>() }));
 vi.mock('@vercel/functions', () => ({ waitUntil }));
 import type { Database } from '#lib/supabase/types.js';
-import { resolveSearchOrg } from './access';
 import { buildSearchEvent, recordSearchEvent } from './analytics';
 import type { SearchResponse } from './engine.types';
 
@@ -25,27 +24,6 @@ const response: SearchResponse = {
 	retrieval_ms: 42,
 	reranked: true
 };
-
-describe('resolveSearchOrg', () => {
-	const grants = [
-		{ org_id: 'org-a', data_source_id: 'bc-regs' },
-		{ org_id: 'org-b', data_source_id: 'bc-regs' },
-		{ org_id: 'org-b', data_source_id: 'fed-regs' }
-	];
-
-	it('prefers an org that grants every requested data source', () => {
-		expect(resolveSearchOrg(['bc-regs', 'fed-regs'], grants)).toBe('org-b');
-	});
-
-	it('falls back to the first org granting any of them', () => {
-		expect(resolveSearchOrg(['bc-regs', 'nope'], grants)).toBe('org-a');
-	});
-
-	it('returns null with no grants or no request', () => {
-		expect(resolveSearchOrg(['bc-regs'], [])).toBeNull();
-		expect(resolveSearchOrg([], grants)).toBeNull();
-	});
-});
 
 describe('buildSearchEvent', () => {
 	const input = {
@@ -116,7 +94,8 @@ describe('recordSearchEvent', () => {
 					? { select: () => ({ eq: () => ({ single: () => org.promise }) }) }
 					: { insert }
 		};
-		const release = () => org.resolve({ data: { log_queries: true }, error: null });
+		const release = (logQueries = true) =>
+			org.resolve({ data: { log_queries: logQueries }, error: null });
 		return { insert, release, supabase: client as unknown as SupabaseClient<Database> };
 	}
 
@@ -127,6 +106,22 @@ describe('recordSearchEvent', () => {
 		await done;
 		expect(waitUntil).not.toHaveBeenCalled();
 		expect(insert).toHaveBeenCalledWith(expect.objectContaining({ org_id: 'org-a', status: 'ok' }));
+	});
+
+	it("applies the org's log_queries switch", async () => {
+		const { insert, release, supabase } = fakeSupabase();
+		const done = recordSearchEvent(supabase, input);
+		release(false);
+		await done;
+		expect(insert).toHaveBeenCalledWith(expect.objectContaining({ org_id: 'org-a', query: null }));
+	});
+
+	it('records a public search with a null org and the query text, without an org lookup', async () => {
+		const { insert, supabase } = fakeSupabase(); // never released: a lookup would hang
+		await recordSearchEvent(supabase, { ...input, orgId: null });
+		expect(insert).toHaveBeenCalledWith(
+			expect.objectContaining({ org_id: null, query: 'noise limits', query_length: 12 })
+		);
 	});
 
 	it('hands the insert to waitUntil on Vercel instead of blocking the response', async () => {

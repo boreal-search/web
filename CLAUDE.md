@@ -30,15 +30,15 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 - `src/env.ts` — declared env vars (`defineEnvVars`); import from `$app/env/private|public`.
 - `src/hooks.server.ts` — Supabase client + validated session on `locals`.
-- `src/lib/server/` — server-only: `engine.ts` (API client, timeouts, failure kinds), `access.ts` (`getAccess`: the one place deciding what a user may search), `analytics.ts` (search_events), `auth.ts` (session + platform/org admin guards), `orgs.ts` (org-management input parsing, invite email), `email.ts` (Resend; app emails only).
+- `src/lib/server/` — server-only: `engine.ts` (API client, timeouts, failure kinds), `access.ts` (`getAccess`: the one place deciding what a user may search: current context from the `boreal_org` cookie, org grants ∪ public corpora), `analytics.ts` (search_events), `auth.ts` (session + platform/org admin guards), `orgs.ts` (org-management input parsing, invite email), `email.ts` (Resend; app emails only).
 - `src/lib/supabase/` — SSR client factory and hand-written `Database` types.
-- `src/routes/(app)/` — authenticated pages; `+layout.server.ts` guards and loads `inOrg` + `accessibleDataSourceIds`. `admin/` (platform admins), `orgs/[slug]/manage/` (org admin page; platform admins see extra sections). Roles: platform admin / org admin / member (`src/lib/roles.ts`).
+- `src/routes/+layout.server.ts` loads `access` + nav (context switcher) for signed-in users; `switch-org/` sets the context cookie. `src/routes/(app)/` — authenticated pages; `+layout.server.ts` guards and passes `access` to child loads. `admin/` (platform admins), `orgs/[slug]/manage/` (org admin page; platform admins see extra sections). Roles: platform admin / org admin / member (`src/lib/roles.ts`).
 - `supabase/migrations/` — control-plane schema with RLS; roles in `*_admin_roles.sql` + `*_org_admin_and_search_outcomes.sql`. `supabase/tests/` — pgTAP (`supabase test db`).
 
 ## Conventions
 
 - Engine calls only from `src/lib/server/**` or `+page.server.ts`/`+server.ts`. `ENGINE_SERVICE_TOKEN` never reaches the browser.
-- Every search/data-source request re-checks org access (`findForbiddenDataSources`); never trust ids from the client.
+- Every search/data-source request re-checks access against the current context's set (`findForbiddenDataSources`); never trust ids from the client.
 - Every search records a `search_events` row (ok / forbidden / timeout / unreachable / unavailable / engine_error). Keep that when changing the search path.
 - Svelte 5 runes (`$state`, `$derived`, `$props`), `PageProps`/`LayoutProps` types, `resolve()` from `$app/paths` for internal links, `rel="external"` for signed engine `/files/` URLs.
 - `#lib/...` imports use a `.js` extension (`#lib/server/engine.js`). No `any`. Keep markup semantic; design pass is a separate effort.

@@ -13,6 +13,8 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 - [ ] Anon vs signed in header; many owned orgs (nav grows); long org name / long email
 - [ ] No active-page indicator exists today; no sign-out confirmation; no mobile layout (single flex row)
 - [ ] In progress: add Account link, Sign up link for anon; "not in an org" state must still render nav
+- Context switcher: form "Searching in [select] Switch" (POST `/switch-org`, works without JS; returns to the same page, or `/` from a data source page). Shown only when there are 2+ contexts: 2+ orgs, or 1 org plus public corpora. Options: the user's orgs by name, then "Public" (omitted when no corpora are public). Invalid choice: 400 error page.
+- [ ] Switcher: 2 orgs + Public; many orgs; long org names; current context visible only as the selected option (no other indicator)
 
 ### Error page (`+error.svelte`)
 
@@ -50,37 +52,39 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 ### `/` Data sources (dashboard)
 
 - Who: member+ (any signed-in user). Anon redirects to `/login?redirectTo=…`.
-- Purpose: list corpora the user's orgs can search.
+- Purpose: list corpora searchable in the current context (current org's grants ∪ public corpora; Public context: public only), one table per group: "<Org name>", then "Public".
 - Data per row: name (link), description, status, document count, page count. Footer link "Search these data sources →".
 - [ ] Loading: none shown (server load); decide on skeleton/streaming
 - [ ] Engine error: red banner "Could not reach the engine: {status message | Engine unreachable}", page still renders with empty list
 - [ ] Empty, no grants: "No data sources are available to your organisation yet. Ask an admin to grant your org access."
 - [ ] Empty, grants exist but engine returned none (or engine down): shorter text without the "ask an admin" line
 - [ ] Many items; long names/descriptions; status values are raw engine strings (values not enumerated in web code, check engine docs)
-- [ ] In progress: user with no org membership gets the "not in an org yet" empty state (see below)
+- [ ] User with no org: lands in Public (see "No org" below)
 
-### "Not in an org yet" empty state _(in progress)_
+### No org: Public search
 
-- Who: signed-in user with zero memberships. Appears on `/`, `/search`, and probably `/account` access.
-- Today: indistinguishable from "no grants" (same empty copy). Needs: explanation, what to do (ask for an invite / use a work email on a claimed domain), who to contact, sign out / change account.
-- [ ] Applies to Data sources, Search (form disabled), and nav (no Manage links)
+- Who: signed-in user with zero memberships. Their only context is Public; no switcher.
+- With public corpora: Data sources and Search work over the public corpora (picker group "Public"), plus the line "Want your own documents? Contact us." (plain text; no contact address yet).
+- No public corpora: empty state "You're not in an org yet, and there are no public data sources. Ask your org admin for an invite, or contact us to search your own documents." on `/` and `/search`.
+- [ ] Needs: a real contact link; sign out / change account; nav has no Manage links
 - [ ] Pending invite for their email is claimed only when the email is confirmed; unconfirmed user needs "confirm your email" copy _(inferred)_
 
 ### `/search`
 
 - Who: member+.
 - Purpose: query selected corpora, optionally draft a cited, verified answer.
-- Inputs: Query (required, search input); Data sources checkboxes (name + page count; all ticked by default, last selection kept after submit); Options (collapsed): Results (1-50, default 10, does not persist), Rerank (default on, does not persist); "Draft an answer from the top results" checkbox (default on).
+- Inputs: Query (required, search input); Data sources checkboxes grouped in one fieldset per group, legend "<Current org name>" then "Public" (name + page count; all ticked by default, last selection kept after submit; a corpus both granted and public appears once, under Public; engine down: ids stand in for names); Options (collapsed): Results (1-50, default 10, does not persist), Rerank (default on, does not persist); "Draft an answer from the top results" checkbox (default on).
 - Submit disabled while searching or when no data sources; label "Searching…"; extra status "Searching and drafting an answer; this can take a few seconds." when answer is on.
 - Results card (ordered, 1-based rank, anchor `#result-n`): page image (lazy, links to PDF), document title (link to PDF `#page=n`), "#rank · Page n · {data_source_id}" (shows raw id, handover says show name), snippet (optional). Count + "{retrieval_ms} ms, reranked".
 - Answer block: heading, verification label, answer text with `[n]` as links to cards, details list of unsupported claims (with cited ref), footer "{model} · drafted in X ms · verified in Y ms".
 - Pre-search
   - [ ] Initial (no results yet); engine error banner above form (list failed) and "None available." with submit disabled
-  - [ ] No data sources granted / not in an org
+  - [ ] No data sources in the current context / not in an org (see "No org")
+  - [ ] Org context: two groups; Public context: one group; group whose corpora the engine doesn't list is hidden
 - Validation (400, inline above button)
   - [ ] "Enter a query."; "Select at least one data source."; (top_k clamped silently, no message)
 - Errors on submit
-  - [ ] 403 "No access to data source(s): …" (also logged as forbidden)
+  - [ ] 403 "You don't have access to: …. Reload the page to see what you can search." (also logged as forbidden; e.g. after switching context in another tab)
   - [ ] 502 "{status} {detail}" for engine 400/401/404/422 (e.g. unknown data sources 404); 503 reads "Search is temporarily unavailable: …"; unreachable reads "Engine unreachable"
   - [ ] Session expired mid-use: redirect to login _(inferred)_
 - Results
@@ -101,7 +105,7 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 
 ### `/data-sources/[id]`
 
-- Who: member+ whose org is granted that source; otherwise 404 (deliberately hides existence).
+- Who: anyone for whom the source is in the current context's set (current org's grant or public); otherwise 404 (deliberately hides existence, also when it belongs to another of the user's orgs).
 - Purpose: corpus detail: ingestion jobs and documents.
 - Data: back link, name, description, "Status · N documents · N pages"; Ingestion jobs table (type, status, progress done/total or —, created local datetime, error in red) plus "N active" count for queued/running (last 20 jobs); Documents table (title linked to PDF, filename, pages or —, status), total count, Previous/Next links (page size 50, `?offset=`).
 - [ ] Not granted / unknown: 404 error page; engine 404: same
@@ -116,8 +120,9 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 ### `/admin` (Platform admin only)
 
 - Who: platform admin; others get 403 error page, anon redirect to login.
-- Purpose: list all orgs, create an org.
+- Purpose: list all orgs, create an org, choose public corpora.
 - Data: Orgs table (name linking to manage, slug, member count, granted corpus ids joined by commas or —); Create org form (Name, Slug with hint "lower-case letters, digits and dashes; used in URLs").
+- Public corpora section: checkboxes of engine data sources (by name), "Save public corpora"; help "Every signed-in user can search these, without an org or a seat."; notice "Public corpora saved." / error inline; engine down: banner + "Public: ids or none", form hidden.
 - [ ] No orgs: "No orgs yet."; many orgs; long names; many corpus ids in a cell (shows raw ids)
 - [ ] Validation 400: "Enter a name and a slug (lower-case letters, digits and dashes, 2–63 chars)."; taken slug: `The slug "x" is taken.`; other DB errors verbatim; inputs kept
 - [ ] Success: redirect to the new org's manage page (no confirmation notice)

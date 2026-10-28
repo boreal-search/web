@@ -11,9 +11,9 @@ import type { PageServerLoad } from './$types';
 const PAGE_SIZE = 50;
 
 export const load: PageServerLoad = async ({ params, url, parent, fetch }) => {
-	const { accessibleDataSourceIds } = await parent();
+	const { access } = await parent();
 	// 404 rather than 403 so we don't confirm that a data source exists.
-	if (!accessibleDataSourceIds.includes(params.id)) error(404, 'Data source not found');
+	if (!access.dataSourceIds.includes(params.id)) error(404, 'Data source not found');
 
 	const offset = Math.max(Number(url.searchParams.get('offset') ?? 0) || 0, 0);
 	const api = engine(fetch);

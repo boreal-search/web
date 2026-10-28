@@ -6,8 +6,10 @@
 	let { data, form }: PageProps = $props();
 	let searching = $state(false);
 
+	let all = $derived(data.groups.flatMap((g) => g.dataSources));
+	let noOrg = $derived(data.access.memberships.length === 0);
 	// Keep the user's last selection across submits; default to everything they can see.
-	let selected = $derived(new Set(form?.requested ?? data.dataSources.map((ds) => ds.id)));
+	let selected = $derived(new Set(form?.requested ?? all.map((ds) => ds.id)));
 	let outcome = $derived(form && 'outcome' in form ? form.outcome : null);
 	let results = $derived(outcome?.response ?? null);
 	let answerNotice = $derived(form && 'answerNotice' in form ? form.answerNotice : null);
@@ -19,24 +21,27 @@
 	);
 	let segments = $derived(answer ? splitCitations(answer.text, results?.results.length ?? 0) : []);
 	let badge = $derived(answer ? verificationBadge(answer.verification) : null);
-	// If the engine listing failed, still show the user's last selection so a retry keeps it.
-	let pickable = $derived(
-		data.dataSources.length > 0
-			? data.dataSources.map((ds) => ({ id: ds.id, name: ds.name, pages: ds.page_count }))
-			: (form?.requested ?? []).map((id) => ({ id, name: id, pages: null }))
-	);
-	let sourceNames = $derived(new Map(data.dataSources.map((ds) => [ds.id, ds.name])));
+	let groups = $derived(data.groups.filter((g) => g.dataSources.length > 0));
+	let sourceNames = $derived(new Map(all.map((ds) => [ds.id, ds.name])));
 </script>
 
 <h1>Search</h1>
 
-{#if !data.inOrg}
-	<p>You're not in an org yet. Ask your org admin for an invite.</p>
-{:else if data.accessibleDataSourceIds.length === 0}
-	<p>
-		Your org doesn't have access to any data sources yet. Ask a platform admin to grant it some.
-	</p>
+{#if data.access.dataSourceIds.length === 0}
+	{#if noOrg}
+		<p>
+			You're not in an org yet, and there are no public data sources. Ask your org admin for an
+			invite, or contact us to search your own documents.
+		</p>
+	{:else}
+		<p>
+			Your org doesn't have access to any data sources yet. Ask a platform admin to grant it some.
+		</p>
+	{/if}
 {:else}
+	{#if noOrg}
+		<p class="muted">Want your own documents? Contact us.</p>
+	{/if}
 	{#if data.engineError}
 		<p class="error" role="alert">{data.engineError}</p>
 	{/if}
@@ -56,21 +61,23 @@
 			<input type="search" name="query" required value={form?.query ?? ''} autocomplete="off" />
 		</label>
 
-		<fieldset>
-			<legend>Data sources</legend>
-			{#each pickable as ds (ds.id)}
-				<label>
-					<input
-						type="checkbox"
-						name="data_source_ids"
-						value={ds.id}
-						checked={selected.has(ds.id)}
-					/>
-					{ds.name}
-					{#if ds.pages !== null}<span class="muted">({ds.pages} pages)</span>{/if}
-				</label>
-			{/each}
-		</fieldset>
+		{#each groups as group (group.label)}
+			<fieldset>
+				<legend>{group.label}</legend>
+				{#each group.dataSources as ds (ds.id)}
+					<label>
+						<input
+							type="checkbox"
+							name="data_source_ids"
+							value={ds.id}
+							checked={selected.has(ds.id)}
+						/>
+						{ds.name}
+						{#if ds.pages !== null}<span class="muted">({ds.pages} pages)</span>{/if}
+					</label>
+				{/each}
+			</fieldset>
+		{/each}
 
 		<details>
 			<summary>Options</summary>
@@ -93,7 +100,7 @@
 			<p class="error" role="alert">{form.error}</p>
 		{/if}
 
-		<button type="submit" class="primary" disabled={searching || pickable.length === 0}>
+		<button type="submit" class="primary" disabled={searching || groups.length === 0}>
 			{searching ? 'Searching…' : 'Search'}
 		</button>
 		{#if searching && answerOn}

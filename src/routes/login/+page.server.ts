@@ -1,12 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { safeRedirect } from '#lib/server/auth.js';
 import { authErrorMessage } from '#lib/server/credentials.js';
 import type { Actions, PageServerLoad } from './$types';
-
-// Only allow same-origin relative paths as a post-login destination.
-function safeRedirect(value: FormDataEntryValue | string | null): string {
-	if (typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')) return value;
-	return '/';
-}
 
 export const load: PageServerLoad = ({ url }) => {
 	return {

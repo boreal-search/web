@@ -72,6 +72,12 @@ export interface Database {
 					}
 				];
 			};
+			public_data_sources: {
+				Row: { data_source_id: string; created_at: string };
+				Insert: { data_source_id: string; created_at?: string };
+				Update: Record<string, never>;
+				Relationships: [];
+			};
 			platform_admins: {
 				Row: { user_id: string; created_at: string };
 				Insert: { user_id: string; created_at?: string };
@@ -121,7 +127,8 @@ export interface Database {
 			search_events: {
 				Row: {
 					id: string;
-					org_id: string;
+					/** null: a search in the Public context. */
+					org_id: string | null;
 					user_id: string | null;
 					data_source_ids: string[];
 					query: string | null;
@@ -138,7 +145,7 @@ export interface Database {
 				};
 				Insert: {
 					id?: string;
-					org_id: string;
+					org_id?: string | null;
 					user_id?: string | null;
 					data_source_ids: string[];
 					query?: string | null;
@@ -160,7 +167,8 @@ export interface Database {
 		Views: {
 			org_search_daily: {
 				Row: {
-					org_id: string;
+					/** null: the Public context (visible to platform admins only). */
+					org_id: string | null;
 					day: string;
 					searches: number;
 					ok: number;

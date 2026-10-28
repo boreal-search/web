@@ -1,5 +1,10 @@
 import { fail } from '@sveltejs/kit';
-import { findForbiddenDataSources, getAccess, resolveSearchOrg } from '#lib/server/access.js';
+import {
+	CONTEXT_COOKIE,
+	findForbiddenDataSources,
+	getAccess,
+	withDataSources
+} from '#lib/server/access.js';
 import { recordSearchEvent } from '#lib/server/analytics.js';
 import { requireUser } from '#lib/server/auth.js';
 import {
@@ -16,16 +21,30 @@ import type { Actions, PageServerLoad } from './$types';
 
 const MAX_TOP_K = 50;
 
-export const load: PageServerLoad = async ({ parent, fetch }) => {
-	const { accessibleDataSourceIds } = await parent();
-	if (accessibleDataSourceIds.length === 0) return { dataSources: [], engineError: null };
-	const allowed = new Set(accessibleDataSourceIds);
+interface PickerGroup {
+	label: string;
+	dataSources: { id: string; name: string; pages: number | null }[];
+}
 
+/** Picker groups ("<Org name>", "Public"). If the engine listing fails, ids stand in for names. */
+export const load: PageServerLoad = async ({
+	parent,
+	fetch
+}): Promise<{ groups: PickerGroup[]; engineError: string | null }> => {
+	const { access } = await parent();
 	try {
-		const all = await engine(fetch).listDataSources();
-		return { dataSources: all.filter((ds) => allowed.has(ds.id)), engineError: null };
+		const list = access.dataSourceIds.length > 0 ? await engine(fetch).listDataSources() : [];
+		const groups = withDataSources(access.groups, list).map((g) => ({
+			label: g.label,
+			dataSources: g.dataSources.map((ds) => ({ id: ds.id, name: ds.name, pages: ds.page_count }))
+		}));
+		return { groups, engineError: null };
 	} catch (e) {
-		return { dataSources: [], engineError: engineErrorMessage(e) };
+		const groups = access.groups.map((g) => ({
+			label: g.label,
+			dataSources: g.ids.map((id) => ({ id, name: id, pages: null }))
+		}));
+		return { groups, engineError: engineErrorMessage(e) };
 	}
 };
 
@@ -38,7 +57,7 @@ const FAILURE_STATUS: Record<EngineFailure['kind'], SearchStatus> = {
 };
 
 export const actions: Actions = {
-	default: async ({ request, locals, fetch }) => {
+	default: async ({ request, locals, cookies, fetch }) => {
 		const user = requireUser();
 		const form = await request.formData();
 		const query = String(form.get('query') ?? '').trim();
@@ -52,17 +71,19 @@ export const actions: Actions = {
 			return fail(400, { query, requested, answer, error: 'Select at least one data source.' });
 		}
 
-		// Re-check access on every search; never trust the ids posted by the form.
-		const access = await getAccess(locals.supabase, user.id);
-		const forbidden = findForbiddenDataSources(requested, access.dataSourceIds);
-		const orgId = resolveSearchOrg(requested, access.grants);
+		// Re-check access on every search; never trust the cookie or the ids posted by the form.
+		const { context, dataSourceIds } = await getAccess(
+			locals.supabase,
+			user.id,
+			cookies.get(CONTEXT_COOKIE)
+		);
+		const forbidden = findForbiddenDataSources(requested, dataSourceIds);
 
-		// Analytics: fire-and-forget on Vercel (waitUntil); awaited in dev/tests. See analytics.ts.
-		// Searches without an org (a future public tier) are not recorded.
-		const record = (status: SearchStatus, extra: { response?: SearchResponse; error?: string }) => {
-			if (!orgId) return Promise.resolve();
-			return recordSearchEvent(locals.supabase, {
-				orgId,
+		// Attributed to the current org (null in Public). Fire-and-forget on Vercel (waitUntil);
+		// awaited in dev/tests. See analytics.ts.
+		const record = (status: SearchStatus, extra: { response?: SearchResponse; error?: string }) =>
+			recordSearchEvent(locals.supabase, {
+				orgId: context.kind === 'org' ? context.org.id : null,
 				userId: user.id,
 				query,
 				dataSourceIds: requested,
@@ -71,7 +92,6 @@ export const actions: Actions = {
 				status,
 				...extra
 			});
-		};
 
 		if (forbidden.length > 0) {
 			await record('forbidden', { error: `forbidden: ${forbidden.join(',')}` });
