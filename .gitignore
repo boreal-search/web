@@ -31,3 +31,4 @@ docs/private/
 
 # Screenshots (scripts/shots.ts)
 .shots
+.claude/settings.local.json
