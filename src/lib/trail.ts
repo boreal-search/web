@@ -308,3 +308,22 @@ export function scopeLabel(step: TrailStep): string {
 	const { data_source_ids, data_source_names } = step.scope;
 	return data_source_ids.map((id) => data_source_names[id] ?? id).join(', ');
 }
+
+/**
+ * A follow-up from the composer: it continues from the latest step (`refine` of it), over the
+ * data sources ticked in Search options. Unchanged sources keep the documents the latest step
+ * was narrowed to; a changed set drops them (they may not be in it). Null for an empty trail.
+ */
+export function followUp(
+	steps: readonly TrailStep[],
+	dataSourceIds: string[]
+): Omit<StepRequest, StepSettings | 'query' | 'rewrite' | 'doc_filter'> | null {
+	const latest = steps.reduce<TrailStep | null>((a, s) => (a && a.n > s.n ? a : s), null);
+	if (!latest) return null;
+	const base = refine(steps, latest.n);
+	const was = new Set(latest.scope.data_source_ids);
+	const same = was.size === dataSourceIds.length && dataSourceIds.every((id) => was.has(id));
+	return same
+		? base
+		: { ...base, data_source_ids: dataSourceIds, document_ids: null, document_titles: {} };
+}

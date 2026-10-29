@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { isNarrowed, refine, scopeLabel, stepNumber, storedStep, widen } from './trail.js';
+import {
+	followUp,
+	isNarrowed,
+	refine,
+	scopeLabel,
+	stepNumber,
+	storedStep,
+	widen
+} from './trail.js';
 import { step } from './trail.fixture.js';
 
 const plan = { document_id: 'plan', title: 'Offsetting Plan' };
@@ -129,6 +137,34 @@ describe('storedStep', () => {
 			page_number: 412,
 			section: '§12.6',
 			snippet: 'predicted to be low in magnitude'
+		});
+	});
+});
+
+describe('followUp', () => {
+	it('is null for an empty trail', () => {
+		expect(followUp([], ['kettle'])).toBeNull();
+	});
+
+	it('continues from the latest step, whatever order the steps come in', () => {
+		const steps = [
+			step(2, { req: { query: 'q2', from: 1 } }),
+			step(1),
+			step(3, { req: { query: 'q3' } })
+		];
+		const r = followUp(steps, ['kettle']);
+		expect(r).toEqual(refine(steps, 3));
+		expect(r?.from).toBe(3);
+	});
+
+	it('keeps chosen documents only while the data sources are unchanged', () => {
+		const s = step(1, { req: { document_ids: ['vol3'], document_titles: { vol3: 'Vol 3' } } });
+		expect(followUp([s], ['kettle'])).toMatchObject({ document_ids: ['vol3'] });
+		expect(followUp([s], ['kettle', 'other'])).toMatchObject({
+			data_source_ids: ['kettle', 'other'],
+			document_ids: null,
+			document_titles: {},
+			from: 1
 		});
 	});
 });

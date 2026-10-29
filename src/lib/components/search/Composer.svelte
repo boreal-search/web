@@ -1,66 +1,62 @@
 <!--
-	A query box and its Search button. `new`: the new-search form (the query is required, the
-	button is the primary one). `refine`: the selected step's refine form. `children`: what sits
-	under the box (search options, "exactly as typed", the last search's problem).
+	The one query box, pinned to the bottom of its column (sticky). An empty trail: a new search;
+	otherwise the page continues from the latest step. `onengage`: the user focused or typed in
+	the box (Search options collapse). `children`: under the box (Search options, the last
+	search's problem); Search options open upward from here.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
 	let {
-		variant,
 		value = $bindable(''),
 		label,
 		placeholder,
 		disabled = false,
 		onsubmit,
+		onengage,
 		children
 	}: {
-		variant: 'new' | 'refine';
 		value?: string;
 		/** The box's (visually hidden) label. */
 		label: string;
 		placeholder: string;
 		disabled?: boolean;
 		onsubmit: (e: SubmitEvent) => void;
+		onengage?: () => void;
 		children?: Snippet;
 	} = $props();
-
-	let id = $derived(variant === 'new' ? 'query' : 'refine');
 </script>
 
-<form class={variant === 'new' ? 'search' : 'refine'} {onsubmit}>
+<form class="composer" {onsubmit}>
 	<div class="query">
-		<label for={id} class="sr-only">{label}</label>
+		<label for="query" class="sr-only">{label}</label>
 		<input
-			{id}
+			id="query"
 			type="search"
-			name={id}
-			required={variant === 'new'}
+			name="query"
+			required
 			bind:value
 			autocomplete="off"
 			{placeholder}
+			onfocus={onengage}
+			oninput={onengage}
 		/>
-		{#if variant === 'new'}
-			<button type="submit" class="primary" {disabled}>Search</button>
-		{:else}
-			<button type="submit">Search</button>
-		{/if}
+		<button type="submit" class="primary" {disabled}>Search</button>
 	</div>
 	{@render children?.()}
 </form>
 
 <style>
-	form.search {
-		display: grid;
-		gap: 1rem;
-		max-width: 52rem;
-		margin-bottom: 2rem;
-	}
-	.refine {
+	.composer {
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
 		display: grid;
 		gap: 0.5rem;
 		max-width: 52rem;
-		margin: 1.25rem 0 0 2.25rem;
+		padding: 0.75rem 0 1rem;
+		border-top: 1px solid var(--color-rule);
+		background: var(--color-page);
 	}
 	.query {
 		display: flex;
@@ -71,16 +67,7 @@
 		min-width: 0;
 		font-size: 1.0625rem;
 	}
-	.refine .query input {
-		font-size: 1rem;
-	}
 	.query button {
 		padding-inline: 1.5rem;
-	}
-
-	@media (max-width: 40rem) {
-		.refine {
-			margin-left: 0;
-		}
 	}
 </style>
