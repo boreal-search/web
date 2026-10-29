@@ -62,11 +62,6 @@
 							>Search</a
 						>
 					</li>
-					<li>
-						<a href={resolve('/(app)/trails')} aria-current={current(resolve('/(app)/trails'))}
-							>Trails</a
-						>
-					</li>
 					{#each data.nav.adminOrgs as org (org.slug)}
 						{@const href = resolve('/(app)/orgs/[slug]/manage', { slug: org.slug })}
 						<li>

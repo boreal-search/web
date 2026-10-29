@@ -1,7 +1,7 @@
 <!--
-	Who can read a stored trail: for a reader, who shared it; for the owner, the people it's shared
+	Sharing a stored trail, for its owner (in the "⋯" menu's Share modal): the people it's shared
 	with read-only (members of its org) and a form to share it with another. Forms post to the
-	search page's actions.
+	search page's actions; sharing sends no email.
 -->
 <script module lang="ts">
 	import type { TrailRelation } from '#lib/supabase/types.js';
@@ -23,7 +23,7 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 
-	let { trail }: { trail: StoredTrail } = $props();
+	let { trail }: { trail: Omit<StoredTrail, 'isOwner'> } = $props();
 
 	// Stay on this trail: by default a submission lands on the action's URL, without `?trail=`.
 	const stay: SubmitFunction =
@@ -31,51 +31,46 @@
 		({ update }) =>
 			update({ navigate: false });
 
-	let owner = $derived(trail.people.find((p) => p.relation === 'owner') ?? null);
 	let shared = $derived(trail.people.filter((p) => p.relation === 'shared'));
 	let members = $derived(trail.people.filter((p) => p.relation === 'member'));
 	const who = (p: { email: string; display_name: string | null }) =>
 		p.display_name ? `${p.display_name} (${p.email})` : p.email;
 </script>
 
-{#if !trail.isOwner}
-	<p class="note">Shared by {owner ? who(owner) : 'its owner'} · read-only</p>
-{:else}
-	<div class="share">
-		{#if trail.org_id === null}
-			<p class="note">Trails searched in Public can't be shared.</p>
-		{:else}
-			{#if shared.length > 0}
-				<ul aria-label="Shared with">
-					{#each shared as p (p.user_id)}
-						<li>
-							<span>Shared with {who(p)} · read-only</span>
-							<form method="POST" action="?/unshare" use:enhance={stay}>
-								<input type="hidden" name="trail_id" value={trail.id} />
-								<input type="hidden" name="user_id" value={p.user_id} />
-								<button type="submit" class="quiet">Remove</button>
-							</form>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-			{#if members.length > 0}
-				<form method="POST" action="?/share" class="share-form" use:enhance={stay}>
-					<input type="hidden" name="trail_id" value={trail.id} />
-					<label for="share-with">Share read-only with</label>
-					<select id="share-with" name="user_id" required>
-						{#each members as p (p.user_id)}
-							<option value={p.user_id}>{who(p)}</option>
-						{/each}
-					</select>
-					<button type="submit">Share</button>
-				</form>
-			{:else if shared.length === 0}
-				<p class="note">No other members in this org to share with.</p>
-			{/if}
+<div class="share">
+	{#if trail.org_id === null}
+		<p class="note">Trails searched in Public can't be shared.</p>
+	{:else}
+		{#if shared.length > 0}
+			<ul aria-label="Shared with">
+				{#each shared as p (p.user_id)}
+					<li>
+						<span>Shared with {who(p)} · read-only</span>
+						<form method="POST" action="?/unshare" use:enhance={stay}>
+							<input type="hidden" name="trail_id" value={trail.id} />
+							<input type="hidden" name="user_id" value={p.user_id} />
+							<button type="submit" class="quiet">Remove</button>
+						</form>
+					</li>
+				{/each}
+			</ul>
 		{/if}
-	</div>
-{/if}
+		{#if members.length > 0}
+			<form method="POST" action="?/share" class="share-form" use:enhance={stay}>
+				<input type="hidden" name="trail_id" value={trail.id} />
+				<label for="share-with">Share read-only with</label>
+				<select id="share-with" name="user_id" required>
+					{#each members as p (p.user_id)}
+						<option value={p.user_id}>{who(p)}</option>
+					{/each}
+				</select>
+				<button type="submit">Share</button>
+			</form>
+		{:else if shared.length === 0}
+			<p class="note">No other members in this org to share with.</p>
+		{/if}
+	{/if}
+</div>
 
 <style>
 	.note {
