@@ -3,7 +3,7 @@
 // steps (choosing a summary marker) and the evidence pane.
 import { tick } from 'svelte';
 import { resolve } from '$app/paths';
-import { MediaQuery, SvelteSet } from 'svelte/reactivity';
+import { SvelteSet } from 'svelte/reactivity';
 import {
 	answerMarks,
 	answerSegments,
@@ -16,6 +16,8 @@ import { isTypingTarget, step as move } from '#lib/search-view.js';
 import type { StepResult, TrailStep } from '#lib/trail.js';
 
 const NONE: StepResult[] = [];
+/** Pane width (px) from which the selected page sits beside the list; matches `@container evidence (min-width: 36rem)`. */
+const WIDE_PANE = 576;
 
 /** Permanent link to the PDF at the result's page; it leaves the app (`rel="external"`). */
 export const pdfHref = (r: StepResult) =>
@@ -52,8 +54,10 @@ export class Evidence {
 	/** The result shown large beside the list: the first result the summary cites, else the top. */
 	current = $derived(this.marks.length > 0 ? this.marks[0].ref - 1 : 0);
 	shown = $derived(this.results[this.current] ?? null);
-	/** The large page sits beside the list only on wide screens; phones open a page under its row. */
-	wide = new MediaQuery('min-width: 64rem', false);
+	/** The evidence pane's width in px (bound by `EvidencePane`): the pane, not the viewport, decides. */
+	paneWidth = $state(0);
+	/** The large page sits beside the list only in a wide pane; a narrow one opens a page under its row. */
+	wide = $derived(this.paneWidth >= WIDE_PANE);
 	/** Engine-signed URLs expire, and stored steps keep none; a missing render shows a plain line. */
 	failed = new SvelteSet<string>();
 	/** Space: the large page at full brightness and wider. */
@@ -118,7 +122,7 @@ export class Evidence {
 		this.select(m.ref - 1, from !== null);
 		this.active = m;
 		if (!from) return;
-		if (!this.wide.current) return this.expand(m.ref - 1, from, false);
+		if (!this.wide) return this.expand(m.ref - 1, from, false);
 		await tick();
 		document.querySelector('.viewer .mark')?.scrollIntoView({ block: 'nearest' });
 	};
@@ -157,7 +161,7 @@ export class Evidence {
 			case ' ':
 				if (usesSpace(e.target)) return;
 				e.preventDefault();
-				if (this.wide.current) this.zoomed = !this.zoomed;
+				if (this.wide) this.zoomed = !this.zoomed;
 				else this.expand(current, document.getElementById(resultAnchorId(current + 1)));
 				return;
 			case 'Escape':

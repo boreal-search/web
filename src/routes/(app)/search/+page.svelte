@@ -9,6 +9,7 @@
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import Composer from '#lib/components/search/Composer.svelte';
 	import EvidencePane from '#lib/components/search/EvidencePane.svelte';
+	import EvidencePanes from '#lib/components/search/EvidencePanes.svelte';
 	import { Evidence } from '#lib/components/search/evidence.svelte.js';
 	import { LiveTrail, type SearchWhere } from '#lib/components/search/live-trail.svelte.js';
 	import SearchOptions from '#lib/components/search/SearchOptions.svelte';
@@ -145,93 +146,114 @@
 	<h1>Search</h1>
 </div>
 
-{#if data.access.dataSourceIds.length === 0}
-	<p class="empty">
+{#snippet composer()}
+	{#if data.access.dataSourceIds.length === 0}
+		<p class="empty">
+			{#if noOrg}
+				You're not in an org yet, and there are no public data sources. Ask your org admin for an
+				invite, or contact us to search your own documents.
+			{:else}
+				Your org doesn't have access to any data sources yet. Ask a platform admin to grant it some.
+			{/if}
+		</p>
+	{:else}
+		{#if data.engineFailure}
+			<FailureNotice
+				failure={data.engineFailure}
+				effect="Data source names and page counts can't be loaded."
+			/>
+		{/if}
+		<Composer
+			variant="new"
+			bind:value={query}
+			label="Query"
+			placeholder={trail.steps.length > 0 ? 'Start a new search' : 'Search documents'}
+			disabled={groups.length === 0 || picked.length === 0}
+			onsubmit={newSearch}
+		>
+			<SearchOptions {groups} {unpicked} bind:summaryOn bind:topK bind:rerank />
+			<SearchProblem problem={trail.problem?.where === 'new' ? trail.problem : null} />
+		</Composer>
+
 		{#if noOrg}
-			You're not in an org yet, and there are no public data sources. Ask your org admin for an
-			invite, or contact us to search your own documents.
-		{:else}
-			Your org doesn't have access to any data sources yet. Ask a platform admin to grant it some.
+			<p class="muted">Want your own documents? Contact us.</p>
 		{/if}
-	</p>
+	{/if}
+{/snippet}
+
+{#snippet evidence()}
+	<EvidencePane step={trail.selected} {ev} {sourceNames} permanentLinks={data.permanentLinks} />
+{/snippet}
+
+{#if trail.steps.length === 0}
+	{@render composer()}
 {:else}
-	{#if data.engineFailure}
-		<FailureNotice
-			failure={data.engineFailure}
-			effect="Data source names and page counts can't be loaded."
-		/>
-	{/if}
-	<Composer
-		variant="new"
-		bind:value={query}
-		label="Query"
-		placeholder={trail.steps.length > 0 ? 'Start a new search' : 'Search documents'}
-		disabled={groups.length === 0 || picked.length === 0}
-		onsubmit={newSearch}
-	>
-		<SearchOptions {groups} {unpicked} bind:summaryOn bind:topK bind:rerank />
-		<SearchProblem problem={trail.problem?.where === 'new' ? trail.problem : null} />
-	</Composer>
+	<EvidencePanes selectedKey={trail.selected?.created_at} {composer} {evidence}>
+		{#snippet steps({ modal, open })}
+			<section class="trail" aria-labelledby="trail-heading">
+				<TrailHeader
+					{title}
+					steps={trail.steps}
+					{stored}
+					email={data.user?.email ?? ''}
+					context={stored ? orgName(stored.org_id) : contextName}
+					notice={actionNotice}
+				/>
+				{#if !data.history && canRefine}
+					<p class="note">
+						This org doesn't keep search history. The trail ends when you leave the page.
+					</p>
+				{/if}
+				{#if contextNote}<p class="note">{contextNote}</p>{/if}
 
-	{#if noOrg}
-		<p class="muted">Want your own documents? Contact us.</p>
-	{/if}
-{/if}
-
-{#if trail.steps.length > 0}
-	<section class="band trail" aria-labelledby="trail-heading">
-		<TrailHeader
-			{title}
-			steps={trail.steps}
-			{stored}
-			email={data.user?.email ?? ''}
-			context={stored ? orgName(stored.org_id) : contextName}
-			notice={actionNotice}
-		/>
-		{#if !data.history && canRefine}
-			<p class="note">
-				This org doesn't keep search history. The trail ends when you leave the page.
-			</p>
-		{/if}
-		{#if contextNote}<p class="note">{contextNote}</p>{/if}
-
-		<ol class="steps">
-			{#each trail.steps as s (s.created_at)}
-				<Step
-					step={s}
-					selected={s === trail.selected}
-					waiting={trail.live?.key === s.created_at ? trail.live.clock : null}
-					now={trail.now}
-					{allIds}
-					active={ev.active}
-					canWiden={canWiden(s)}
-					documents={documentsIn(s.scope.data_source_ids, all)}
-					onopen={() => openStep(s.n)}
-					onchoose={(m, from) => ev.choose(s, m, from)}
-					onwiden={() => run({ ...widen(s), ...settings() }, 'refine')}
-				>
-					{#if canRefine}
-						<Composer
-							variant="refine"
-							bind:value={refineQuery}
-							label="Refine step {stepNumber(s.n)}"
-							placeholder="Refine, or start a new search…"
-							onsubmit={refineSearch}
+				<ol class="steps">
+					{#each trail.steps as s (s.created_at)}
+						<Step
+							step={s}
+							selected={s === trail.selected}
+							waiting={trail.live?.key === s.created_at ? trail.live.clock : null}
+							now={trail.now}
+							{allIds}
+							active={ev.active}
+							canWiden={canWiden(s)}
+							documents={documentsIn(s.scope.data_source_ids, all)}
+							onopen={() => openStep(s.n)}
+							onchoose={(m, from) => {
+								if (modal && from) open();
+								ev.choose(s, m, from);
+							}}
+							onwiden={() => run({ ...widen(s), ...settings() }, 'refine')}
+							onview={modal
+								? () => {
+										openStep(s.n);
+										open();
+									}
+								: undefined}
 						>
-							<label class="check">
-								<input type="checkbox" name="exact" bind:checked={exact} />
-								Search exactly as typed
-							</label>
-							<SearchProblem problem={trail.problem?.where === 'refine' ? trail.problem : null} />
-						</Composer>
-					{/if}
-				</Step>
-			{/each}
-		</ol>
-	</section>
+							{#if canRefine}
+								<Composer
+									variant="refine"
+									bind:value={refineQuery}
+									label="Refine step {stepNumber(s.n)}"
+									placeholder="Refine, or start a new search…"
+									onsubmit={refineSearch}
+								>
+									<label class="check">
+										<input type="checkbox" name="exact" bind:checked={exact} />
+										Search exactly as typed
+									</label>
+									<SearchProblem
+										problem={trail.problem?.where === 'refine' ? trail.problem : null}
+									/>
+								</Composer>
+							{/if}
+						</Step>
+					{/each}
+				</ol>
+			</section>
+		{/snippet}
+	</EvidencePanes>
 {/if}
-
-<EvidencePane step={trail.selected} {ev} {sourceNames} permanentLinks={data.permanentLinks} />
 
 <style>
 	.note {
@@ -244,5 +266,12 @@
 		margin: 1rem 0 0;
 		padding: 0;
 		border-top: 1px solid var(--color-rule);
+	}
+	/* The selected step, the one whose pages the evidence shows, carries a bar on its edge. */
+	.steps :global(.step) {
+		padding-left: 0.75rem;
+	}
+	.steps :global(.step[aria-current]) {
+		box-shadow: inset 2px 0 0 var(--color-ink);
 	}
 </style>

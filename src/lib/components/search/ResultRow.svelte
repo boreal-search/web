@@ -42,7 +42,7 @@
 	onclick={() => ev.select(i)}
 	onfocusin={() => ev.select(i)}
 >
-	{#if ev.wide.current || !interactive}
+	{#if ev.wide || !interactive}
 		<a
 			class="sheet thumb"
 			href={pdfHref(r)}
@@ -92,7 +92,7 @@
 			<blockquote class="source">{snippetText(r.snippet)}</blockquote>
 		{/if}
 	</div>
-	{#if ev.expanded === i && !ev.wide.current}
+	{#if ev.expanded === i && !ev.wide}
 		<figure
 			class="expanded"
 			id="page-{i + 1}"
@@ -195,13 +195,13 @@
 		margin-left: auto;
 	}
 
-	@media (min-width: 40rem) {
+	@container evidence (min-width: 28rem) {
 		li {
 			grid-template-columns: 12rem minmax(0, 1fr);
 		}
 	}
 	/* Desktop: a narrow contact strip of pages beside the selected page at reading size. */
-	@media (min-width: 64rem) {
+	@container evidence (min-width: 36rem) {
 		li {
 			grid-template-columns: 5.5rem minmax(0, 1fr);
 			padding: 1rem 0.75rem 1rem 0;
