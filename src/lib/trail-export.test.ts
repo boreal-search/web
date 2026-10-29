@@ -69,6 +69,13 @@ Exported 2026-10-28 21:02 UTC · reviewer@example.com · Kettle Ridge Review
 		expect(text).toMatch(/\[1\] Vol 3 · §12\.6 · p\.412 · Unsupported · /);
 		expect(text).toMatch(/\[2\] Vol 3 · p\.431 · Not checked · /);
 	});
+
+	it('keeps the lines of a markdown summary', () => {
+		const a = answer({ text: 'Two rules:\n\n- **Fines** apply [1].\n- Notice   is due [2].' });
+		expect(trailMarkdown(meta, [step(1, { answer: a })])).toContain(
+			'    Two rules:\n    - **Fines** apply [1].\n    - Notice is due [2].\n'
+		);
+	});
 });
 
 describe('trailJson', () => {
