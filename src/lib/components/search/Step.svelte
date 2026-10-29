@@ -1,10 +1,10 @@
 <!--
 	One trail step: its number and query (a control that opens its snapshot), scope chips, the
-	query as searched, the waiting bar, the checked summary, the readout and the widen action.
-	`children`: what follows the step when it's the selected one (the refine form).
+	query as searched, the waiting bar, the checked summary, the readout, the widen action and,
+	on earlier steps of a stored trail, "Branch from here" (a new trail seeded with 01..this one).
 -->
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { enhance } from '$app/forms';
 	import type { Mark } from '#lib/answer.js';
 	import { count, plural } from '#lib/format.js';
 	import { indexedDay, stepReadout, summaryProblem, type WaitClock } from '#lib/step-view.js';
@@ -25,7 +25,7 @@
 		onchoose,
 		onwiden,
 		onview,
-		children
+		branchFrom
 	}: {
 		step: TrailStep;
 		selected: boolean;
@@ -44,8 +44,11 @@
 		onwiden: () => void;
 		/** When given (narrow screens), a "View pages (N)" button that opens the evidence. */
 		onview?: () => void;
-		children?: Snippet;
+		/** The stored trail this step can be branched from (an earlier step); null: no branch. */
+		branchFrom: string | null;
 	} = $props();
+
+	let branching = $state(false);
 
 	let readout = $derived(stepReadout(s));
 	let showReadout = $derived(s.readout.search !== null && (s.readout.finished || !s.wants_answer));
@@ -127,7 +130,33 @@
 		{/if}
 	</div>
 
-	{#if selected}{@render children?.()}{/if}
+	{#if branchFrom}
+		<form
+			method="POST"
+			action="?/branch"
+			class="branch"
+			use:enhance={() => {
+				branching = true;
+				return async ({ update }) => {
+					await update();
+					branching = false;
+				};
+			}}
+		>
+			<input type="hidden" name="trail_id" value={branchFrom} />
+			<input type="hidden" name="n" value={s.n} />
+			<button
+				type="submit"
+				class="quiet"
+				disabled={branching}
+				aria-label="Branch from step {stepNumber(s.n)}: a new trail with steps 01 to {stepNumber(
+					s.n
+				)}"
+			>
+				{branching ? 'Branching…' : 'Branch from here'}
+			</button>
+		</form>
+	{/if}
 </li>
 
 <style>
@@ -225,10 +254,24 @@
 		color: var(--color-accent);
 	}
 
+	.branch {
+		margin: 0.5rem 0 0 2.25rem;
+	}
+	.branch button {
+		min-height: 2rem;
+		padding-inline: 0;
+		font-size: 0.875rem;
+		color: var(--color-muted);
+	}
+	.branch button:hover {
+		color: var(--color-ink);
+	}
+
 	@media (max-width: 40rem) {
 		.chips,
 		.as,
-		.body {
+		.body,
+		.branch {
 			margin-left: 0;
 		}
 	}

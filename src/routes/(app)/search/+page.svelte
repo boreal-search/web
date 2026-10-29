@@ -1,8 +1,9 @@
 <script lang="ts">
 	// The trail screen (infra/docs/handovers/2026-10-28-search-trail.md, "The trail screen"): each
 	// search is a numbered step with its own scope, readout and checked summary; the selected
-	// step's pages fill the results view. Streaming lives in `LiveTrail`, the results view's
-	// state in `Evidence`; this page wires them to the forms.
+	// step's pages fill the results view. One composer: a new search on an empty trail, else a
+	// follow-up from the latest step. Streaming lives in `LiveTrail`, the results view's state in
+	// `Evidence`; this page wires them to the composer.
 	import { afterNavigate } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -11,14 +12,14 @@
 	import EvidencePane from '#lib/components/search/EvidencePane.svelte';
 	import EvidencePanes from '#lib/components/search/EvidencePanes.svelte';
 	import { Evidence } from '#lib/components/search/evidence.svelte.js';
-	import { LiveTrail, type SearchWhere } from '#lib/components/search/live-trail.svelte.js';
+	import { LiveTrail } from '#lib/components/search/live-trail.svelte.js';
 	import SearchOptions from '#lib/components/search/SearchOptions.svelte';
 	import SearchProblem from '#lib/components/search/SearchProblem.svelte';
 	import Step from '#lib/components/search/Step.svelte';
 	import TrailHeader from '#lib/components/search/TrailHeader.svelte';
 	import { documentsIn, topKValue } from '#lib/search-view.js';
 	import {
-		refine,
+		followUp,
 		stepDocuments,
 		stepNumber,
 		widen,
@@ -42,21 +43,28 @@
 			? 'Public'
 			: (data.access.memberships.find((m) => m.id === id)?.name ?? 'another org');
 
-	// ---- The new-search form: picker and options, kept across searches. ----
-	/** Unticked data sources (default: everything the user can search). */
+	// ---- The composer and Search options, kept across searches. ----
+	/** Unticked data sources (default: everything; a shown trail: its latest step's). */
 	const unpicked = new SvelteSet<string>();
+	function pickFrom(steps: readonly TrailStep[]) {
+		const latest = steps.at(-1);
+		if (!latest) return;
+		unpicked.clear();
+		for (const id of allIds) if (!latest.scope.data_source_ids.includes(id)) unpicked.add(id);
+	}
 	let picked = $derived(allIds.filter((id) => !unpicked.has(id)));
 	const initialQuery = () => data.query;
 	let query = $state(initialQuery());
 	let summaryOn = $state(true);
 	let topK = $state(10);
 	let rerank = $state(true);
-	let refineQuery = $state('');
 	let exact = $state(false);
+	let optionsOpen = $state(false);
 
 	// ---- The trail: stored steps from `?trail=`, or the ones searched on this page. ----
 	const fromData = () => ({ steps: data.trail?.steps ?? [], id: data.trail?.id ?? null });
 	const trail = new LiveTrail(fromData().steps, fromData().id);
+	pickFrom(fromData().steps);
 	const ev = new Evidence(
 		() => trail.selected,
 		(n) => (trail.selectedN = n)
@@ -71,11 +79,15 @@
 		// A link to the bare page ("New search") also clears a trail that was never stored.
 		if (next.id === trail.trailId && !(next.id === null && nav.type === 'link')) return;
 		trail.show(next.steps, next.id);
+		pickFrom(next.steps);
 	});
 
 	/** The stored trail as loaded, when it's the one shown: title, owner, people. */
 	let stored = $derived(data.trail && data.trail.id === trail.trailId ? data.trail : null);
 	let canRefine = $derived(stored ? stored.canRefine : true);
+	/** The composer continues the trail shown (else it starts a new one). */
+	let continuing = $derived(canRefine && trail.steps.length > 0);
+	let orgId = $derived(data.access.context.kind === 'org' ? data.access.context.org.id : null);
 	let title = $derived(stored?.title ?? trail.steps[0]?.query ?? '');
 	let contextNote = $derived(
 		stored?.isOwner && !stored.canRefine
@@ -86,7 +98,7 @@
 		form && 'error' in form ? form.error : form && 'notice' in form ? form.notice : null
 	);
 
-	const run = (req: StepRequest, where: SearchWhere) => void trail.run(req, where, all);
+	const run = (req: StepRequest) => void trail.run(req, all);
 	const settings = () => ({
 		answer: summaryOn,
 		top_k: topKValue(topK),
@@ -94,47 +106,38 @@
 		trail_id: trail.trailId
 	});
 
-	function newSearch(e: SubmitEvent) {
+	function search(e: SubmitEvent) {
 		e.preventDefault();
+		optionsOpen = false;
 		const q = query.trim();
 		if (!q || picked.length === 0) return;
+		const next = continuing ? followUp(trail.steps, picked) : null;
 		run(
-			{
-				query: q,
-				data_source_ids: picked,
-				document_ids: null,
-				document_titles: {},
-				rewrite: true,
-				doc_filter: true,
-				from: null,
-				context: [],
-				...settings(),
-				trail_id: null
-			},
-			'new'
+			next
+				? { ...next, query: q, rewrite: !exact, doc_filter: true, ...settings() }
+				: {
+						query: q,
+						data_source_ids: picked,
+						document_ids: null,
+						document_titles: {},
+						rewrite: true,
+						doc_filter: true,
+						from: null,
+						context: [],
+						...settings(),
+						trail_id: null
+					}
 		);
-	}
-
-	function refineSearch(e: SubmitEvent) {
-		e.preventDefault();
-		const q = refineQuery.trim();
-		const selected = trail.selected;
-		if (!q || !selected) return;
-		run(
-			{
-				...refine(trail.steps, selected.n),
-				query: q,
-				rewrite: !exact,
-				doc_filter: true,
-				...settings()
-			},
-			'refine'
-		);
-		refineQuery = '';
+		query = '';
 	}
 
 	const canWiden = (s: TrailStep) =>
 		canRefine && s.readout.finished && stepDocuments(s).ids.length > 0;
+	/** "Branch from here": earlier steps of a stored trail in this context, where history is kept. */
+	const branchFrom = (s: TrailStep) =>
+		stored && data.history && stored.org_id === orgId && !trail.live && s !== trail.steps.at(-1)
+			? stored.id
+			: null;
 
 	function openStep(n: number) {
 		trail.selectedN = n;
@@ -164,17 +167,29 @@
 			/>
 		{/if}
 		<Composer
-			variant="new"
 			bind:value={query}
-			label="Query"
-			placeholder={trail.steps.length > 0 ? 'Start a new search' : 'Search documents'}
+			label={continuing ? 'Follow-up query' : 'Query'}
+			placeholder={continuing
+				? `Follow up on step ${stepNumber(trail.steps.at(-1)?.n ?? 1)}…`
+				: trail.steps.length > 0
+					? 'Start a new search'
+					: 'Search documents'}
 			disabled={groups.length === 0 || picked.length === 0}
-			onsubmit={newSearch}
+			onsubmit={search}
+			onengage={() => (optionsOpen = false)}
 		>
-			<SearchOptions {groups} {unpicked} bind:summaryOn bind:topK bind:rerank />
-			<SearchProblem problem={trail.problem?.where === 'new' ? trail.problem : null} />
+			<SearchOptions
+				{groups}
+				{unpicked}
+				bind:summaryOn
+				bind:topK
+				bind:rerank
+				bind:exact
+				bind:open={optionsOpen}
+				followUp={continuing}
+			/>
+			<SearchProblem problem={trail.problem} />
 		</Composer>
-
 		{#if noOrg}
 			<p class="muted">Want your own documents? Contact us.</p>
 		{/if}
@@ -222,32 +237,15 @@
 								if (modal && from) open();
 								ev.choose(s, m, from);
 							}}
-							onwiden={() => run({ ...widen(s), ...settings() }, 'refine')}
+							onwiden={() => run({ ...widen(s), ...settings() })}
 							onview={modal
 								? () => {
 										openStep(s.n);
 										open();
 									}
 								: undefined}
-						>
-							{#if canRefine}
-								<Composer
-									variant="refine"
-									bind:value={refineQuery}
-									label="Refine step {stepNumber(s.n)}"
-									placeholder="Refine, or start a new search…"
-									onsubmit={refineSearch}
-								>
-									<label class="check">
-										<input type="checkbox" name="exact" bind:checked={exact} />
-										Search exactly as typed
-									</label>
-									<SearchProblem
-										problem={trail.problem?.where === 'refine' ? trail.problem : null}
-									/>
-								</Composer>
-							{/if}
-						</Step>
+							branchFrom={branchFrom(s)}
+						/>
 					{/each}
 				</ol>
 			</section>

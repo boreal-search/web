@@ -3,7 +3,13 @@
 // owner, where the org keeps search history). This is the jsonb ⇄ TrailStep boundary.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json, TrailRelation } from '#lib/supabase/types.js';
-import type { StepReadout, StepResult, StepScope, TrailStep } from '#lib/trail.js';
+import {
+	storedStep,
+	type StepReadout,
+	type StepResult,
+	type StepScope,
+	type TrailStep
+} from '#lib/trail.js';
 import type { Answer } from './engine.types';
 
 type Db = SupabaseClient<Database>;
@@ -205,4 +211,74 @@ export async function deleteTrail(db: Db, trailId: string) {
 	const { error, count } = await db.from('trails').delete({ count: 'exact' }).eq('id', trailId);
 	if (error) return error.message;
 	return count ? null : 'Only the owner can delete this trail.';
+}
+
+// Branching: a new trail seeded with steps 01..n of another, for the composer to continue.
+
+/** A branch's title: "<title> (branch)", within the column's limit. */
+export function branchTitle(title: string) {
+	const suffix = ' (branch)';
+	return `${title.slice(0, TITLE_MAX - suffix.length).trimEnd()}${suffix}`;
+}
+
+/**
+ * The steps a branch from step `n` starts with: 01..n, in order, as stored (no signed URLs).
+ * The database renumbers inserted steps from 1, so n and `builds_on` stay valid only while the
+ * seed is gapless; null when it isn't (or `n` is the latest step: nothing to branch from).
+ */
+export function branchSeed(steps: readonly TrailStep[], n: number): TrailStep[] | null {
+	const sorted = [...steps].sort((a, b) => a.n - b.n);
+	const seed = sorted.filter((s) => s.n <= n);
+	if (seed.length === 0 || seed.length === sorted.length) return null;
+	if (seed.some((s, i) => s.n !== i + 1)) return null;
+	return seed.map(storedStep);
+}
+
+/**
+ * Branch the trail `trailId` (any the user can read) from step `n` into a new trail of their
+ * own, in the same context. RLS refuses where the org doesn't keep search history. Steps go in
+ * one by one (the trigger numbers them; created_at comes from each insert). On a failure the
+ * half-made branch is deleted. Returns the new trail's id, or a message for the user.
+ */
+export async function branchTrail(
+	db: Db,
+	userId: string,
+	trailId: string,
+	n: number,
+	orgId: string | null
+): Promise<{ id: string } | { error: string }> {
+	const source = await loadTrail(db, trailId, userId);
+	if (!source) return { error: 'That trail was not found.' };
+	if (source.trail.org_id !== orgId)
+		return { error: 'This trail belongs to another context. Switch back to it to branch.' };
+	const seed = branchSeed(source.steps, n);
+	if (!seed) return { error: 'Branch from an earlier step.' };
+	const { data, error } = await db
+		.from('trails')
+		.insert({ org_id: orgId, title: branchTitle(source.trail.title) })
+		.select('id')
+		.single();
+	if (error)
+		return {
+			error: error.code === '42501' ? "This org doesn't keep search history." : error.message
+		};
+	for (const s of seed) {
+		const { error: e } = await db.from('trail_steps').insert({
+			trail_id: data.id,
+			n: 0, // assigned by the trail_steps_insert trigger
+			query: s.query,
+			resolved_query: s.resolved_query,
+			rewrite: s.rewrite,
+			scope: asJson(s.scope),
+			builds_on: s.builds_on,
+			results: asJson(s.results),
+			answer: s.answer ? asJson(s.answer) : null,
+			readout: storedReadout(s)
+		});
+		if (e) {
+			await db.from('trails').delete().eq('id', data.id);
+			return { error: `The branch could not be saved: ${e.message}` };
+		}
+	}
+	return { id: data.id };
 }

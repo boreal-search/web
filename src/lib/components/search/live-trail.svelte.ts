@@ -1,4 +1,5 @@
 // The trail shown on the search page: stored steps from `?trail=`, or the ones searched here.
+// The composer continues from the latest step (`followUp`); a branch opens as another trail.
 // Steps stream from POST /search/stream and are built with the same reducer the server stores
 // them with (`applyEvent`).
 import { tick } from 'svelte';
@@ -15,12 +16,8 @@ import {
 	type TrailStep
 } from '#lib/trail.js';
 
-/** Which form a search came from: its problem is shown there. */
-export type SearchWhere = 'new' | 'refine';
-
-/** A search that produced no step (refused, or failed before results). */
+/** A search that produced no step (refused, or failed before results); shown at the composer. */
 export interface SearchProblem {
-	where: SearchWhere;
 	text: string | null;
 	failure: Failure | null;
 }
@@ -68,7 +65,7 @@ export class LiveTrail {
 		clearInterval(this.#ticker);
 	};
 
-	async run(req: StepRequest, where: SearchWhere, sources: readonly StepSource[]) {
+	async run(req: StepRequest, sources: readonly StepSource[]) {
 		this.stop();
 		const ac = new AbortController();
 		this.#controller = ac;
@@ -116,7 +113,6 @@ export class LiveTrail {
 				} | null;
 				drop();
 				this.problem = {
-					where,
 					failure: body?.failure ?? null,
 					text: body?.failure ? null : (body?.error ?? `The search failed (${res.status}).`)
 				};
@@ -144,14 +140,15 @@ export class LiveTrail {
 				update((s) => applyEvent(s, { type: 'error', status: null, detail }, req.from));
 			}
 		} finally {
+			// Stopped by the user or another search; `stop()` below aborts too, so read it first.
+			const stopped = ac.signal.aborted;
 			if (this.#controller === ac) this.stop();
-			// No results: nothing to keep in the trail; say why where it was asked.
+			// No results: nothing to keep in the trail; say why at the composer.
 			const got = current();
 			if (got && got.readout.search === null) {
 				drop();
-				if (!ac.signal.aborted)
+				if (!stopped)
 					this.problem = {
-						where,
 						failure: null,
 						text: summaryProblem(got) ?? 'Results not available. Try again.'
 					};
