@@ -154,3 +154,14 @@ export function trailJson(meta: TrailExportMeta, steps: readonly TrailStep[]): s
 	};
 	return `${JSON.stringify(record, null, 2)}\n`;
 }
+
+/** The download's file name: `boreal-trail-<title slug>-<YYYY-MM-DD>.<md|json>`. */
+export function trailFileName(title: string, exportedAt: string, kind: 'md' | 'json'): string {
+	const slug =
+		title
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-|-$/g, '')
+			.slice(0, 48) || 'search';
+	return `boreal-trail-${slug}-${exportedAt.slice(0, 10)}.${kind}`;
+}

@@ -31,6 +31,7 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 
 - `src/app.css` — the theme: every colour and font token, light and dark. `docs/ui.md` — how to use them.
 - `src/lib/answer.ts` — answer parsing and `AnswerCheck`, the answer-state vocabulary.
+- `src/lib/components/search/` — the search screen's parts; `live-trail.svelte.ts` (streaming steps) and `evidence.svelte.ts` (results view + keys) hold its state, the page wires them.
 - `src/env.ts` — declared env vars (`defineEnvVars`); import from `$app/env/private|public`.
 - `src/hooks.server.ts` — Supabase client + validated session on `locals`.
 - `src/lib/server/` — server-only: `engine.ts` (API client, timeouts, failure kinds), `access.ts` (`getAccess`: the one place deciding what a user may search: current context from the `boreal_org` cookie, org grants ∪ public corpora), `analytics.ts` (search_events), `auth.ts` (session + platform/org admin guards), `orgs.ts` (org-management input parsing, invite email), `email.ts` (Resend; app emails only).
@@ -73,4 +74,5 @@ Guidance, not hard rules (adapted from Lauren Tan's pstack):
 Verify: `bun run check && bun run lint && bun run test`, then the real page in `bun run dev`, light and dark.
 Test logins: `TEST_{PLATFORM_ADMIN,ORG_ADMIN,CLAUDE_READABLE_MEMBER}_{EMAIL,PASSWORD}` in `.env`; `SHOTS_AS=member bun run shots /`.
 Only the member one is Claude-readable (`grep -E '^TEST_CLAUDE_READABLE_MEMBER_' .env`, allowed in `.claude/settings.local.json`).
-For `.svelte` files use the `svelte` skill / autofixer. Decisions and context: `docs/`.
+Edit `.svelte` files through the `svelte:svelte-file-editor` agent, or the `svelte:svelte-code-writer` skill + `svelte-autofixer`. ESLint caps `.svelte` files at 300 lines (blank/comments skipped): split, don't disable.
+Decisions and context: `docs/`.

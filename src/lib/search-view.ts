@@ -73,3 +73,34 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 /** Move a selection by `delta` within 0..length-1, stopping at the ends. */
 export const step = (index: number, delta: number, length: number) =>
 	Math.min(Math.max(index + delta, 0), Math.max(length - 1, 0));
+
+/** Documents across a step's data sources, for "Search all N documents"; null if any is unknown. */
+export function documentsIn(
+	dataSourceIds: readonly string[],
+	sources: readonly { id: string; documents: number | null }[]
+): number | null {
+	let total = 0;
+	for (const id of dataSourceIds) {
+		const n = sources.find((ds) => ds.id === id)?.documents;
+		if (n === null || n === undefined) return null;
+		total += n;
+	}
+	return total;
+}
+
+/** The "Results" field as a request's `top_k`: a whole number in 1..50, 10 when empty. */
+export const topKValue = (topK: number) => Math.min(50, Math.max(1, Math.round(topK || 10)));
+
+/** Why a page render can't be shown: no signing, an expired engine URL, or none kept. */
+export const missingText = (
+	r: Pick<StepResult, 'page_image_url'>,
+	permanentLinks: boolean
+): string =>
+	permanentLinks
+		? "Page image couldn't be loaded."
+		: r.page_image_url
+			? 'Page image expired. Search again to refresh.'
+			: "Page images aren't kept with the trail. Open the PDF at this page.";
+
+/** A result's snippet as a quoted excerpt: whitespace collapsed, ellipses either side. */
+export const snippetText = (s: string) => `…${s.replace(/\s+/g, ' ').trim()}…`;

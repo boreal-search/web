@@ -1,4 +1,6 @@
 <script lang="ts">
+	/* eslint-disable max-lines -- TODO: split into section components (members, invites,
+	   platform-only sections) to get under 300 lines. */
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import { plural, stamp } from '#lib/format.js';
