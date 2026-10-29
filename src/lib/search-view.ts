@@ -50,16 +50,6 @@ function shortSection(section: string, max: number) {
 /** Milliseconds as a seconds reading: 746 → "0.7", 12_340 → "12.3". */
 export const seconds = (ms: number) => (Math.max(0, ms) / 1000).toFixed(1);
 
-/** Sum of known page counts, or null if any is unknown (engine listing failed). */
-export function pagesSearched(pages: (number | null)[]): number | null {
-	let total = 0;
-	for (const p of pages) {
-		if (p === null) return null;
-		total += p;
-	}
-	return total;
-}
-
 /** True when a key press should go to the element (typing, or a control that uses keys). */
 export function isTypingTarget(target: EventTarget | null): boolean {
 	if (!target || typeof target !== 'object' || !('tagName' in target)) return false;

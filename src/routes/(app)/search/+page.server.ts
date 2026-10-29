@@ -56,7 +56,8 @@ export const load: PageServerLoad = async ({
 	parent,
 	fetch,
 	url,
-	locals
+	locals,
+	untrack
 }): Promise<{
 	groups: PickerGroup[];
 	engineFailure: EngineFailure | null;
@@ -66,7 +67,9 @@ export const load: PageServerLoad = async ({
 	trail: PageTrail | null;
 }> => {
 	const user = requireUser();
-	const { access } = await parent();
+	// Untracked: the search layout re-runs on its own (the trail list after each stored step)
+	// without re-running this. A context switch invalidates everything anyway.
+	const { access } = await untrack(() => parent());
 	const orgId = access.context.kind === 'org' ? access.context.org.id : null;
 	const trailId = url.searchParams.get('trail');
 

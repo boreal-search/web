@@ -49,6 +49,7 @@
 
 <style>
 	.composer {
+		container-type: inline-size;
 		position: relative;
 		display: grid;
 		gap: 0.5rem;
@@ -65,5 +66,15 @@
 	}
 	.query button {
 		padding-inline: 1.5rem;
+	}
+	/* A narrow steps column (1024 with the sidebar open): room for the placeholder. */
+	@container (max-width: 20rem) {
+		.query input {
+			padding-inline: 0.625rem;
+			font-size: 1rem;
+		}
+		.query button {
+			padding-inline: 0.875rem;
+		}
 	}
 </style>

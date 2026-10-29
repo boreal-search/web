@@ -134,9 +134,13 @@
 
 	const canWiden = (s: TrailStep) =>
 		canRefine && s.readout.finished && stepDocuments(s).ids.length > 0;
-	/** "Branch from here": earlier steps of a stored trail in this context, where history is kept. */
+	/** "Branch from here": steps before the stored trail's latest, in its context, where history is kept. */
 	const branchFrom = (s: TrailStep) =>
-		stored && data.history && stored.org_id === orgId && !trail.live && s !== trail.steps.at(-1)
+		stored &&
+		data.history &&
+		stored.org_id === orgId &&
+		!trail.live &&
+		s.n < (stored.steps.at(-1)?.n ?? 0)
 			? stored.id
 			: null;
 

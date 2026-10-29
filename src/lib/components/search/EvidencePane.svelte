@@ -32,14 +32,24 @@
 	onMount(() => {
 		interactive = true;
 	});
+
+	let section = $state<HTMLElement>();
+	/** The results keys work only while these pages are what's shown: not under another open
+	 * modal (Share, Delete, Trails), nor inside the closed phone "Pages" modal. */
+	function onkeydown(e: KeyboardEvent) {
+		if (!section || section.closest('dialog:not([open])')) return;
+		for (const d of document.querySelectorAll('dialog[open]')) if (!d.contains(section)) return;
+		ev.onkeydown(e);
+	}
 </script>
 
-<svelte:window onkeydown={ev.onkeydown} />
+<svelte:window {onkeydown} />
 
 {#if step}
 	{@const results = ev.results}
 	{@const shown = ev.shown}
 	<section
+		bind:this={section}
 		class="evidence"
 		aria-labelledby="evidence-heading"
 		bind:clientWidth={ev.paneWidth}

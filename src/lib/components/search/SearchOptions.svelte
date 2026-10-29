@@ -1,22 +1,16 @@
 <!--
 	Search options, one control at the composer. Collapsed it reads as a summary ("All 3 data
 	sources · summary on"); open it is a popover at the composer (a non-modal <dialog>) on
-	desktop and a full-screen modal (`showModal()`) on phones. Sections: Data sources (grouped by
-	org, then Public, one per line with page counts, all/none per group), Generated summary,
-	Results, and, once there is a trail, "Search exactly as typed" for follow-ups. Escape, Close
+	desktop and a full-screen modal (`showModal()`) on phones. Sections: Data sources
+	(DataSourcePicker), Generated summary, Results, and, once there is a trail, "Search exactly as typed" for follow-ups. Escape, Close
 	or a click outside closes it (focus returns to the control); the page closes it when the
 	composer is focused or typed in, and on search.
 -->
 <script lang="ts">
 	import type { SvelteSet } from 'svelte/reactivity';
-	import { count } from '#lib/format.js';
 	import { optionsSummary } from '#lib/search-options.js';
 	import { topKValue } from '#lib/search-view.js';
-
-	interface Group {
-		label: string;
-		dataSources: { id: string; name: string; pages: number | null }[];
-	}
+	import DataSourcePicker, { type Group } from './DataSourcePicker.svelte';
 
 	let {
 		groups,
@@ -81,13 +75,6 @@
 			e.preventDefault(); // not a search: Enter in an option only sets it
 		}
 	}
-
-	function setGroup(group: Group, on: boolean) {
-		for (const ds of group.dataSources) {
-			if (on) unpicked.delete(ds.id);
-			else unpicked.add(ds.id);
-		}
-	}
 </script>
 
 <svelte:document
@@ -109,7 +96,7 @@
 	>
 		<span class="sr-only">Search options:</span>
 		<span>{summary}</span>
-		<span class="caret" aria-hidden="true">{open ? '▾' : '▴'}</span>
+		<span class="caret" aria-hidden="true">▴</span>
 	</button>
 
 	<dialog
@@ -124,46 +111,7 @@
 			<button type="button" class="quiet" onclick={close}>Close</button>
 		</header>
 
-		<section aria-labelledby="opt-sources">
-			<h3 id="opt-sources">Data sources</h3>
-			{#each groups as group (group.label)}
-				<fieldset>
-					<legend>{group.label}</legend>
-					<p class="all">
-						<button
-							type="button"
-							class="quiet"
-							aria-label="Select all in {group.label}"
-							onclick={() => setGroup(group, true)}>All</button
-						>
-						<button
-							type="button"
-							class="quiet"
-							aria-label="Select none in {group.label}"
-							onclick={() => setGroup(group, false)}>None</button
-						>
-					</p>
-					<ul>
-						{#each group.dataSources as ds (ds.id)}
-							<li>
-								<label class="check">
-									<input
-										type="checkbox"
-										checked={!unpicked.has(ds.id)}
-										onchange={(e) =>
-											e.currentTarget.checked ? unpicked.delete(ds.id) : unpicked.add(ds.id)}
-									/>
-									<span class="name">{ds.name}</span>
-									{#if ds.pages !== null}<span class="pages">{count(ds.pages)} p.</span>{/if}
-								</label>
-							</li>
-						{/each}
-					</ul>
-				</fieldset>
-			{:else}
-				<p class="muted">No data sources are available right now.</p>
-			{/each}
-		</section>
+		<DataSourcePicker {groups} {unpicked} />
 
 		<section aria-labelledby="opt-summary">
 			<h3 id="opt-summary">Generated summary</h3>
@@ -206,6 +154,15 @@
 		color: var(--color-muted);
 		text-align: left;
 		white-space: normal;
+	}
+	/* Points the way the popover opens (down by default; `--options-caret: 0deg` for up), and
+	   back once open. */
+	.caret {
+		display: inline-block;
+		rotate: var(--options-caret, 180deg);
+	}
+	.trigger[aria-expanded='true'] .caret {
+		rotate: calc(var(--options-caret, 180deg) + 180deg);
 	}
 	/* Desktop: a popover over the page, anchored to the composer (its positioned ancestor): below
 	   it by default, above it where the composer is pinned (`--options-top/-bottom`). */
@@ -253,52 +210,6 @@
 		margin: 0.75rem 0 0.25rem;
 		font-size: 0.875rem;
 		font-weight: 600;
-	}
-	fieldset {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		align-items: baseline;
-		margin: 0 0 0.5rem;
-		padding: 0;
-		border: 0;
-	}
-	legend {
-		float: left;
-		padding: 0;
-		color: var(--color-muted);
-		font-size: 0.875rem;
-	}
-	.all {
-		display: flex;
-		gap: 0.75rem;
-		margin: 0;
-	}
-	.all button {
-		min-height: 1.75rem;
-		padding-inline: 0;
-		font-size: 0.8125rem;
-	}
-	ul {
-		grid-column: 1 / -1;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	ul .check {
-		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
-	}
-	.name {
-		flex: 1;
-		min-width: 0;
-		overflow-wrap: anywhere;
-	}
-	.pages {
-		white-space: nowrap;
-		font: 400 0.8125rem/1 var(--font-mono);
-		color: var(--color-muted);
-		font-variant-numeric: tabular-nums;
 	}
 	.row {
 		display: flex;

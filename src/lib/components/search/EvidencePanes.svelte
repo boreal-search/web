@@ -84,6 +84,7 @@
 		background: var(--color-page);
 		--options-top: auto;
 		--options-bottom: calc(100% + 0.25rem);
+		--options-caret: 0deg;
 	}
 	.evidence-col {
 		display: none;

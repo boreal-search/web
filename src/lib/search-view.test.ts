@@ -5,7 +5,6 @@ import {
 	isTypingTarget,
 	locator,
 	missingText,
-	pagesSearched,
 	seconds,
 	snippetText,
 	step,
@@ -62,11 +61,6 @@ describe('readout formatting', () => {
 		expect(seconds(746)).toBe('0.7');
 		expect(seconds(12_340)).toBe('12.3');
 		expect(seconds(-5)).toBe('0.0');
-	});
-	it('sums page counts, or null when one is unknown', () => {
-		expect(pagesSearched([314, 125, 115])).toBe(554);
-		expect(pagesSearched([314, null])).toBeNull();
-		expect(pagesSearched([])).toBe(0);
 	});
 });
 
