@@ -183,6 +183,6 @@ export const actions: Actions = {
 		requireUser();
 		const problem = await deleteTrail(locals.supabase, field(await request.formData(), 'trail_id'));
 		if (problem) return fail(400, { error: problem });
-		redirect(303, resolve('/(app)/trails'));
+		redirect(303, resolve('/(app)/search'));
 	}
 };

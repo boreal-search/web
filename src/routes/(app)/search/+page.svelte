@@ -67,7 +67,8 @@
 	afterNavigate((nav) => {
 		if (nav.type === 'enter' || nav.shallow) return;
 		const next = fromData();
-		if (next.id === trail.trailId || (next.id === null && trail.trailId === null)) return;
+		// A link to the bare page ("New search") also clears a trail that was never stored.
+		if (next.id === trail.trailId && !(next.id === null && nav.type === 'link')) return;
 		trail.show(next.steps, next.id);
 	});
 
