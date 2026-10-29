@@ -11,7 +11,7 @@ describe('stepNumber', () => {
 });
 
 describe('refine', () => {
-	it('carries the scope of the step refined and sends earlier steps as context', () => {
+	it('sends earlier steps as context, with the documents each was narrowed to by name', () => {
 		const steps = [
 			step(1),
 			step(2, {
@@ -22,21 +22,23 @@ describe('refine', () => {
 			step(3)
 		];
 		const r = refine(steps, 2);
+		// The named document is not sent as document_ids (that would pin the follow-up to it);
+		// the engine carries it from context unless the follow-up names another or asks for all.
 		expect(r).toEqual({
 			data_source_ids: ['kettle'],
-			document_ids: ['plan'],
-			document_titles: { plan: 'Offsetting Plan' },
+			document_ids: null,
+			document_titles: {},
 			from: 2,
 			context: [
 				{
 					query: 'What residual effects on Chinook habitat?',
 					resolved_query: 'What residual effects on Chinook habitat?',
-					scope: { data_source_ids: ['kettle'] }
+					scope: { data_source_ids: ['kettle'], inferred_document_ids: [] }
 				},
 				{
 					query: 'Just the offsetting plan. How is the 2.4 ha made up?',
 					resolved_query: 'How is the 2.4 ha of Chinook habitat offsetting made up?',
-					scope: { data_source_ids: ['kettle'] }
+					scope: { data_source_ids: ['kettle'], inferred_document_ids: ['plan'] }
 				}
 			]
 		});
@@ -52,7 +54,15 @@ describe('refine', () => {
 		expect(refine([s], 1)).toMatchObject({
 			document_ids: ['vol3'],
 			document_titles: { vol3: 'Vol 3' },
-			context: [{ scope: { data_source_ids: ['kettle'], document_ids: ['vol3'] } }]
+			context: [
+				{
+					scope: {
+						data_source_ids: ['kettle'],
+						document_ids: ['vol3'],
+						inferred_document_ids: ['plan']
+					}
+				}
+			]
 		});
 	});
 

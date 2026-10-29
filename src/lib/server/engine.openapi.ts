@@ -257,10 +257,13 @@ export interface components {
 			data_source_ids: string[];
 			/** Document Ids */
 			document_ids?: string[] | null;
+			/** Inferred Document Ids */
+			inferred_document_ids?: string[] | null;
 		};
 		/**
 		 * ContextStep
-		 * @description A previous trail step. Only its queries reach the rewrite; never a summary.
+		 * @description A previous trail step. Its queries reach the rewrite; its inferred documents may be
+		 *     carried forward (ContextScope); never a summary.
 		 */
 		ContextStep: {
 			/** Query */
@@ -383,6 +386,11 @@ export interface components {
 			document_id: string;
 			/** Title */
 			title: string;
+			/**
+			 * Carried
+			 * @default false
+			 */
+			carried?: boolean;
 		};
 		/** JobOut */
 		JobOut: {

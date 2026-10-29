@@ -51,7 +51,13 @@ describe('parseStepRequest', () => {
 			from: 2,
 			trail_id: TRAIL,
 			rewrite: false,
-			context: [{ query: 'q1', resolved_query: null, scope: { data_source_ids: ['a'] } }]
+			context: [
+				{
+					query: 'q1',
+					resolved_query: null,
+					scope: { data_source_ids: ['a'], inferred_document_ids: ['d1'] }
+				}
+			]
 		});
 		expect(out).toMatchObject({
 			ok: true,
@@ -61,7 +67,7 @@ describe('parseStepRequest', () => {
 				from: 2,
 				trail_id: TRAIL,
 				rewrite: false,
-				context: [{ query: 'q1', scope: { data_source_ids: ['a'] } }]
+				context: [{ query: 'q1', scope: { data_source_ids: ['a'], inferred_document_ids: ['d1'] } }]
 			}
 		});
 	});
@@ -77,6 +83,13 @@ describe('parseStepRequest', () => {
 		['bad trail id', { ...valid, trail_id: 'x' }],
 		['too much context', { ...valid, context: Array(6).fill({ query: 'q' }) }],
 		['context without a query', { ...valid, context: [{ resolved_query: 'q' }] }],
+		[
+			'context inferred ids not strings',
+			{
+				...valid,
+				context: [{ query: 'q', scope: { data_source_ids: ['a'], inferred_document_ids: [1] } }]
+			}
+		],
 		[
 			'context scope ids not strings',
 			{ ...valid, context: [{ query: 'q', scope: { data_source_ids: [1] } }] }

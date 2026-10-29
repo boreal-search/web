@@ -70,7 +70,7 @@ export interface TrailStep {
 export interface StepRequest {
 	query: string;
 	data_source_ids: string[];
-	/** Narrow within the data sources (the scope chip carried from the step refined). */
+	/** Narrow within the data sources: only documents the user chose (never inferred ones). */
 	document_ids: string[] | null;
 	rewrite: boolean;
 	/** false: "Search all N documents": don't narrow to documents named in the query. */
@@ -242,9 +242,11 @@ export function stepDocuments(step: TrailStep): { ids: string[]; titles: Record<
 
 /**
  * Scope and context for refining step `k` (the search-trail handover, "Building context and
- * scope"): k's data sources and documents (explicit, else the ones its query named), and the
- * last MAX_CONTEXT steps up to k, oldest first, as queries and scopes only, never summaries or
- * results. The caller adds the query, `rewrite` ("Search exactly as typed") and its settings.
+ * scope"): k's data sources and the documents the user chose, and the last MAX_CONTEXT steps up
+ * to k, oldest first, as queries and scopes only, never summaries or results. Documents a step
+ * was narrowed to by name go back as `inferred_document_ids`, never as `document_ids`: the
+ * engine keeps them when the follow-up names no document, and switches or widens otherwise.
+ * The caller adds the query, `rewrite` ("Search exactly as typed") and its settings.
  */
 export function refine(
 	steps: readonly TrailStep[],
@@ -253,18 +255,19 @@ export function refine(
 	const upTo = [...steps].filter((s) => s.n <= k).sort((a, b) => a.n - b.n);
 	const step = upTo.at(-1);
 	if (!step || step.n !== k) throw new Error(`no step ${k} in the trail`);
-	const docs = stepDocuments(step);
+	const chosen = step.scope.document_ids?.length ? step.scope.document_ids : null;
 	return {
 		data_source_ids: step.scope.data_source_ids,
-		document_ids: docs.ids.length > 0 ? docs.ids : null,
-		document_titles: docs.titles,
+		document_ids: chosen,
+		document_titles: chosen ? stepDocuments(step).titles : {},
 		from: k,
 		context: upTo.slice(-MAX_CONTEXT).map((s) => ({
 			query: s.query,
 			resolved_query: s.resolved_query,
 			scope: {
 				data_source_ids: s.scope.data_source_ids,
-				...(s.scope.document_ids ? { document_ids: s.scope.document_ids } : {})
+				...(s.scope.document_ids ? { document_ids: s.scope.document_ids } : {}),
+				inferred_document_ids: s.scope.inferred_documents.map((d) => d.document_id)
 			}
 		}))
 	};

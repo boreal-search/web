@@ -109,9 +109,12 @@ function parseContextStep(c: unknown): ContextStep | null {
 		const s = c.scope;
 		if (!isRecord(s) || !isStrings(s.data_source_ids)) return null;
 		if (s.document_ids != null && !isStrings(s.document_ids)) return null;
+		if (s.inferred_document_ids != null && !isStrings(s.inferred_document_ids)) return null;
 		step.scope = {
 			data_source_ids: s.data_source_ids,
-			...(s.document_ids ? { document_ids: s.document_ids } : {})
+			...(s.document_ids ? { document_ids: s.document_ids } : {}),
+			// The engine keeps ids only within the (access-checked) data sources.
+			...(s.inferred_document_ids ? { inferred_document_ids: s.inferred_document_ids } : {})
 		};
 	}
 	return step;
