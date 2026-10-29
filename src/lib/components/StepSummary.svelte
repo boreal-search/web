@@ -1,6 +1,8 @@
 <!--
 	A step's generated summary (docs/ui.md "Answer states"): the label, one flag, then each
-	sentence by its check state, every marker coloured by its own citation's status. A Not found
+	sentence by its check state, every marker coloured by its own citation's status. The text is
+	minimal markdown (`answerBlocks`: paragraphs, lists, bold, italic, code), rendered as elements
+	from our own tree, never as HTML. A Not found
 	is a normal result, read against the pages searched. `children`: what follows a Not found
 	(the widen action). Choosing a marker is the page's business (`onchoose`).
 -->
@@ -8,9 +10,12 @@
 	import type { Snippet } from 'svelte';
 	import {
 		answerCheck,
+		answerBlocks,
 		answerCheckLabel,
-		answerSentences,
 		resultAnchorId,
+		type AnswerBlock,
+		type AnswerInline,
+		type AnswerRun,
 		type Mark
 	} from '#lib/answer.js';
 	import { checkFlag } from '#lib/search-view.js';
@@ -33,7 +38,9 @@
 
 	let answer = $derived(step.answer);
 	let check = $derived(answerCheck(answer));
-	let sentences = $derived(answerSentences(answer, step.results));
+	let blocks = $derived(answerBlocks(answer, step.results));
+	/** The sentence whose marker has focus: its unsupported note shows at the sentence's end. */
+	let focused = $state<number | null>(null);
 
 	/** The label's suffix when the check ran (kept as a value: markup trims its leading space). */
 	const CHECKED = ' · each sentence checked';
@@ -64,28 +71,66 @@
 		<p class="status">
 			<span class="flag" data-state={checkFlag(check)}>{answerCheckLabel(check)}</span>
 		</p>
-		<p class="text">
-			{#each sentences as sentence, i (i)}<span
-					class={['sentence', sentence.status]}
-					title={sentence.status === 'unsupported' ? UNSUPPORTED : undefined}
-					>{#each sentence.segments as seg, j (j)}{#if seg.kind === 'cite'}{@const one =
-								seg.marks.length === 1}<span class="cite"
-								>{#if !one}[{/if}{#each seg.marks as m, k (m.ref)}{#if k > 0},
-									{/if}<a
-										href="#{resultAnchorId(m.ref)}"
-										data-status={m.status}
-										class={{ on: active === m }}
-										aria-label={markLabel(m)}
-										onfocus={() => onchoose(m, null)}
-										onclick={(e) => onchoose(m, e.currentTarget)}>{one ? `[${m.ref}]` : m.ref}</a
-									>{/each}{#if !one}]{/if}</span
-							>{:else}{seg.text}{/if}{/each}{#if sentence.status === 'unsupported'}<span class="why"
-							>({UNSUPPORTED})</span
-						>{/if}</span
-				>{/each}
-		</p>
+		<div class="text">
+			{#each blocks as b, i (i)}{@render block(b)}{/each}
+		</div>
 	{/if}
 </div>
+
+{#snippet block(b: AnswerBlock)}
+	{#if b.kind === 'paragraph'}
+		<p>
+			{#each b.children as n, i (i)}{@render inline(n)}{/each}
+		</p>
+	{:else if b.ordered}
+		<ol start={b.start}>
+			{#each b.items as item, i (i)}<li>
+					{#each item as c, j (j)}{@render block(c)}{/each}
+				</li>{/each}
+		</ol>
+	{:else}
+		<ul>
+			{#each b.items as item, i (i)}<li>
+					{#each item as c, j (j)}{@render block(c)}{/each}
+				</li>{/each}
+		</ul>
+	{/if}
+{/snippet}
+
+{#snippet inline(n: AnswerInline)}
+	{#if n.kind === 'run'}{@render run(n)}{:else if n.kind === 'break'}<br
+		/>{:else if n.kind === 'strong'}<strong
+			>{#each n.children as c, i (i)}{@render inline(c)}{/each}</strong
+		>{:else if n.kind === 'emphasis'}<em
+			>{#each n.children as c, i (i)}{@render inline(c)}{/each}</em
+		>{:else}<code
+			>{#each n.children as c, i (i)}{@render inline(c)}{/each}</code
+		>{/if}
+{/snippet}
+
+{#snippet run(r: AnswerRun)}<span
+		class={['sentence', r.status]}
+		title={r.status === 'unsupported' ? UNSUPPORTED : undefined}
+		>{#each r.segments as seg, j (j)}{#if seg.kind === 'cite'}{@const one =
+					seg.marks.length === 1}<span class="cite"
+					>{#if !one}[{/if}{#each seg.marks as m, k (m.ref)}{#if k > 0},
+						{/if}<a
+							href="#{resultAnchorId(m.ref)}"
+							data-status={m.status}
+							class={{ on: active === m }}
+							aria-label={markLabel(m)}
+							onfocus={() => {
+								focused = r.sentence;
+								onchoose(m, null);
+							}}
+							onblur={() => (focused = null)}
+							onclick={(e) => onchoose(m, e.currentTarget)}>{one ? `[${m.ref}]` : m.ref}</a
+						>{/each}{#if !one}]{/if}</span
+				>{:else}{seg.text}{/if}{/each}{#if r.last && r.status === 'unsupported'}<span
+				class={['why', r.sentence !== null && focused === r.sentence && 'shown']}
+				>({UNSUPPORTED})</span
+			>{/if}</span
+	>{/snippet}
 
 <style>
 	.summary {
@@ -107,7 +152,29 @@
 	.text {
 		font-size: 1.0625rem;
 		line-height: 1.6;
-		white-space: pre-line;
+	}
+	.text ul,
+	.text ol {
+		margin: 0 0 0.5rem;
+		padding-left: 1.5rem;
+	}
+	.text ul {
+		list-style: disc;
+	}
+	.text ol {
+		list-style: decimal;
+	}
+	.text li + li {
+		margin-top: 0.25rem;
+	}
+	.text li > :last-child {
+		margin-bottom: 0;
+	}
+	.text strong {
+		font-weight: 600;
+	}
+	.text code {
+		font: 400 0.9375em/1 var(--font-mono);
 	}
 	.searched {
 		font: 400 0.875rem/1.5 var(--font-mono);
@@ -128,7 +195,7 @@
 		clip-path: inset(50%);
 		white-space: nowrap;
 	}
-	.sentence:focus-within .why {
+	.why.shown {
 		position: static;
 		width: auto;
 		height: auto;

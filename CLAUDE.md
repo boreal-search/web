@@ -71,5 +71,6 @@ Guidance, not hard rules (adapted from Lauren Tan's pstack):
   `reviewer`. Proceed and let the user course-correct; confirm only irreversible actions.
 
 Verify: `bun run check && bun run lint && bun run test`, then the real page in `bun run dev`, light and dark.
-Test logins: `TEST_{PLATFORM_ADMIN,ORG_ADMIN,MEMBER}_{EMAIL,PASSWORD}` in `.env`; `SHOTS_AS=member bun run shots /`.
+Test logins: `TEST_{PLATFORM_ADMIN,ORG_ADMIN,CLAUDE_READABLE_MEMBER}_{EMAIL,PASSWORD}` in `.env`; `SHOTS_AS=member bun run shots /`.
+Only the member one is Claude-readable (`grep -E '^TEST_CLAUDE_READABLE_MEMBER_' .env`, allowed in `.claude/settings.local.json`).
 For `.svelte` files use the `svelte` skill / autofixer. Decisions and context: `docs/`.

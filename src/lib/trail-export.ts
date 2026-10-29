@@ -94,7 +94,8 @@ function stepLines(step: TrailStep, origin: string): string[] {
 	if (answer?.abstained) add('Not found in the pages searched.');
 	else if (answer) {
 		add(`Generated summary · ${answerCheckLabel(answerCheck(answer))}`);
-		add(oneLine(answer.text));
+		// The summary is markdown: keep its lines so lists stay lists.
+		for (const l of answer.text.split('\n').map(oneLine)) if (l) add(l);
 		const seen = new Set<string>();
 		for (const c of answer.citations) {
 			const r = step.results[c.ref - 1];

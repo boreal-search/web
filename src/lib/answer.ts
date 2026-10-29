@@ -1,5 +1,8 @@
-// Pure helpers for rendering an engine answer. `answer.text` is model output: callers render
-// the segments as text, never as HTML.
+// Pure helpers for rendering an engine answer. `answer.text` is model output, and markdown:
+// `answerBlocks` parses it into a small tree of our own types that callers render as elements
+// and text, never as HTML (`{@html}`).
+import { fromMarkdown } from 'mdast-util-from-markdown';
+import type { Nodes } from 'mdast';
 import type {
 	Answer,
 	Citation,
@@ -57,12 +60,6 @@ export function cleanBoxes(boxes: readonly (readonly number[])[]): Box[] {
 }
 
 type Located = Pick<SearchResult, 'document_id' | 'page_number'>;
-
-/** A run of the summary: one cited sentence (its `sentence.status`), or text outside any (null). */
-export interface AnswerSentence {
-	status: CitationStatus | null;
-	segments: AnswerSegment[];
-}
 
 function toMark(c: Citation, results: readonly Located[]): Mark | null {
 	const r = results[c.ref - 1];
@@ -143,36 +140,222 @@ export function answerSegments(
 }
 
 /**
- * The summary as runs: each cited sentence (from `citation.sentence`, with its status) and the
- * text between them (status null), each split into segments. A marker that starts inside a
- * sentence belongs to it even if it runs past the sentence's end.
+ * A piece of the summary's text: part of one cited sentence (`sentence`, its index in the
+ * answer, with its status) or of the text outside any (both null). A sentence that spans
+ * several inline nodes (`**bold**`, say) is several pieces.
  */
-export function answerSentences(
-	answer: Pick<Answer, 'text' | 'citations'>,
-	results: readonly Located[]
-): AnswerSentence[] {
+export interface AnswerRun {
+	kind: 'run';
+	status: CitationStatus | null;
+	sentence: number | null;
+	/** The sentence's last piece: where a note about the whole sentence goes. */
+	last: boolean;
+	segments: AnswerSegment[];
+}
+
+export type AnswerInline =
+	| AnswerRun
+	| { kind: 'break' }
+	| { kind: 'strong' | 'emphasis' | 'code'; children: AnswerInline[] };
+
+/** The summary's markdown, reduced to what the summary shows: paragraphs and lists. */
+export type AnswerBlock =
+	| { kind: 'paragraph'; children: AnswerInline[] }
+	| { kind: 'list'; ordered: boolean; start: number | null; items: AnswerBlock[][] };
+
+/** `text[from, to)`: one cited sentence, or text outside any (status and sentence null). */
+interface Span {
+	from: number;
+	to: number;
+	status: CitationStatus | null;
+	sentence: number | null;
+}
+
+/**
+ * The text cut into its cited sentences (`citation.sentence`) and the text between, covering
+ * all of it. A marker that starts inside a span belongs to it even if it runs past its end, so
+ * no marker straddles a cut. A sentence overlapping the previous one is dropped.
+ */
+function spans(answer: Pick<Answer, 'text' | 'citations'>, all: readonly Marker[]): Span[] {
 	const { text } = answer;
-	const all = markers(answer, results);
-	const spans = new Map<string, { start: number; end: number; status: CitationStatus }>();
+	const sentences = new Map<string, { start: number; end: number; status: CitationStatus }>();
 	for (const { sentence: s } of answer.citations) {
-		if (validSpan(s.start, s.end, text.length)) spans.set(`${s.start}:${s.end}`, { ...s });
+		if (validSpan(s.start, s.end, text.length)) sentences.set(`${s.start}:${s.end}`, { ...s });
 	}
-	const out: AnswerSentence[] = [];
-	const run = (from: number, to: number, status: CitationStatus | null) => {
-		if (from >= to) return;
+	const out: Span[] = [];
+	const span = (
+		from: number,
+		to: number,
+		status: CitationStatus | null,
+		sentence: number | null
+	) => {
+		if (from >= to) return undefined;
 		const inside = all.filter((m) => m.start >= from && m.start < to);
 		const end = Math.max(to, inside.at(-1)?.end ?? to);
-		out.push({ status, segments: segmentsOf(text, inside, from, end) });
+		out.push({ from, to: end, status, sentence });
 		return end;
 	};
 	let at = 0;
-	for (const s of [...spans.values()].sort((a, b) => a.start - b.start)) {
-		if (s.start < at) continue; // overlaps the previous sentence
-		at = run(at, s.start, null) ?? at;
-		at = run(Math.max(at, s.start), s.end, s.status) ?? at;
+	let n = 0;
+	for (const s of [...sentences.values()].sort((a, b) => a.start - b.start)) {
+		if (s.start < at) continue;
+		at = span(at, s.start, null, null) ?? at;
+		at = span(Math.max(at, s.start), s.end, s.status, n++) ?? at;
 	}
-	run(at, text.length, null);
+	span(at, text.length, null, null);
 	return out;
+}
+
+/**
+ * Where each character of a node's `value` sits in `text[from, to)`. The value is that source
+ * with syntax taken out (escape backslashes, list indentation, code backticks), so each value
+ * character is matched to the next equal source character. Null when that fails (an entity like
+ * `&#42;` decodes to a character the source doesn't have): the caller then shows the value as
+ * plain text, with any markers in it left as text.
+ */
+function sourceOffsets(text: string, from: number, to: number, value: string): number[] | null {
+	const out: number[] = [];
+	let i = from;
+	for (let j = 0; j < value.length; j++) {
+		while (i < to && text[i] !== value[j]) i++;
+		if (i >= to) return null;
+		out.push(i++);
+	}
+	return out;
+}
+
+const OUTSIDE = { status: null, sentence: null } as const;
+const plain = (t: string): AnswerSegment[] => (t ? [{ kind: 'text', text: t }] : []);
+
+/** First index of the ascending `xs` holding a value >= `x`. */
+function lowerBound(xs: readonly number[], x: number) {
+	let lo = 0;
+	let hi = xs.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		if (xs[mid]! < x) lo = mid + 1;
+		else hi = mid;
+	}
+	return lo;
+}
+
+/**
+ * The summary as blocks of minimal markdown (CommonMark: paragraphs, lists, strong, emphasis,
+ * code), its text cut into pieces at sentence edges, each with its sentence's status and its
+ * markers. Model output is untrusted, so nothing else becomes markup: headings read as bold
+ * paragraphs, quotes as their contents, links as their text (no hrefs), and images, HTML, code
+ * blocks, rules and definitions as their source text. A marker split across nodes stays text.
+ */
+export function answerBlocks(
+	answer: Pick<Answer, 'text' | 'citations'>,
+	results: readonly Located[]
+): AnswerBlock[] {
+	const { text } = answer;
+	const all = markers(answer, results);
+	const cuts = spans(answer, all);
+	const pieces: AnswerRun[] = [];
+	const piece = (span: Pick<Span, 'status' | 'sentence'>, segments: AnswerSegment[]) => {
+		const run: AnswerRun = { kind: 'run', ...span, last: false, segments };
+		pieces.push(run);
+		return run;
+	};
+
+	/** Pieces of a leaf whose `value` came from `text[from, to)`; `cite`: markers become links. */
+	const leaf = (value: string, from: number, to: number, cite: boolean): AnswerRun[] => {
+		const src =
+			text.slice(from, to) === value
+				? Array.from(value, (_, j) => from + j)
+				: sourceOffsets(text, from, to, value);
+		if (!src) {
+			const span = cuts.find((s) => s.from <= from && from < s.to) ?? OUTSIDE;
+			return [piece(span, plain(value))];
+		}
+		const out: AnswerRun[] = [];
+		for (const span of cuts) {
+			const a = lowerBound(src, span.from);
+			const b = lowerBound(src, span.to);
+			if (a >= b) continue;
+			// Markers in value coordinates; one whose characters aren't contiguous there is text.
+			const inside = !cite
+				? []
+				: all.flatMap((m) => {
+						const k = lowerBound(src, m.start);
+						const len = m.end - m.start;
+						return k >= a && k + len <= b && src[k] === m.start && src[k + len - 1] === m.end - 1
+							? [{ ...m, start: k, end: k + len }]
+							: [];
+					});
+			out.push(piece(span, segmentsOf(value, inside, a, b)));
+		}
+		return out;
+	};
+	const offsets = (n: Nodes) => {
+		const from = n.position?.start.offset;
+		const to = n.position?.end.offset;
+		return from === undefined || to === undefined ? null : ([from, to] as const);
+	};
+	/** A node's source text, shown as is. */
+	const raw = (n: Nodes): AnswerRun[] => {
+		const at = offsets(n);
+		return at && at[0] < at[1] ? leaf(text.slice(...at), ...at, false) : [];
+	};
+	const value = (n: Nodes & { value: string }, cite: boolean): AnswerRun[] => {
+		const at = offsets(n);
+		return at ? leaf(n.value, ...at, cite) : [piece(OUTSIDE, plain(n.value))];
+	};
+
+	const inline = (n: Nodes): AnswerInline[] => {
+		switch (n.type) {
+			case 'text':
+				return value(n, true);
+			case 'strong':
+			case 'emphasis':
+				return [{ kind: n.type, children: n.children.flatMap(inline) }];
+			case 'inlineCode':
+				return [{ kind: 'code', children: value(n, false) }];
+			case 'break':
+				return [{ kind: 'break' }];
+			case 'link':
+			case 'linkReference':
+				return n.children.flatMap(inline);
+			default:
+				return raw(n);
+		}
+	};
+	const block = (n: Nodes): AnswerBlock[] => {
+		switch (n.type) {
+			case 'paragraph':
+				return [{ kind: 'paragraph', children: n.children.flatMap(inline) }];
+			case 'heading':
+				return [
+					{
+						kind: 'paragraph',
+						children: [{ kind: 'strong', children: n.children.flatMap(inline) }]
+					}
+				];
+			case 'blockquote':
+				return n.children.flatMap(block);
+			case 'list':
+				return [
+					{
+						kind: 'list',
+						ordered: n.ordered === true,
+						start: n.ordered ? (n.start ?? 1) : null,
+						items: n.children.map((item) => item.children.flatMap(block))
+					}
+				];
+			default: {
+				const children = raw(n);
+				return children.length > 0 ? [{ kind: 'paragraph', children }] : [];
+			}
+		}
+	};
+
+	const blocks = fromMarkdown(text).children.flatMap(block);
+	const lastOf = new Map<number, AnswerRun>();
+	for (const p of pieces) if (p.sentence !== null) lastOf.set(p.sentence, p);
+	for (const p of lastOf.values()) p.last = true;
+	return blocks;
 }
 
 /** Every mark in the answer, in text order. */

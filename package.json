@@ -25,6 +25,7 @@
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",
 		"@tailwindcss/vite": "^4.3.3",
+		"@types/mdast": "^4.0.4",
 		"@types/node": "^24",
 		"eslint": "^10.4.1",
 		"eslint-config-prettier": "^10.1.8",
@@ -52,6 +53,7 @@
 		"@fontsource-variable/source-serif-4": "^5.3.1",
 		"@supabase/ssr": "^0.12.7",
 		"@supabase/supabase-js": "^2.118.0",
-		"@vercel/functions": "^3.10.4"
+		"@vercel/functions": "^3.10.4",
+		"mdast-util-from-markdown": "^2.1.0"
 	}
 }

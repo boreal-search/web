@@ -2,7 +2,8 @@
 //   bun scripts/shots.ts [route ...]      e.g. bun scripts/shots.ts / /search "/search?q=fish habitat" /admin
 // A route `/search?q=…` submits the search form with that query. Routes starting with `anon:` are
 // shot logged out (`anon:/login`). Logs in as SHOTS_AS=platform-admin|org-admin|member (default
-// org-admin) with TEST_<ROLE>_EMAIL / TEST_<ROLE>_PASSWORD from .env (bun loads it).
+// org-admin) with TEST_<ROLE>_EMAIL / TEST_<ROLE>_PASSWORD from .env (bun loads it); the member
+// uses TEST_CLAUDE_READABLE_MEMBER_*.
 // Output: .shots/<role>/<route>-<scheme>-<width>.png (git-ignored).
 import { chromium, type Page } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -13,11 +14,12 @@ const routes = process.argv.slice(2);
 if (routes.length === 0)
 	routes.push('anon:/login', 'anon:/signup', 'anon:/forgot', '/', '/search', '/account', '/admin');
 
+// The member login is the one Claude may read (.claude/settings.local.json), hence its own prefix.
 const role = (process.env.SHOTS_AS ?? 'org-admin').toUpperCase().replace('-', '_');
-const email = process.env[`TEST_${role}_EMAIL`];
-const password = process.env[`TEST_${role}_PASSWORD`];
-if (!email || !password)
-	throw new Error(`Set TEST_${role}_EMAIL and TEST_${role}_PASSWORD in .env`);
+const prefix = role === 'MEMBER' ? 'TEST_CLAUDE_READABLE_MEMBER' : `TEST_${role}`;
+const email = process.env[`${prefix}_EMAIL`];
+const password = process.env[`${prefix}_PASSWORD`];
+if (!email || !password) throw new Error(`Set ${prefix}_EMAIL and ${prefix}_PASSWORD in .env`);
 
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome' });

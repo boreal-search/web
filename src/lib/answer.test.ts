@@ -3,11 +3,13 @@ import {
 	answerCheck,
 	answerCheckLabel,
 	answerMarks,
+	answerBlocks,
 	answerSegments,
-	answerSentences,
 	cleanBoxes,
 	pageOutlines,
 	resultAnchorId,
+	type AnswerBlock,
+	type AnswerInline,
 	type Mark
 } from './answer';
 import type { Citation, Highlight } from '#lib/server/engine.types.js';
@@ -199,64 +201,206 @@ describe('citation status', () => {
 	});
 });
 
-describe('answerSentences', () => {
-	// Two cited sentences with plain text before, between and after.
-	const text = 'Intro. Fines reach $1 million [1]. Also [2]. Notice is required [1, 2]. End.';
-	const span = (sentence: string) => {
-		const start = text.indexOf(sentence);
-		return { start, end: start + sentence.length };
+describe('answerBlocks', () => {
+	/** The tree as a compact string: `{status|text|end}` a sentence piece (`end`: its last). */
+	const show = (blocks: AnswerBlock[]): string[] => blocks.map(showBlock);
+	const showBlock = (b: AnswerBlock): string =>
+		b.kind === 'paragraph'
+			? `p(${b.children.map(showInline).join('')})`
+			: `${b.ordered ? `ol${b.start}` : 'ul'}(${b.items.map((i) => `li(${i.map(showBlock).join('')})`).join('')})`;
+	const showInline = (n: AnswerInline): string => {
+		if (n.kind === 'break') return '\\n';
+		if (n.kind === 'run') {
+			const t = n.segments
+				.map((s) =>
+					s.kind === 'text' ? s.text : `[${s.marks.map((m) => `${m.ref}:${m.status}`).join(' ')}]`
+				)
+				.join('');
+			return n.status === null ? t : `{${n.status}|${t}${n.last ? '|end' : ''}}`;
+		}
+		const inner = n.children.map(showInline).join('');
+		return n.kind === 'strong'
+			? `**${inner}**`
+			: n.kind === 'emphasis'
+				? `_${inner}_`
+				: `\`${inner}\``;
 	};
-	const s1 = span('Fines reach $1 million [1].');
-	const s2 = span('Notice is required [1, 2].');
-	const citations = [
-		cite(text, '[1]', 1, {}, { sentence: { ...s1, status: 'verified' }, status: 'verified' }),
-		cite(text, '[2]', 2, {}, { sentence: { start: 0, end: 0, status: 'verified' } }),
-		cite(text, '[1, 2]', 1, {}, { sentence: { ...s2, status: 'verified' }, status: 'unsupported' }),
-		cite(text, '[1, 2]', 2, {}, { sentence: { ...s2, status: 'verified' }, status: 'verified' })
-	];
-	const shape = (runs: ReturnType<typeof answerSentences>) =>
-		runs.map((r) => ({
-			status: r.status,
-			parts: r.segments.map((s) =>
-				s.kind === 'text' ? s.text : s.marks.map((m) => `${m.ref}:${m.status}`).join(' ')
-			)
-		}));
-
-	it('groups segments by cited sentence, with the text between them unmarked', () => {
-		expect(shape(answerSentences({ text, citations }, results))).toEqual([
-			{ status: null, parts: ['Intro. '] },
-			{ status: 'verified', parts: ['Fines reach $1 million ', '1:verified', '.'] },
-			// A marker whose sentence offsets are unusable still renders, outside any sentence.
-			{ status: null, parts: [' Also ', '2:not_checked', '. '] },
+	/** Citation of `marker` in `text` for the sentence containing it, both with `status`. */
+	const cited = (
+		text: string,
+		sentence: string,
+		marker: string,
+		ref: number,
+		status: Citation['status']
+	) => {
+		const s = text.indexOf(sentence);
+		const m = s + sentence.indexOf(marker);
+		return cite(
+			text,
+			marker,
+			ref,
+			{},
 			{
-				status: 'verified',
-				parts: ['Notice is required ', '1:unsupported 2:verified', '.']
-			},
-			{ status: null, parts: [' End.'] }
-		]);
-	});
+				start: m,
+				end: m + marker.length,
+				sentence: { start: s, end: s + sentence.length, status },
+				status
+			}
+		);
+	};
+	/** No usable sentence: the marker stands outside any. */
+	const NONE = { start: 0, end: 0, status: 'verified' } as const;
+	const blocks = (text: string, citations: Citation[]) =>
+		show(answerBlocks({ text, citations }, results));
 
-	it('keeps all of the text, in order', () => {
-		const joined = answerSentences({ text, citations }, results)
-			.flatMap((r) => r.segments)
-			.map((s) => (s.kind === 'text' ? s.text : '#'))
-			.join('');
-		expect(joined).toBe('Intro. Fines reach $1 million #. Also #. Notice is required #. End.');
+	describe('plain prose', () => {
+		// Two cited sentences with plain text before, between and after.
+		const text = 'Intro. Fines reach $1 million [1]. Also [2]. Notice is required [1, 2]. End.';
+		const span = (sentence: string) => {
+			const start = text.indexOf(sentence);
+			return { start, end: start + sentence.length };
+		};
+		const s1 = span('Fines reach $1 million [1].');
+		const s2 = span('Notice is required [1, 2].');
+		const citations = [
+			cite(text, '[1]', 1, {}, { sentence: { ...s1, status: 'verified' }, status: 'verified' }),
+			cite(text, '[2]', 2, {}, { sentence: NONE }),
+			cite(
+				text,
+				'[1, 2]',
+				1,
+				{},
+				{ sentence: { ...s2, status: 'verified' }, status: 'unsupported' }
+			),
+			cite(text, '[1, 2]', 2, {}, { sentence: { ...s2, status: 'verified' }, status: 'verified' })
+		];
+
+		it('is one paragraph of sentence pieces, with the text between them unmarked', () => {
+			expect(blocks(text, citations)).toEqual([
+				'p(Intro. ' +
+					'{verified|Fines reach $1 million [1:verified].|end}' +
+					// A marker whose sentence offsets are unusable still renders, outside any sentence.
+					' Also [2:not_checked]. ' +
+					'{verified|Notice is required [1:unsupported 2:verified].|end}' +
+					' End.)'
+			]);
+		});
+
+		it('has the same marks as the flat segments', () => {
+			const runs = answerBlocks({ text, citations }, results).flatMap((b) =>
+				b.kind === 'paragraph' ? b.children : []
+			);
+			const segments = runs.flatMap((r) => (r.kind === 'run' ? r.segments : []));
+			expect(answerMarks(segments)).toEqual(
+				answerMarks(answerSegments({ text, citations }, results))
+			);
+		});
 	});
 
 	it('keeps a marker with its sentence when it runs past the sentence end', () => {
 		const t = 'Fines apply [1].';
 		const c = cite(t, '[1]', 1, {}, { sentence: { start: 0, end: 13, status: 'unsupported' } });
-		expect(shape(answerSentences({ text: t, citations: [c] }, results))).toEqual([
-			{ status: 'unsupported', parts: ['Fines apply ', '1:not_checked'] },
-			{ status: null, parts: ['.'] }
+		expect(blocks(t, [c])).toEqual(['p({unsupported|Fines apply [1:not_checked]|end}.)']);
+	});
+
+	it('is one unmarked paragraph when abstained', () => {
+		expect(blocks('Not found in the pages searched.', [])).toEqual([
+			'p(Not found in the pages searched.)'
+		]);
+		expect(blocks('', [])).toEqual([]);
+	});
+
+	it('renders bold, italic and code around and next to citations', () => {
+		const t = 'Fines are **$1 million** [1]. *See* `s. 12` [2]. Also **[1]**.';
+		const a = 'Fines are **$1 million** [1].';
+		const b = '*See* `s. 12` [2].';
+		const last = t.lastIndexOf('[1]');
+		expect(
+			blocks(t, [
+				cited(t, a, '[1]', 1, 'unsupported'),
+				cited(t, b, '[2]', 2, 'verified'),
+				cite(t, '[1]', 1, {}, { start: last, end: last + 3, sentence: NONE })
+			])
+		).toEqual([
+			'p({unsupported|Fines are }**{unsupported|$1 million}**{unsupported| [1:unsupported].|end} ' +
+				'_{verified|See}_{verified| }`{verified|s. 12}`{verified| [2:verified].|end}' +
+				' Also **[1:not_checked]**.)'
 		]);
 	});
 
-	it('is one unmarked run when abstained', () => {
-		const t = 'Not found in the pages searched.';
-		expect(answerSentences({ text: t, citations: [] }, results)).toEqual([
-			{ status: null, segments: [{ kind: 'text', text: t }] }
+	it('gives a sentence spanning a strong node its status on each piece, the end on the last', () => {
+		const t = 'The fine is **at most $1 million** in total [1].';
+		expect(blocks(t, [cited(t, t, '[1]', 1, 'unsupported')])).toEqual([
+			'p({unsupported|The fine is }**{unsupported|at most $1 million}**{unsupported| in total [1:unsupported].|end})'
+		]);
+	});
+
+	it('renders a bullet list with citations in its items', () => {
+		const t = 'Two rules:\n\n- Fines apply [1].\n- Notice is due\n  in writing [2].';
+		const a = 'Fines apply [1].';
+		const b = 'Notice is due\n  in writing [2].';
+		expect(
+			blocks(t, [cited(t, a, '[1]', 1, 'verified'), cited(t, b, '[2]', 2, 'unsupported')])
+		).toEqual([
+			'p(Two rules:)',
+			'ul(li(p({verified|Fines apply [1:verified].|end}))' +
+				// The item's continuation indent isn't text, but the marker after it still links.
+				'li(p({unsupported|Notice is due\nin writing [2:unsupported].|end})))'
+		]);
+	});
+
+	it('keeps an ordered list start', () => {
+		expect(blocks('3. three\n4. four', [])).toEqual(['ol3(li(p(three))li(p(four)))']);
+	});
+
+	it('keeps markers after an escaped character', () => {
+		const t = 'A \\*star\\* rule [1].';
+		expect(blocks(t, [cited(t, t, '[1]', 1, 'verified')])).toEqual([
+			'p({verified|A *star* rule [1:verified].|end})'
+		]);
+	});
+
+	it('shows a text node it cannot place in the source as plain text', () => {
+		const t = 'A &#42; rule [1].';
+		expect(blocks(t, [cited(t, t, '[1]', 1, 'verified')])).toEqual([
+			'p({verified|A * rule [1].|end})'
+		]);
+	});
+
+	it('shows a link as its text only', () => {
+		const t = 'See [the act](https://evil.example/x) [1].';
+		const out = answerBlocks({ text: t, citations: [cited(t, t, '[1]', 1, 'verified')] }, results);
+		expect(show(out)).toEqual([
+			'p({verified|See }{verified|the act}{verified| [1:verified].|end})'
+		]);
+		expect(JSON.stringify(out)).not.toContain('evil');
+	});
+
+	it('drops a marker that crosses a node boundary to text', () => {
+		const t = 'A rule *[1]* applies.';
+		const at = t.indexOf('*[1]');
+		expect(blocks(t, [cite(t, '[1]', 1, {}, { start: at, end: at + 4, sentence: NONE })])).toEqual([
+			'p(A rule _[1]_ applies.)'
+		]);
+	});
+
+	it('renders partial markdown as text, markers still linked', () => {
+		const t = '**unclosed [1]';
+		expect(blocks(t, [cited(t, t, '[1]', 1, 'verified')])).toEqual([
+			'p({verified|**unclosed [1:verified]|end})'
+		]);
+	});
+
+	it('shows headings as bold paragraphs and other constructs as their source text', () => {
+		const t = '# Title\n\n> quoted [1]\n\n```\ncode\n```\n\n<b>x</b>\n\n![img](y)\n\n---';
+		const at = t.indexOf('[1]');
+		expect(blocks(t, [cite(t, '[1]', 1, {}, { start: at, end: at + 3, sentence: NONE })])).toEqual([
+			'p(**Title**)',
+			'p(quoted [1:not_checked])',
+			'p(```\ncode\n```)',
+			'p(<b>x</b>)',
+			'p(![img](y))',
+			'p(---)'
 		]);
 	});
 });
