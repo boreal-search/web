@@ -1,8 +1,9 @@
 <!--
-	The one query box, pinned to the bottom of its column (sticky). An empty trail: a new search;
-	otherwise the page continues from the latest step. `onengage`: the user focused or typed in
-	the box (Search options collapse). `children`: under the box (Search options, the last
-	search's problem); Search options open upward from here.
+	The one query box. An empty trail: a new search, under the heading; otherwise the page
+	continues from the latest step, and the box sits in the steps column's pinned slot
+	(EvidencePanes). `onengage`: the user focused or typed in the box (Search options collapse).
+	`children`: under the box (Search options, the last search's problem); Search options open
+	from here (below it, or upward in the pinned slot).
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
@@ -48,15 +49,10 @@
 
 <style>
 	.composer {
-		position: sticky;
-		bottom: 0;
-		z-index: 2;
+		position: relative;
 		display: grid;
 		gap: 0.5rem;
 		max-width: 52rem;
-		padding: 0.75rem 0 1rem;
-		border-top: 1px solid var(--color-rule);
-		background: var(--color-page);
 	}
 	.query {
 		display: flex;

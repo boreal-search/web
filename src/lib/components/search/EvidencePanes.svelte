@@ -7,6 +7,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { untrack } from 'svelte';
+	import Modal from './Modal.svelte';
 
 	let {
 		selectedKey,
@@ -26,16 +27,13 @@
 	/** Matches `@container panes (min-width: 45rem)` below. */
 	let modal = $derived(width > 0 && width < 720);
 	let pane = $state<HTMLElement>();
-	let dialog = $state<HTMLDialogElement>();
+	let sheetOpen = $state(false);
 
-	const open = () => dialog?.showModal();
+	const open = () => (sheetOpen = true);
 
 	$effect(() => {
 		void selectedKey;
-		untrack(() => {
-			pane?.scrollTo({ top: 0 });
-			dialog?.scrollTo({ top: 0 });
-		});
+		untrack(() => pane?.scrollTo({ top: 0 }));
 	});
 </script>
 
@@ -53,12 +51,9 @@
 	</div>
 </div>
 {#if modal}
-	<dialog class="evidence-modal" aria-labelledby="evidence-heading" bind:this={dialog}>
-		<form method="dialog" class="modal-bar">
-			<button type="submit" class="quiet">Back to steps</button>
-		</form>
+	<Modal bind:open={sheetOpen} title="Pages" closeLabel="Back to steps" full>
 		{@render evidence()}
-	</dialog>
+	</Modal>
 {/if}
 
 <style>
@@ -79,6 +74,7 @@
 	.steps {
 		flex: 1;
 	}
+	/* Pinned to the bottom of the viewport; Search options open upward from here. */
 	.composer-slot {
 		position: sticky;
 		bottom: 0;
@@ -86,6 +82,8 @@
 		padding: 0.75rem 0 1rem;
 		border-top: 1px solid var(--color-rule);
 		background: var(--color-page);
+		--options-top: auto;
+		--options-bottom: calc(100% + 0.25rem);
 	}
 	.evidence-col {
 		display: none;
@@ -96,46 +94,19 @@
 			grid-template-columns: minmax(18rem, 2fr) minmax(24rem, 3fr);
 			align-items: start;
 		}
+		/* Both columns fit the viewport above the site footer, so the pane never scrolls off. */
 		.steps-col {
-			min-height: 100dvh;
+			min-height: calc(100dvh - var(--site-footer));
 		}
 		.evidence-col {
 			display: block;
 			position: sticky;
 			top: 0;
-			max-height: 100dvh;
+			max-height: calc(100dvh - var(--site-footer));
 			overflow-y: auto;
 			overscroll-behavior: contain;
 			padding-left: 1.5rem;
 			border-left: 1px solid var(--color-rule);
 		}
-	}
-	/* Phones: the evidence as a full-screen sheet over the steps, closed by its button or Escape. */
-	.evidence-modal {
-		width: 100%;
-		max-width: none;
-		height: 100%;
-		max-height: none;
-		margin: 0;
-		padding: 0 max(1rem, env(safe-area-inset-left)) 2rem;
-		border: 0;
-		background: var(--color-page);
-		color: var(--color-ink);
-		overscroll-behavior: contain;
-		/* The pane's sticky header and page sit under the close bar. */
-		--evidence-top: 3rem;
-	}
-	.evidence-modal::backdrop {
-		background: var(--color-page);
-	}
-	.modal-bar {
-		position: sticky;
-		top: 0;
-		z-index: 2;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		height: 3rem;
-		background: var(--color-page);
 	}
 </style>

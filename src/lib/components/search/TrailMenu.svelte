@@ -13,7 +13,7 @@
 		type TrailExportMeta
 	} from '#lib/trail-export.js';
 	import type { TrailStep } from '#lib/trail.js';
-	import TrailDialog from './TrailDialog.svelte';
+	import Modal from './Modal.svelte';
 	import TrailShare, { type StoredTrail } from './TrailShare.svelte';
 
 	let {
@@ -151,12 +151,12 @@
 </div>
 
 {#if owner}
-	<TrailDialog bind:open={sharing} title="Share trail" onclose={() => button?.focus()}>
+	<Modal bind:open={sharing} title="Share trail" onclose={() => button?.focus()}>
 		<TrailShare trail={owner} />
 		{#if notice}<p class="notice" role="status">{notice}</p>{/if}
-	</TrailDialog>
+	</Modal>
 
-	<TrailDialog bind:open={deleting} title="Delete trail" onclose={() => button?.focus()}>
+	<Modal bind:open={deleting} title="Delete trail" onclose={() => button?.focus()}>
 		<p class="confirm">
 			Delete “{title}” and its {steps.length}
 			{steps.length === 1 ? 'step' : 'steps'}? People it's shared with lose it too. This can't be
@@ -167,7 +167,7 @@
 			<button type="submit" class="danger">Delete trail</button>
 			<button type="button" onclick={() => (deleting = false)}>Cancel</button>
 		</form>
-	</TrailDialog>
+	</Modal>
 {/if}
 
 <style>
@@ -218,6 +218,11 @@
 	[role='menuitem']:focus-visible {
 		outline: 2px solid var(--color-accent);
 		outline-offset: -2px;
+	}
+	@media (max-width: 47.5rem) {
+		[role='menuitem'] {
+			min-height: 2.75rem;
+		}
 	}
 	hr {
 		margin: 0.25rem 0;

@@ -8,7 +8,7 @@
 	import { resolve } from '$app/paths';
 	import type { Snippet } from 'svelte';
 	import { rememberSidebar } from './sidebar.js';
-	import TrailDialog from './TrailDialog.svelte';
+	import Modal from './Modal.svelte';
 	import TrailSidebar, { type SidebarTrail } from './TrailSidebar.svelte';
 
 	let {
@@ -80,19 +80,23 @@
 	</div>
 </div>
 
-<TrailDialog bind:open={sheetOpen} title="Trails" full onclose={() => opener?.focus()}>
-	<TrailSidebar {trails} {currentId} onpick={() => (sheetOpen = false)} />
-</TrailDialog>
+<Modal bind:open={sheetOpen} title="Trails" full onclose={() => opener?.focus()}>
+	<TrailSidebar {trails} {currentId} heading={false} onpick={() => (sheetOpen = false)} />
+</Modal>
 
 <style>
-	/* The search screen uses the full width; its own panes set their measures. */
-	:global(main:has(> .search-shell)) {
-		max-width: 112rem;
+	/* The search screen widens the site's column (header and footer follow); its panes set their
+	   own measures and run down to the footer. */
+	:global(:root:has(.search-shell)) {
+		--column: 112rem;
+	}
+	:global(main:has(.panes)) {
+		padding-bottom: 0;
 	}
 	.search-shell {
 		display: grid;
-		grid-template-columns: 16.5rem minmax(0, 1fr);
-		gap: 0 2rem;
+		grid-template-columns: 15rem minmax(0, 1fr);
+		gap: 0 1.5rem;
 		align-items: start;
 	}
 	.search-shell.collapsed {
@@ -101,12 +105,12 @@
 	.rail {
 		position: sticky;
 		top: 0;
-		max-height: 100dvh;
+		max-height: calc(100dvh - var(--site-footer));
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		padding: 0 1.25rem 1rem 0;
+		padding: 0 1rem 1rem 0;
 		border-right: 1px solid var(--color-rule);
 		min-height: 60vh;
 	}

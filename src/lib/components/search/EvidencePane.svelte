@@ -1,6 +1,8 @@
 <!--
 	The selected step's pages, headed by its number and query: the result list and, in a wide pane,
-	the selected page at reading size beside it (the pane's width decides, not the viewport). Owns the results keyboard (J/K/Space/O/C) and the "Citation copied" status.
+	the selected page at reading size beside it (the pane's width decides, not the viewport). Owns
+	the results keyboard (J/K/Space/O/C) and the "Citation copied" status. In a modal its sticky
+	header sits under the modal's (`--sticky-top`).
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -136,7 +138,7 @@
 	/* Stays in view while the pane scrolls: which step these pages belong to. */
 	.evidence-head {
 		position: sticky;
-		top: var(--evidence-top, 0);
+		top: var(--sticky-top, 0);
 		z-index: 1;
 		display: flex;
 		flex-wrap: wrap;
@@ -220,7 +222,7 @@
 			gap: 0.5rem;
 			order: -1;
 			position: sticky;
-			top: calc(var(--evidence-top, 0px) + var(--head, 4rem));
+			top: calc(var(--sticky-top, 0px) + var(--head, 4rem));
 			z-index: 1;
 			padding: 1rem 0 0.75rem;
 			border-bottom: 1px solid var(--color-rule);

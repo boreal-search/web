@@ -21,14 +21,19 @@
 	let {
 		trails,
 		currentId,
+		heading = true,
 		onpick
 	}: {
 		trails: readonly SidebarTrail[];
 		/** The trail shown on the page, if stored. */
 		currentId: string | null;
+		/** Show the "Trails" label (false inside the modal, whose title says it). */
+		heading?: boolean;
 		/** A link chosen ("New search" or a trail), before it navigates. */
 		onpick?: () => void;
 	} = $props();
+
+	const id = $props.id();
 
 	const searchHref = resolve('/(app)/search');
 	const trailHref = (id: string) => `${searchHref}?trail=${id}`;
@@ -39,11 +44,14 @@
 		<span aria-hidden="true">+</span> New search
 	</a>
 
-	<h2 class="label" id="trails-heading">Trails</h2>
+	{#if heading}<h2 class="label" id="{id}-heading">Trails</h2>{/if}
 	{#if trails.length === 0}
 		<p class="empty-note">No trails yet. Each search starts one.</p>
 	{:else}
-		<ul aria-labelledby="trails-heading">
+		<ul
+			aria-labelledby={heading ? `${id}-heading` : undefined}
+			aria-label={heading ? undefined : 'Trails'}
+		>
 			{#each trails as t (t.id)}
 				<li>
 					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved, plus ?trail= -->

@@ -1,6 +1,6 @@
 <!--
 	Search options, one control at the composer. Collapsed it reads as a summary ("All 3 data
-	sources · summary on"); open it is a popover above the composer (a non-modal <dialog>) on
+	sources · summary on"); open it is a popover at the composer (a non-modal <dialog>) on
 	desktop and a full-screen modal (`showModal()`) on phones. Sections: Data sources (grouped by
 	org, then Public, one per line with page counts, all/none per group), Generated summary,
 	Results, and, once there is a trail, "Search exactly as typed" for follow-ups. Escape, Close
@@ -207,12 +207,14 @@
 		text-align: left;
 		white-space: normal;
 	}
-	/* Desktop: a popover above the composer (the composer is the positioned ancestor). */
+	/* Desktop: a popover over the page, anchored to the composer (its positioned ancestor): below
+	   it by default, above it where the composer is pinned (`--options-top/-bottom`). */
 	dialog {
 		position: absolute;
-		inset: auto auto calc(100% + 0.25rem) 0;
+		inset: var(--options-top, calc(100% + 0.25rem)) auto var(--options-bottom, auto) 0;
+		z-index: 3;
 		width: min(34rem, 100%);
-		max-height: min(70vh, 40rem);
+		max-height: min(45dvh, 30rem);
 		margin: 0;
 		padding: 0 1rem 1rem;
 		overflow: auto;

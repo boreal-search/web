@@ -3,11 +3,12 @@
 // Steps stream from POST /search/stream and are built with the same reducer the server stores
 // them with (`applyEvent`).
 import { tick } from 'svelte';
-import { goto } from '$app/navigation';
+import { goto, invalidate } from '$app/navigation';
 import { resolve } from '$app/paths';
 import type { Failure } from '#lib/failure.js';
 import { ndjson } from '#lib/ndjson.js';
 import { startClock, summaryProblem, tickClock, type WaitClock } from '#lib/step-view.js';
+import { TRAILS_DEPENDENCY } from './sidebar.js';
 import {
 	applyEvent,
 	newStep,
@@ -94,9 +95,12 @@ export class LiveTrail {
 		this.now = performance.now();
 		this.live = { key, clock: startClock(this.now, req.answer) };
 		this.#ticker = setInterval(() => (this.now = performance.now()), 100);
-		void tick().then(() =>
-			document.querySelector(`[data-step="${key}"]`)?.scrollIntoView({ block: 'nearest' })
-		);
+		// A follow-up goes to the top of the view: its results and summary grow below it, clear of
+		// the pinned composer. A new trail's first step is in view already.
+		if (req.from !== null)
+			void tick().then(() =>
+				document.querySelector(`[data-step="${key}"]`)?.scrollIntoView({ block: 'start' })
+			);
 		let newTrail: string | null = null;
 
 		try {
@@ -128,6 +132,8 @@ export class LiveTrail {
 						// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, plus ?trail=
 						void goto(trailHref(event.trail_id), { shallow: true, replace: true });
 					}
+					// The sidebar lists the new trail, or moves this one to the top.
+					void invalidate(TRAILS_DEPENDENCY);
 				}
 				update((s) => applyEvent(s, event, req.from));
 			}

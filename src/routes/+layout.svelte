@@ -129,11 +129,11 @@
 		border-bottom: 1px solid var(--color-rule);
 	}
 	/* One column edge for header, context row, footer and main (app.css): rules run full-bleed,
-	   content sits in the 72rem column with the same gutters. */
+	   content sits in the --column (wider on the search screen) with the same gutters. */
 	.masthead,
 	.context > *,
 	footer.site p {
-		max-width: 72rem;
+		max-width: var(--column);
 		margin-inline: auto;
 		padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right));
 	}
@@ -225,6 +225,8 @@
 	}
 
 	footer.site {
+		box-sizing: border-box;
+		min-height: var(--site-footer);
 		padding: 1.5rem 0 2rem;
 		border-top: 1px solid var(--color-rule);
 		font: 400 0.8125rem/1.5 var(--font-mono);

@@ -17,6 +17,7 @@
 	import SearchProblem from '#lib/components/search/SearchProblem.svelte';
 	import Step from '#lib/components/search/Step.svelte';
 	import TrailHeader from '#lib/components/search/TrailHeader.svelte';
+	import { DEFAULT_TOP_K } from '#lib/search-options.js';
 	import { documentsIn, topKValue } from '#lib/search-view.js';
 	import {
 		followUp,
@@ -56,7 +57,7 @@
 	const initialQuery = () => data.query;
 	let query = $state(initialQuery());
 	let summaryOn = $state(true);
-	let topK = $state(10);
+	let topK = $state(DEFAULT_TOP_K);
 	let rerank = $state(true);
 	let exact = $state(false);
 	let optionsOpen = $state(false);
@@ -254,6 +255,17 @@
 {/if}
 
 <style>
+	/* Phones: the bar above it (Trails, New search) heads the screen; screen readers keep the h1. */
+	@media (max-width: 47.5rem) {
+		.page-head {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			margin: 0;
+			overflow: hidden;
+			clip-path: inset(50%);
+		}
+	}
 	.note {
 		margin: 0 0 0.75rem;
 		font: 400 0.8125rem/1.5 var(--font-mono);
@@ -268,6 +280,7 @@
 	/* The selected step, the one whose pages the evidence shows, carries a bar on its edge. */
 	.steps :global(.step) {
 		padding-left: 0.75rem;
+		scroll-margin-top: 1rem;
 	}
 	.steps :global(.step[aria-current]) {
 		box-shadow: inset 2px 0 0 var(--color-ink);

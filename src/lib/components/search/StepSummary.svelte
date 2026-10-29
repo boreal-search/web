@@ -139,6 +139,10 @@
 	.summary p {
 		margin: 0 0 0.5rem;
 	}
+	/* A narrow steps column (beside the evidence) wraps the state's label. */
+	.status .flag {
+		white-space: normal;
+	}
 	.eyebrow {
 		font-size: 0.9375rem;
 		font-weight: 600;
