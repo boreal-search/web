@@ -1,6 +1,6 @@
 <!--
-	The selected step's pages: the result list and, on wide screens, the selected page at reading
-	size beside it. Owns the results keyboard (J/K/Space/O/C) and the "Citation copied" status.
+	The selected step's pages, headed by its number and query: the result list and, in a wide pane,
+	the selected page at reading size beside it (the pane's width decides, not the viewport). Owns the results keyboard (J/K/Space/O/C) and the "Citation copied" status.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -25,6 +25,8 @@
 
 	// Phone thumbnails become expand buttons only once JS runs; until then they stay PDF links.
 	let interactive = $state(false);
+	/** The sticky header's height: the pinned page sits just under it. */
+	let headHeight = $state(0);
 	onMount(() => {
 		interactive = true;
 	});
@@ -32,13 +34,20 @@
 
 <svelte:window onkeydown={ev.onkeydown} />
 
-{#if step && step.readout.search !== null}
+{#if step}
 	{@const results = ev.results}
 	{@const shown = ev.shown}
-	<section class="band evidence" aria-labelledby="evidence-heading">
-		<div class="evidence-head">
+	<section
+		class="evidence"
+		aria-labelledby="evidence-heading"
+		bind:clientWidth={ev.paneWidth}
+		style:--head="{headHeight}px"
+	>
+		<header class="evidence-head" bind:clientHeight={headHeight}>
 			<h2 id="evidence-heading">
-				Pages <span class="loc">step {stepNumber(step.n)}</span>
+				<span class="sr-only">Pages for step </span><span class="num">{stepNumber(step.n)}</span>
+				<span class="dot" aria-hidden="true">·</span>
+				<span class="q">{step.query}</span>
 			</h2>
 			{#if results.length > 1}
 				<p class="keys muted">
@@ -48,8 +57,14 @@
 					<span><kbd>C</kbd> copy citation</span>
 				</p>
 			{/if}
-		</div>
-		{#if results.length === 0}
+		</header>
+		{#if step.readout.search === null}
+			<p class="empty">
+				{step.readout.finished
+					? "No pages to show: the search didn't finish."
+					: 'Pages appear here as they arrive.'}
+			</p>
+		{:else if results.length === 0}
 			<p class="empty">
 				Nothing matched in the pages searched. Try other wording, or tick more data sources.
 			</p>
@@ -69,7 +84,7 @@
 					{/each}
 				</ol>
 
-				{#if shown && ev.wide.current}
+				{#if shown && ev.wide}
 					<figure class="viewer" aria-label="Selected page">
 						<a
 							class={['sheet', ev.zoomed && 'zoomed']}
@@ -114,19 +129,48 @@
 <p class="copied readout" role="status">{ev.copyStatus}</p>
 
 <style>
+	/* The pane's width, not the viewport's, sets the layout below (and in ResultRow). */
+	.evidence {
+		container: evidence / inline-size;
+	}
+	/* Stays in view while the pane scrolls: which step these pages belong to. */
 	.evidence-head {
+		position: sticky;
+		top: var(--evidence-top, 0);
+		z-index: 1;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
 		justify-content: space-between;
 		gap: 0.25rem 1rem;
-		margin-bottom: 1rem;
+		padding: 0.75rem 0;
+		border-bottom: 1px solid var(--color-rule);
+		background: var(--color-page);
 	}
 	.evidence-head h2 {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		min-width: 0;
 		margin: 0;
+		font-size: 1.125rem;
 	}
-	.evidence-head h2 .loc {
-		margin-left: 0.5rem;
+	.num {
+		flex: none;
+		font: 500 0.9375rem/1.2 var(--font-mono);
+		font-variant-numeric: tabular-nums;
+		color: var(--color-muted);
+	}
+	.dot {
+		color: var(--color-muted);
+	}
+	.q {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.empty {
+		margin-top: 1rem;
 	}
 	.keys {
 		display: none;
@@ -148,7 +192,6 @@
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		border-top: 1px solid var(--color-rule);
 	}
 	.copied {
 		position: fixed;
@@ -169,27 +212,34 @@
 		margin: 0;
 	}
 
-	/* Desktop: a narrow contact strip of pages beside the selected page at reading size. */
-	@media (min-width: 64rem) {
-		.layout {
-			grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
-			align-items: start;
-		}
+	/* A pane wide enough for a reading-size page. Medium: the selected page sits above the list,
+	   pinned under the pane's header, with the list scrolling beneath it. */
+	@container evidence (min-width: 36rem) {
 		.viewer {
 			display: grid;
 			gap: 0.5rem;
+			order: -1;
 			position: sticky;
-			top: 1rem;
+			top: calc(var(--evidence-top, 0px) + var(--head, 4rem));
+			z-index: 1;
+			padding: 1rem 0 0.75rem;
+			border-bottom: 1px solid var(--color-rule);
+			background: var(--color-page);
 		}
 		.viewer .sheet {
 			justify-self: start;
 		}
-		/* Zoomed: the selected page takes most of the width, at full size. */
-		.layout.zoomed {
-			grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+		.viewer :global(img) {
+			max-height: 45dvh;
+		}
+		.layout {
+			gap: 0;
 		}
 		.layout.zoomed .viewer {
 			position: static;
+		}
+		.layout.zoomed .viewer :global(img) {
+			max-height: none;
 		}
 		figcaption {
 			display: flex;
@@ -205,6 +255,25 @@
 			font: 500 0.8125rem/1.5 var(--font-mono);
 			letter-spacing: 0.02em;
 			text-transform: uppercase;
+		}
+	}
+	/* Wide: a contact strip of pages beside the selected page. */
+	@container evidence (min-width: 52rem) {
+		.layout {
+			grid-template-columns: minmax(18rem, 2fr) minmax(0, 3fr);
+			align-items: start;
+			gap: 1.25rem;
+		}
+		.viewer {
+			order: 0;
+			border-bottom: 0;
+		}
+		.viewer :global(img) {
+			max-height: calc(100dvh - var(--head, 4rem) - 3rem);
+		}
+		/* Zoomed: the selected page takes most of the width, at full size. */
+		.layout.zoomed {
+			grid-template-columns: minmax(10rem, 1fr) minmax(0, 3fr);
 		}
 	}
 </style>

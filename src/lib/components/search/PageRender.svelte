@@ -93,13 +93,13 @@
 		background: var(--color-surface);
 	}
 
-	@media (min-width: 40rem) {
+	@container evidence (min-width: 28rem) {
 		.expired {
 			padding: 1rem;
 			font-size: 0.875rem;
 		}
 	}
-	@media (min-width: 64rem) {
+	@container evidence (min-width: 36rem) {
 		.expired {
 			padding: 0.5rem;
 			font-size: 0.75rem;
@@ -108,14 +108,10 @@
 			padding: 1.5rem;
 			font-size: 0.875rem;
 		}
+		/* Its height cap is the evidence pane's call (it knows the layout). */
 		.viewer img {
 			width: auto;
 			max-width: 100%;
-			max-height: calc(100vh - 5rem);
-		}
-		/* Zoomed: the selected page at full size. */
-		.viewer.zoomed img {
-			max-height: none;
 		}
 	}
 </style>

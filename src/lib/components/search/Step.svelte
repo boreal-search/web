@@ -24,6 +24,7 @@
 		onopen,
 		onchoose,
 		onwiden,
+		onview,
 		children
 	}: {
 		step: TrailStep;
@@ -41,6 +42,8 @@
 		onopen: () => void;
 		onchoose: (m: Mark, from: HTMLElement | null) => void;
 		onwiden: () => void;
+		/** When given (narrow screens), a "View pages (N)" button that opens the evidence. */
+		onview?: () => void;
 		children?: Snippet;
 	} = $props();
 
@@ -117,6 +120,11 @@
 			</p>
 		{/if}
 		{#if canWiden && !s.answer?.abstained}{@render widenAction()}{/if}
+		{#if onview && s.readout.search !== null && s.results.length > 0}
+			<p class="view">
+				<button type="button" onclick={onview}>View pages ({s.results.length})</button>
+			</p>
+		{/if}
 	</div>
 
 	{#if selected}{@render children?.()}{/if}
@@ -207,7 +215,8 @@
 		margin: 0 0 0.5rem;
 		color: var(--color-muted);
 	}
-	.widen {
+	.widen,
+	.view {
 		margin: 0.75rem 0 0;
 	}
 	/* Spruce outline: the widen action, a search, not a destructive or primary one. */
