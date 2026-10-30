@@ -125,7 +125,9 @@
 		{#if canWiden && !s.answer?.abstained}{@render widenAction()}{/if}
 		{#if onview && s.readout.search !== null && s.results.length > 0}
 			<p class="view">
-				<button type="button" onclick={onview}>View pages ({s.results.length})</button>
+				<button type="button" class="primary" onclick={onview}
+					>View pages ({s.results.length})</button
+				>
 			</p>
 		{/if}
 	</div>
@@ -248,7 +250,7 @@
 	.view {
 		margin: 0.75rem 0 0;
 	}
-	/* Spruce outline: the widen action, a search, not a destructive or primary one. */
+	/* Spruce outline: the widen action, neither primary nor destructive. */
 	button.outline {
 		border-color: var(--color-accent);
 		color: var(--color-accent);
