@@ -207,7 +207,9 @@ describe('answerBlocks', () => {
 	const showBlock = (b: AnswerBlock): string =>
 		b.kind === 'paragraph'
 			? `p(${b.children.map(showInline).join('')})`
-			: `${b.ordered ? `ol${b.start}` : 'ul'}(${b.items.map((i) => `li(${i.map(showBlock).join('')})`).join('')})`;
+			: b.kind === 'code'
+				? `pre${b.lang ? `:${b.lang}` : ''}(${b.children.map(showInline).join('')})`
+				: `${b.ordered ? `ol${b.start}` : 'ul'}(${b.items.map((i) => `li(${i.map(showBlock).join('')})`).join('')})`;
 	const showInline = (n: AnswerInline): string => {
 		if (n.kind === 'break') return '\\n';
 		if (n.kind === 'run') {
@@ -391,13 +393,95 @@ describe('answerBlocks', () => {
 		]);
 	});
 
+	describe('code', () => {
+		it('keeps inline code as code, its backticks gone', () => {
+			expect(blocks('Run `make all` first.', [])).toEqual(['p(Run `make all` first.)']);
+		});
+
+		it('makes a single-line fence on its own line a code block', () => {
+			const t = 'To build the image:\n``` make armv8_aos_m0_image.efi ```\nThen flash it.';
+			expect(blocks(t, [])).toEqual([
+				'p(To build the image:\n)',
+				'pre(make armv8_aos_m0_image.efi)',
+				'p(\nThen flash it.)'
+			]);
+			expect(blocks('``` make x ```', [])).toEqual(['pre(make x)']);
+		});
+
+		it('keeps a single-line fence inside a sentence inline', () => {
+			expect(blocks('Run ``` make x ``` now.', [])).toEqual(['p(Run `make x` now.)']);
+		});
+
+		it('keeps a multi-line fence verbatim, with its language and indentation', () => {
+			const t = 'Build:\n\n```sh\ncd src\n  make -j4  [1]\n\nmake install\n```\n\nDone.';
+			expect(blocks(t, [])).toEqual([
+				'p(Build:)',
+				'pre:sh(cd src\n  make -j4  [1]\n\nmake install)',
+				'p(Done.)'
+			]);
+		});
+
+		it('links a citation right after code', () => {
+			const t = 'Build with `make all` [1]. Next.';
+			expect(blocks(t, [cited(t, 'Build with `make all` [1].', '[1]', 1, 'verified')])).toEqual([
+				'p({verified|Build with }`{verified|make all}`{verified| [1:verified].|end} Next.)'
+			]);
+			const f = '``` make x ``` [2]';
+			expect(blocks(f, [cited(f, f, '[2]', 2, 'verified')])).toEqual([
+				'p(`{verified|make x}`{verified| [2:verified]|end})'
+			]);
+		});
+
+		it('keeps code whole when a sentence ends inside it, a marker in it stays text', () => {
+			const t = 'Use `a. b [1]` here [1].';
+			const end = t.indexOf(' b');
+			const c = cite(
+				t,
+				'[1]',
+				1,
+				{},
+				{
+					start: t.lastIndexOf('[1]'),
+					end: t.lastIndexOf('[1]') + 3,
+					sentence: { start: 0, end, status: 'unsupported' }
+				}
+			);
+			expect(blocks(t, [c])).toEqual([
+				'p({unsupported|Use }`{unsupported|a.|end} b [1]` here [1:not_checked].)'
+			]);
+			const f = '```\nfoo. bar\n```';
+			const at = f.indexOf(' bar');
+			expect(
+				blocks(f, [
+					cite(
+						f,
+						'foo',
+						1,
+						{},
+						{ start: 0, end: 0, sentence: { start: 0, end: at, status: 'verified' } }
+					)
+				])
+			).toEqual(['pre({verified|foo.|end} bar)']);
+		});
+
+		it('leaves HTML in code and prose as text', () => {
+			const t =
+				'<script>alert(1)</script>\n\n`<img onerror=x>` and <b>bold</b>\n\n```html\n<b>x</b>\n```';
+			expect(blocks(t, [])).toEqual([
+				'p(<script>alert(1)</script>)',
+				'p(`<img onerror=x>` and <b>bold</b>)',
+				'pre:html(<b>x</b>)'
+			]);
+		});
+	});
+
 	it('shows headings as bold paragraphs and other constructs as their source text', () => {
 		const t = '# Title\n\n> quoted [1]\n\n```\ncode\n```\n\n<b>x</b>\n\n![img](y)\n\n---';
 		const at = t.indexOf('[1]');
 		expect(blocks(t, [cite(t, '[1]', 1, {}, { start: at, end: at + 3, sentence: NONE })])).toEqual([
 			'p(**Title**)',
 			'p(quoted [1:not_checked])',
-			'p(```\ncode\n```)',
+			'pre(code)',
 			'p(<b>x</b>)',
 			'p(![img](y))',
 			'p(---)'

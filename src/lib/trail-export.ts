@@ -83,6 +83,33 @@ function errorLine(step: TrailStep) {
 	return `${what} not available: the search engine reported an error (${e.status ?? 'no status'}: ${oneLine(e.detail)}).`;
 }
 
+const FENCE = /^\s*(`{3,}|~{3,})/;
+
+/**
+ * The summary's lines. It is markdown: lines are kept so lists stay lists, each tidied to one
+ * line, blank ones dropped; inside a fenced code block they stay as written (indentation, blank
+ * lines), only trailing space trimmed.
+ */
+function summaryLines(text: string): string[] {
+	const out: string[] = [];
+	/** The open fence's marker (```` ``` ````, `~~~`), while inside a code block. */
+	let fence: string | null = null;
+	for (const l of text.split('\n')) {
+		const marker = FENCE.exec(l)?.[1];
+		const rest = marker ? l.trim().slice(marker.length) : '';
+		if (fence !== null) {
+			out.push(l.trimEnd());
+			const closes = marker?.[0] === fence[0] && marker.length >= fence.length && !rest.trim();
+			if (closes) fence = null;
+		} else if (marker && !(marker[0] === '`' && rest.includes('`'))) {
+			// Opens a block (a ``` line whose rest has backticks is an inline span instead).
+			out.push(l.trim());
+			fence = marker;
+		} else if (l.trim()) out.push(oneLine(l));
+	}
+	return out;
+}
+
 function stepLines(step: TrailStep, origin: string): string[] {
 	const lines = [`${stepNumber(step.n)}  ${oneLine(step.query)}`];
 	const add = (s: string) => lines.push(INDENT + s);
@@ -94,8 +121,7 @@ function stepLines(step: TrailStep, origin: string): string[] {
 	if (answer?.abstained) add('Not found in the pages searched.');
 	else if (answer) {
 		add(`Generated summary · ${answerCheckLabel(answerCheck(answer))}`);
-		// The summary is markdown: keep its lines so lists stay lists.
-		for (const l of answer.text.split('\n').map(oneLine)) if (l) add(l);
+		for (const l of summaryLines(answer.text)) lines.push(l && INDENT + l);
 		const seen = new Set<string>();
 		for (const c of answer.citations) {
 			const r = step.results[c.ref - 1];

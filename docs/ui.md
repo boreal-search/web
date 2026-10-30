@@ -22,6 +22,7 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 | `verified`    | Answer state: verified                               |
 | `unsupported` | Answer state: unsupported                            |
 | `highlight`   | Wash behind quoted passages                          |
+| `code`        | Subtle wash behind code (spans and blocks)           |
 | `danger`      | Destructive actions and system errors                |
 | `sheet`       | Page renders: same in both themes, never inverted    |
 
@@ -44,6 +45,9 @@ Three roles, and the role says whose words they are.
 | `font-sans`  | Schibsted Grotesk | Headings, UI, summaries, queries (default)    |
 | `font-serif` | Source Serif 4    | Quoted passages from documents only           |
 | `font-mono`  | JetBrains Mono    | Locators, page numbers, times, counts, states |
+
+Code in a generated summary (markdown code spans and fenced blocks) is `font-mono` on `code`;
+blocks keep their whitespace and scroll sideways rather than wrap.
 
 Headings are upright, one colour: no italics, no coloured words. A quote always shows its
 locator (`VOL 3 · §12.6 · P.412`), and a locator opens the PDF at that page.

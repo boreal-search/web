@@ -38,6 +38,7 @@
 	--color-verified: light-dark(#1e4a32, #86b794);
 	--color-unsupported: light-dark(#9a5f12, #d9a250); /* resin */
 	--color-highlight: light-dark(#dde6d5, #23342a); /* moss: wash behind quoted passages */
+	--color-code: light-dark(#ece8de, #242220); /* lichen: subtle wash behind code */
 	--color-danger: light-dark(#a2331f, #e4896e); /* destructive, system errors; never in search */
 	--color-sheet: #fffefa; /* page renders: same in both themes, never inverted */
 	--color-sheet-rule: #d6d2c8; /* edge of a page render */
