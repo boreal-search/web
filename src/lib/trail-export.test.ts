@@ -76,6 +76,16 @@ Exported 2026-10-28 21:02 UTC · reviewer@example.com · Kettle Ridge Review
 			'    Two rules:\n    - **Fines** apply [1].\n    - Notice is due [2].\n'
 		);
 	});
+
+	it('keeps code blocks as written', () => {
+		const a = answer({
+			text: 'Build   it [1]:\n\n```sh\ncd  src\n\n  make -j4   \n```\n``` make x.efi ```\nRun `a  b`.'
+		});
+		expect(trailMarkdown(meta, [step(1, { answer: a })])).toContain(
+			'    Build it [1]:\n    ```sh\n    cd  src\n\n      make -j4\n    ```\n' +
+				'    ``` make x.efi ```\n    Run `a b`.\n'
+		);
+	});
 });
 
 describe('trailJson', () => {
