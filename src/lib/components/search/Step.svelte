@@ -1,5 +1,5 @@
 <!--
-	One trail step: its number and query (a control that opens its snapshot), scope chips, the
+	One trail step: its number and query (a control that selects it), scope chips, the
 	query as searched, the waiting bar, the checked summary, the readout, the widen action and,
 	on earlier steps of a stored trail, "Branch from here" (a new trail seeded with 01..this one).
 -->
@@ -21,7 +21,7 @@
 		active,
 		canWiden,
 		documents,
-		onopen,
+		onselect,
 		onchoose,
 		onwiden,
 		onview,
@@ -39,7 +39,8 @@
 		canWiden: boolean;
 		/** Documents across the step's data sources, for "Search all N documents"; null if unknown. */
 		documents: number | null;
-		onopen: () => void;
+		/** Select the step; an open evidence pane swaps to its pages, a closed one stays closed. */
+		onselect: () => void;
 		onchoose: (m: Mark, from: HTMLElement | null) => void;
 		onwiden: () => void;
 		/** When given (the evidence closed or hidden), a "View pages (N)" button that opens it. */
@@ -78,8 +79,8 @@
 		<button
 			type="button"
 			class="open"
-			aria-label={selected ? undefined : `Open step ${stepNumber(s.n)}: ${s.query}`}
-			onclick={onopen}
+			aria-label={selected ? undefined : `Select step ${stepNumber(s.n)}: ${s.query}`}
+			onclick={onselect}
 		>
 			<span class="num">{stepNumber(s.n)}</span>
 			<span class="q">{s.query}</span>
@@ -172,7 +173,7 @@
 	.step h3 {
 		margin: 0 0 0.25rem;
 	}
-	/* The step's number and query, as a heading-sized control that opens its snapshot. */
+	/* The step's number and query, as a heading-sized control that selects the step. */
 	.open {
 		display: flex;
 		align-items: baseline;

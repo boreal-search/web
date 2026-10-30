@@ -31,8 +31,10 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 - Green (`verified`, `accent`) is never decorative.
 - The search screen has three areas, each a step apart: `page` (the conversation), `sidebar`,
   `pane`. Light steps darker, dark steps lighter, `surface` sits above all three; text roles
-  stay AA on each (lowest: `muted` on `pane`, 4.6:1 light). Sticky bars inside an area take
-  that area's role as their background.
+  stay AA on each (lowest: `muted` on `pane`, 4.7:1 light, 5.4:1 dark). The two area shades
+  are warm greys (Rule's family pulled toward brown, low chroma), never ochre or yellow, so
+  they sit apart from fog by hue as well as lightness. Sticky bars inside an area take that
+  area's role as their background.
 - Light and dark follow `prefers-color-scheme` unless the user picks one on `/account`
   (`<html data-theme>`); every colour role is one `light-dark(light, dark)` value.
 
@@ -72,6 +74,10 @@ citation the engine couldn't place opens its page unmarked, its locator saying "
 have no side viewer: a `[n]` or a thumbnail opens the page full width under its row (Close or
 Escape returns focus). Keys: J K next/previous, Space zoom page (`.sheet.zoomed`), O open PDF at
 page, C copy citation (title · page · permanent PDF link).
+On the search screen the evidence pane (or the overlay on narrower screens) opens only when
+asked: "View pages (N)" on a step, or a `[n]`. Results arriving, a new search, a follow-up or
+loading a trail leave it as it is, and it starts closed. Choosing a step selects it; an open
+pane swaps to that step's pages, a closed one stays closed. The keys work only while it is open.
 
 ## Waiting
 

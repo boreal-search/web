@@ -243,10 +243,7 @@
 							active={ev.active}
 							canWiden={canWiden(s)}
 							documents={documentsIn(s.scope.data_source_ids, all)}
-							onopen={() => {
-								openStep(s.n);
-								void open();
-							}}
+							onselect={() => openStep(s.n)}
 							onchoose={async (m, from) => {
 								if (from) await open();
 								ev.choose(s, m, from);

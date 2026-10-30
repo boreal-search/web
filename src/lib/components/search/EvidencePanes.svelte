@@ -1,7 +1,8 @@
 <!--
 	The search screen's main area: the trail's steps (composer pinned at the bottom of their column)
-	and the selected step's evidence. The evidence can be closed at every size; opening a step, an
-	answer, a `[n]` or "View pages" brings it back (`open`).
+	and the selected step's evidence. The evidence opens only when asked: "View pages" or a `[n]`
+	(`open`). It starts closed at every size; results arriving, a new search or choosing a step
+	never open it (an open pane swaps to the selected step's pages).
 	- Wide content area (≥ 60rem, sidebar excluded): two panes split by a divider (paneforge) the
 	  viewer drags or moves with the arrow keys; double-click resets it. The steps share is kept in
 	  a cookie, so the server paints it. The evidence stays in the viewport and scrolls on its own.
@@ -53,10 +54,12 @@
 	/** The content area's width; 0 until measured (SSR renders the two-pane markup). */
 	let width = $state(0);
 	let narrow = $derived(width > 0 && width < NARROW);
-	/** Wide: the viewer closed the evidence pane. */
-	let closed = $state(false);
-	let overlay = $derived(narrow && page.state.evidence === true);
-	let shown = $derived(narrow ? overlay : !closed);
+	/** The viewer asked for pages and hasn't closed them; never remembered, so a load starts closed. */
+	let closed = $state(true);
+	/** Opened as an overlay: a shallow history entry, so Back (any kind) closes it at every size. */
+	let pushed = $state(false);
+	let shown = $derived(!closed && !(pushed && page.state.evidence !== true));
+	let overlay = $derived(narrow && shown);
 	let beside = $derived(shown && !narrow);
 	const initial = () => initialSplit;
 	let split = $state(initial());
@@ -65,26 +68,29 @@
 
 	let group = $state<ReturnType<typeof PaneGroup>>();
 	let pane = $state<HTMLElement>();
-	/** What opened the overlay: focus returns there once it closes. */
+	/** What opened the evidence: focus returns there once it closes, if it's still on the page. */
 	let opener: HTMLElement | null = null;
 
 	const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-	/** Show the evidence; resolves once it's laid out (its width decides how a page opens). */
+	/** Show the evidence and focus its close control; resolves once it's laid out (its width
+	 * decides how a page opens). */
 	async function open() {
 		if (shown) return;
-		if (narrow) {
-			opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			pushState('', { evidence: true });
-		} else closed = false;
+		opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		pushed = narrow;
+		if (narrow) pushState('', { evidence: true });
+		closed = false;
 		await tick();
 		await frame();
 		await frame();
+		pane?.querySelector<HTMLElement>('.close')?.focus({ preventScroll: true });
 	}
 
 	function close() {
-		if (!narrow) closed = true;
-		else if (page.state.evidence) history.back();
+		closed = true;
+		if (pushed && page.state.evidence) history.back();
+		pushed = false;
 	}
 
 	function reset() {
@@ -105,10 +111,17 @@
 		untrack(() => pane?.scrollTo({ top: 0 }));
 	});
 
+	// Closed (Close, Escape, Back): focus returns to the opener, else (wide: it unmounted) the
+	// selected step's "View pages", else its title.
 	$effect(() => {
-		if (overlay || !opener) return;
-		untrack(() => opener?.focus({ preventScroll: true }));
-		opener = null;
+		if (shown || !opener) return;
+		void tick().then(() => {
+			const step = (sel: string) =>
+				document.querySelector<HTMLElement>(`.step[aria-current] ${sel}`);
+			const to = opener?.isConnected ? opener : (step('.view button') ?? step('button.open'));
+			opener = null;
+			to?.focus({ preventScroll: true });
+		});
 	});
 </script>
 
