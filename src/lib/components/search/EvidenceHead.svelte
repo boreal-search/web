@@ -19,21 +19,13 @@
 		/** Its rendered height: the pinned page sits just under it. */
 		height?: number;
 	} = $props();
-
-	const focusBack = (node: HTMLElement) => {
-		if (close.back) node.focus({ preventScroll: true });
-	};
 </script>
 
 <header class="evidence-head" bind:clientHeight={height}>
 	<div class="title">
 		{#if close.back}
-			<button
-				type="button"
-				class="quiet close"
-				aria-label="Back to steps"
-				onclick={close.onclose}
-				{@attach focusBack}><span aria-hidden="true">←</span> Steps</button
+			<button type="button" class="quiet close" aria-label="Back to steps" onclick={close.onclose}
+				><span aria-hidden="true">←</span> Steps</button
 			>
 		{/if}
 		<h2 id="evidence-heading">
