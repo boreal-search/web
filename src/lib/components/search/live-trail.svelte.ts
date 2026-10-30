@@ -8,7 +8,7 @@ import { resolve } from '$app/paths';
 import type { Failure } from '#lib/failure.js';
 import { ndjson } from '#lib/ndjson.js';
 import { startClock, summaryProblem, tickClock, type WaitClock } from '#lib/step-view.js';
-import { TRAILS_DEPENDENCY } from './sidebar.js';
+import { TRAILS_DEPENDENCY } from './layout-prefs.js';
 import {
 	applyEvent,
 	newStep,

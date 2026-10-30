@@ -1,7 +1,7 @@
 <!--
 	The search screen's one modal (native <dialog>, so focus is trapped and Escape closes): a title,
-	a Close button, the content. `full` makes it a full-screen sheet (phones: trails, pages) whose
-	header stays put while the content scrolls; sticky content sits under it via `--sticky-top`.
+	a Close button, the content. `full` makes it a full-screen sheet (phones: trails) whose
+	header stays put while the content scrolls.
 	Each opening starts at the top. Bind `open`.
 -->
 <script lang="ts">
@@ -11,7 +11,6 @@
 		open = $bindable(false),
 		title,
 		full = false,
-		closeLabel = 'Close',
 		onclose,
 		children
 	}: {
@@ -19,7 +18,6 @@
 		title: string;
 		/** A full-screen sheet instead of a centred box. */
 		full?: boolean;
-		closeLabel?: string;
 		/** After it closes (Escape, Close, backdrop): e.g. give focus back to what opened it. */
 		onclose?: () => void;
 		children: Snippet;
@@ -55,7 +53,7 @@
 	<div class="body">
 		<header>
 			<h2 id="{id}-title">{title}</h2>
-			<button type="button" class="quiet" onclick={() => (open = false)}>{closeLabel}</button>
+			<button type="button" class="quiet" onclick={() => (open = false)}>Close</button>
 		</header>
 		{@render children()}
 	</div>
@@ -82,7 +80,6 @@
 		margin: 0;
 		border: 0;
 		background: var(--color-page);
-		--sticky-top: 3.5rem;
 	}
 	.body {
 		padding: 1rem max(1rem, env(safe-area-inset-right)) 1.5rem max(1rem, env(safe-area-inset-left));
@@ -104,7 +101,7 @@
 		top: 0;
 		z-index: 3;
 		box-sizing: border-box;
-		height: var(--sticky-top);
+		height: 3.5rem;
 		padding-bottom: 0;
 		background: var(--color-page);
 	}

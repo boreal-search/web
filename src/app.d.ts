@@ -25,7 +25,11 @@ declare global {
 			failure?: Failure;
 		}
 
-		// interface PageState {}
+		/** Shallow history entries (`pushState`): the search screen's evidence overlay on medium and
+		 * small screens, so Back (button or gesture) closes it. */
+		interface PageState {
+			evidence?: boolean;
+		}
 	}
 }
 

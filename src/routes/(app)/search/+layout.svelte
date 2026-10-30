@@ -11,7 +11,7 @@
 <SearchShell
 	trails={data.trails}
 	currentId={page.url.searchParams.get('trail')}
-	collapsed={data.sidebarCollapsed}
+	sidebar={data.sidebar}
 >
 	{@render children()}
 </SearchShell>

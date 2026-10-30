@@ -10,7 +10,9 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 | Role          | Use                                                  |
 | ------------- | ---------------------------------------------------- |
 | `page`        | Page background                                      |
-| `surface`     | Raised surfaces                                      |
+| `surface`     | Raised surfaces (menus, selected rows): above all    |
+| `sidebar`     | Search: the trail sidebar's area                     |
+| `pane`        | Search: the evidence pane's area (and its overlay)   |
 | `ink`         | Text                                                 |
 | `muted`       | Secondary text                                       |
 | `rule`        | Hairline dividers only (1.2:1, never a control edge) |
@@ -26,6 +28,10 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 - No red in search results or answer states. `danger` is for destructive actions and
   system errors elsewhere.
 - Green (`verified`, `accent`) is never decorative.
+- The search screen has three areas, each a step apart: `page` (the conversation), `sidebar`,
+  `pane`. Light steps darker, dark steps lighter, `surface` sits above all three; text roles
+  stay AA on each (lowest: `muted` on `pane`, 4.6:1 light). Sticky bars inside an area take
+  that area's role as their background.
 - Light and dark follow `prefers-color-scheme` unless the user picks one on `/account`
   (`<html data-theme>`); every colour role is one `light-dark(light, dark)` value.
 

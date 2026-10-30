@@ -42,7 +42,7 @@
 		onopen: () => void;
 		onchoose: (m: Mark, from: HTMLElement | null) => void;
 		onwiden: () => void;
-		/** When given (narrow screens), a "View pages (N)" button that opens the evidence. */
+		/** When given (the evidence closed or hidden), a "View pages (N)" button that opens it. */
 		onview?: () => void;
 		/** The stored trail this step can be branched from (an earlier step); null: no branch. */
 		branchFrom: string | null;

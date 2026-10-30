@@ -1,13 +1,15 @@
 <!--
 	The selected step's pages, headed by its number and query: the result list and, in a wide pane,
 	the selected page at reading size beside it (the pane's width decides, not the viewport). Owns
-	the results keyboard (J/K/Space/O/C) and the "Citation copied" status. In a modal its sticky
-	header sits under the modal's (`--sticky-top`).
+	the results keyboard (J/K/Space/O/C) and the "Citation copied" status; mounted only while
+	shown, so the keys are inert when the pane is closed. Escape closes the narrow overlay.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { stepNumber, type TrailStep } from '#lib/trail.js';
+	import type { TrailStep } from '#lib/trail.js';
 	import { pdfHref, type Evidence } from './evidence.svelte.js';
+	import EvidenceHead from './EvidenceHead.svelte';
+	import type { EvidenceClose } from './EvidencePanes.svelte';
 	import PageRender from './PageRender.svelte';
 	import ResultRow from './ResultRow.svelte';
 
@@ -15,7 +17,8 @@
 		step,
 		ev,
 		sourceNames,
-		permanentLinks
+		permanentLinks,
+		close
 	}: {
 		/** The selected step, or null when there is none. */
 		step: TrailStep | null;
@@ -23,6 +26,7 @@
 		/** Data source names the user can search now, by id. */
 		sourceNames: ReadonlyMap<string, string>;
 		permanentLinks: boolean;
+		close: EvidenceClose;
 	} = $props();
 
 	// Phone thumbnails become expand buttons only once JS runs; until then they stay PDF links.
@@ -34,12 +38,14 @@
 	});
 
 	let section = $state<HTMLElement>();
-	/** The results keys work only while these pages are what's shown: not under another open
-	 * modal (Share, Delete, Trails), nor inside the closed phone "Pages" modal. */
+	/** The results keys work only while these pages are what's shown: not under an open modal
+	 * (Share, Delete, Trails). */
 	function onkeydown(e: KeyboardEvent) {
-		if (!section || section.closest('dialog:not([open])')) return;
-		for (const d of document.querySelectorAll('dialog[open]')) if (!d.contains(section)) return;
+		if (!section || document.querySelector('dialog[open]')) return;
 		ev.onkeydown(e);
+		if (e.key !== 'Escape' || e.defaultPrevented || !close.back) return;
+		e.preventDefault();
+		close.onclose();
 	}
 </script>
 
@@ -55,21 +61,7 @@
 		bind:clientWidth={ev.paneWidth}
 		style:--head="{headHeight}px"
 	>
-		<header class="evidence-head" bind:clientHeight={headHeight}>
-			<h2 id="evidence-heading">
-				<span class="sr-only">Pages for step </span><span class="num">{stepNumber(step.n)}</span>
-				<span class="dot" aria-hidden="true">·</span>
-				<span class="q">{step.query}</span>
-			</h2>
-			{#if results.length > 1}
-				<p class="keys muted">
-					<span><kbd>J</kbd> <kbd>K</kbd> next and previous</span>
-					<span><kbd>Space</kbd> zoom page</span>
-					<span><kbd>O</kbd> open PDF at page</span>
-					<span><kbd>C</kbd> copy citation</span>
-				</p>
-			{/if}
-		</header>
+		<EvidenceHead {step} keys={results.length > 1} {close} bind:height={headHeight} />
 		{#if step.readout.search === null}
 			<p class="empty">
 				{step.readout.finished
@@ -145,56 +137,8 @@
 	.evidence {
 		container: evidence / inline-size;
 	}
-	/* Stays in view while the pane scrolls: which step these pages belong to. */
-	.evidence-head {
-		position: sticky;
-		top: var(--sticky-top, 0);
-		z-index: 1;
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 0.25rem 1rem;
-		padding: 0.75rem 0;
-		border-bottom: 1px solid var(--color-rule);
-		background: var(--color-page);
-	}
-	.evidence-head h2 {
-		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
-		min-width: 0;
-		margin: 0;
-		font-size: 1.125rem;
-	}
-	.num {
-		flex: none;
-		font: 500 0.9375rem/1.2 var(--font-mono);
-		font-variant-numeric: tabular-nums;
-		color: var(--color-muted);
-	}
-	.dot {
-		color: var(--color-muted);
-	}
-	.q {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
 	.empty {
 		margin-top: 1rem;
-	}
-	.keys {
-		display: none;
-		flex-wrap: wrap;
-		gap: 0 1rem;
-		margin: 0;
-		font-size: 0.8125rem;
-	}
-	@media (hover: hover) and (pointer: fine) {
-		.keys {
-			display: flex;
-		}
 	}
 	.layout {
 		display: grid;
@@ -232,11 +176,11 @@
 			gap: 0.5rem;
 			order: -1;
 			position: sticky;
-			top: calc(var(--sticky-top, 0px) + var(--head, 4rem));
+			top: var(--head, 4rem);
 			z-index: 1;
 			padding: 1rem 0 0.75rem;
 			border-bottom: 1px solid var(--color-rule);
-			background: var(--color-page);
+			background: var(--color-pane);
 		}
 		.viewer .sheet {
 			justify-self: start;

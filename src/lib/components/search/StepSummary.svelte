@@ -124,7 +124,11 @@
 								onchoose(m, null);
 							}}
 							onblur={() => (focused = null)}
-							onclick={(e) => onchoose(m, e.currentTarget)}>{one ? `[${m.ref}]` : m.ref}</a
+							onclick={(e) => {
+								// The page shows the result (and may open an overlay); no hash entry in history.
+								e.preventDefault();
+								onchoose(m, e.currentTarget);
+							}}>{one ? `[${m.ref}]` : m.ref}</a
 						>{/each}{#if !one}]{/if}</span
 				>{:else}{seg.text}{/if}{/each}{#if r.last && r.status === 'unsupported'}<span
 				class={['why', r.sentence !== null && focused === r.sentence && 'shown']}

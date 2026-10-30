@@ -10,7 +10,7 @@
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import Composer from '#lib/components/search/Composer.svelte';
 	import EvidencePane from '#lib/components/search/EvidencePane.svelte';
-	import EvidencePanes from '#lib/components/search/EvidencePanes.svelte';
+	import EvidencePanes, { type EvidenceClose } from '#lib/components/search/EvidencePanes.svelte';
 	import { Evidence } from '#lib/components/search/evidence.svelte.js';
 	import { LiveTrail } from '#lib/components/search/live-trail.svelte.js';
 	import SearchOptions from '#lib/components/search/SearchOptions.svelte';
@@ -201,15 +201,21 @@
 	{/if}
 {/snippet}
 
-{#snippet evidence()}
-	<EvidencePane step={trail.selected} {ev} {sourceNames} permanentLinks={data.permanentLinks} />
+{#snippet evidence(close: EvidenceClose)}
+	<EvidencePane
+		step={trail.selected}
+		{ev}
+		{sourceNames}
+		permanentLinks={data.permanentLinks}
+		{close}
+	/>
 {/snippet}
 
 {#if trail.steps.length === 0}
 	{@render composer()}
 {:else}
-	<EvidencePanes selectedKey={trail.selected?.created_at} {composer} {evidence}>
-		{#snippet steps({ modal, open })}
+	<EvidencePanes selectedKey={trail.selected?.created_at} split={data.split} {composer} {evidence}>
+		{#snippet steps({ beside, open })}
 			<section class="trail" aria-labelledby="trail-heading">
 				<TrailHeader
 					{title}
@@ -237,18 +243,21 @@
 							active={ev.active}
 							canWiden={canWiden(s)}
 							documents={documentsIn(s.scope.data_source_ids, all)}
-							onopen={() => openStep(s.n)}
-							onchoose={(m, from) => {
-								if (modal && from) open();
+							onopen={() => {
+								openStep(s.n);
+								void open();
+							}}
+							onchoose={async (m, from) => {
+								if (from) await open();
 								ev.choose(s, m, from);
 							}}
 							onwiden={() => run({ ...widen(s), ...settings() })}
-							onview={modal
-								? () => {
+							onview={beside
+								? undefined
+								: () => {
 										openStep(s.n);
-										open();
-									}
-								: undefined}
+										void open();
+									}}
 							branchFrom={branchFrom(s)}
 						/>
 					{/each}

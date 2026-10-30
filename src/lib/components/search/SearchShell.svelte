@@ -1,43 +1,49 @@
 <!--
 	The search screen's outer layout: the trail sidebar beside the main content. Desktop: a
-	sticky column the viewer can collapse to a narrow rail (remembered in a cookie). Phones
+	sticky column the viewer can collapse to a narrow rail (remembered in a cookie). Until they
+	choose, medium screens (< 80rem) start collapsed, by CSS so the server's paint is right. Phones
 	(≤ 760px): no sidebar column; a "Trails" button opens the list as a full-screen modal.
 -->
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { Snippet } from 'svelte';
-	import { rememberSidebar } from './sidebar.js';
+	import { MediaQuery } from 'svelte/reactivity';
+	import { rememberSidebar, type SidebarChoice } from './layout-prefs.js';
 	import Modal from './Modal.svelte';
 	import TrailSidebar, { type SidebarTrail } from './TrailSidebar.svelte';
 
 	let {
 		trails,
 		currentId,
-		collapsed: initialCollapsed,
+		sidebar,
 		children
 	}: {
 		trails: readonly SidebarTrail[];
 		/** The stored trail shown on the page, if any. */
 		currentId: string | null;
 		/** The viewer's remembered choice, from the load. */
-		collapsed: boolean;
+		sidebar: SidebarChoice;
 		children: Snippet;
 	} = $props();
 
-	const initial = () => initialCollapsed;
-	let collapsed = $state(initial());
+	const initial = () => sidebar;
+	let choice = $state(initial());
+	/** Medium screens: the sidebar starts collapsed (matches `.auto` in the CSS below). */
+	const medium = new MediaQuery('max-width: 79.99rem', false);
+	let collapsed = $derived(choice === null ? medium.current : choice === 'collapsed');
 	let sheetOpen = $state(false);
 	let opener = $state<HTMLButtonElement>();
 	afterNavigate(() => (sheetOpen = false));
 
 	function toggle() {
-		collapsed = !collapsed;
-		rememberSidebar(collapsed);
+		const next = !collapsed;
+		choice = next ? 'collapsed' : 'open';
+		rememberSidebar(next);
 	}
 </script>
 
-<div class={['search-shell', { collapsed }]}>
+<div class={['search-shell', choice === 'collapsed' && 'collapsed', choice === null && 'auto']}>
 	<aside class="rail" aria-label="Trails">
 		<button
 			type="button"
@@ -53,15 +59,13 @@
 			</svg>
 			<span class="sr-only">{collapsed ? 'Show trails' : 'Hide trails'}</span>
 		</button>
-		{#if collapsed}
-			<a class="button quiet toggle" href={resolve('/(app)/search')} title="New search">
-				<span aria-hidden="true">+</span><span class="sr-only">New search</span>
-			</a>
-		{:else}
-			<div id="trail-sidebar">
-				<TrailSidebar {trails} {currentId} />
-			</div>
-		{/if}
+		<!-- Both are rendered; the CSS shows the one for the state (unset: by screen width). -->
+		<a class="button quiet toggle new" href={resolve('/(app)/search')} title="New search">
+			<span aria-hidden="true">+</span><span class="sr-only">New search</span>
+		</a>
+		<div id="trail-sidebar">
+			<TrailSidebar {trails} {currentId} />
+		</div>
 	</aside>
 
 	<div class="main">
@@ -90,17 +94,58 @@
 	:global(:root:has(.search-shell)) {
 		--column: 112rem;
 	}
+	:global(main:has(.search-shell)) {
+		padding-top: 0;
+	}
 	:global(main:has(.panes)) {
 		padding-bottom: 0;
 	}
 	.search-shell {
+		--rail: 15rem;
+		position: relative;
+		isolation: isolate;
 		display: grid;
-		grid-template-columns: 15rem minmax(0, 1fr);
+		grid-template-columns: var(--rail) minmax(0, 1fr);
 		gap: 0 1.5rem;
 		align-items: start;
 	}
 	.search-shell.collapsed {
-		grid-template-columns: 2.75rem minmax(0, 1fr);
+		--rail: 2.75rem;
+	}
+	/* The sidebar's own shade, from the screen's left edge down the whole screen. */
+	.search-shell::before {
+		content: '';
+		position: absolute;
+		z-index: -1;
+		inset: 0 auto 0 calc(-1 * max(1rem, env(safe-area-inset-left)));
+		width: calc(var(--rail) + max(1rem, env(safe-area-inset-left)));
+		border-right: 1px solid var(--color-rule);
+		background: var(--color-sidebar);
+	}
+	.main {
+		padding-top: 2rem;
+	}
+	.rail .new,
+	.collapsed #trail-sidebar {
+		display: none;
+	}
+	.collapsed .rail .new {
+		display: inline-flex;
+	}
+	@media (max-width: 79.99rem) {
+		.search-shell.auto {
+			--rail: 2.75rem;
+		}
+		.auto #trail-sidebar {
+			display: none;
+		}
+		.auto .rail .new {
+			display: inline-flex;
+		}
+		.auto .rail {
+			padding-right: 0;
+			align-items: flex-start;
+		}
 	}
 	.rail {
 		position: sticky;
@@ -110,9 +155,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		padding: 0 1rem 1rem 0;
-		border-right: 1px solid var(--color-rule);
-		min-height: 60vh;
+		padding: 2rem 1rem 1rem 0;
 	}
 	.collapsed .rail {
 		padding-right: 0;
@@ -137,10 +180,12 @@
 	}
 	@media (max-width: 47.5rem) {
 		.search-shell,
-		.search-shell.collapsed {
+		.search-shell.collapsed,
+		.search-shell.auto {
 			display: block;
 		}
-		.rail {
+		.rail,
+		.search-shell::before {
 			display: none;
 		}
 		.phone-bar {
