@@ -26,9 +26,10 @@
 	--color-page: light-dark(#f5f2ea, #151411); /* fog / wet basalt */
 	--color-surface: light-dark(#fbf9f4, #2a2824); /* paper: raised surface, above every area */
 	/* Search areas, each its own shade beside the page (the conversation): sidebar, then pane.
-	   Light steps darker, dark steps lighter; ink, muted, accent and edge stay AA on both. */
-	--color-sidebar: light-dark(#efebe2, #1b1a17); /* trail sidebar */
-	--color-pane: light-dark(#e9e5da, #22201c); /* evidence pane: results and pages */
+	   Light steps darker, dark steps lighter. Rule's family pulled toward brown (OKLCH hue ~70,
+	   chroma ≤0.009, against fog's ~90) so they read warm grey, not ochre; muted stays AA on both. */
+	--color-sidebar: light-dark(#f0ece8, #1d1a18); /* trail sidebar: warm grey, a step off fog */
+	--color-pane: light-dark(#ebe6e1, #24201d); /* evidence pane: results and pages */
 	--color-ink: light-dark(#1d1b17, #ece7db); /* basalt: text */
 	--color-muted: light-dark(#6a655a, #9c9588); /* bark: secondary text */
 	--color-rule: light-dark(#e1dccf, #2f2c26); /* hairlines only (1.2:1), never a control edge */

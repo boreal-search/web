@@ -1,7 +1,8 @@
 <!--
 	The search screen's main area: the trail's steps (composer pinned at the bottom of their column)
-	and the selected step's evidence. The evidence can be closed at every size; opening a step, an
-	answer, a `[n]` or "View pages" brings it back (`open`).
+	and the selected step's evidence. The evidence opens only when asked: "View pages" or a `[n]`
+	(`open`). It starts closed at every size; results arriving, a new search or choosing a step
+	never open it (an open pane swaps to the selected step's pages).
 	- Wide content area (≥ 60rem, sidebar excluded): two panes split by a divider (paneforge) the
 	  viewer drags or moves with the arrow keys; double-click resets it. The steps share is kept in
 	  a cookie, so the server paints it. The evidence stays in the viewport and scrolls on its own.
@@ -53,8 +54,8 @@
 	/** The content area's width; 0 until measured (SSR renders the two-pane markup). */
 	let width = $state(0);
 	let narrow = $derived(width > 0 && width < NARROW);
-	/** Wide: the viewer closed the evidence pane. */
-	let closed = $state(false);
+	/** Wide: the evidence pane is closed until the viewer asks for pages (never remembered). */
+	let closed = $state(true);
 	let overlay = $derived(narrow && page.state.evidence === true);
 	let shown = $derived(narrow ? overlay : !closed);
 	let beside = $derived(shown && !narrow);
