@@ -24,7 +24,11 @@
 @theme {
 	--color-*: initial;
 	--color-page: light-dark(#f5f2ea, #151411); /* fog / wet basalt */
-	--color-surface: light-dark(#fbf9f4, #1d1b18); /* paper: raised surface */
+	--color-surface: light-dark(#fbf9f4, #2a2824); /* paper: raised surface, above every area */
+	/* Search areas, each its own shade beside the page (the conversation): sidebar, then pane.
+	   Light steps darker, dark steps lighter; ink, muted, accent and edge stay AA on both. */
+	--color-sidebar: light-dark(#efebe2, #1b1a17); /* trail sidebar */
+	--color-pane: light-dark(#e9e5da, #22201c); /* evidence pane: results and pages */
 	--color-ink: light-dark(#1d1b17, #ece7db); /* basalt: text */
 	--color-muted: light-dark(#6a655a, #9c9588); /* bark: secondary text */
 	--color-rule: light-dark(#e1dccf, #2f2c26); /* hairlines only (1.2:1), never a control edge */
@@ -34,6 +38,7 @@
 	--color-verified: light-dark(#1e4a32, #86b794);
 	--color-unsupported: light-dark(#9a5f12, #d9a250); /* resin */
 	--color-highlight: light-dark(#dde6d5, #23342a); /* moss: wash behind quoted passages */
+	--color-code: light-dark(#ece8de, #242220); /* lichen: subtle wash behind code */
 	--color-danger: light-dark(#a2331f, #e4896e); /* destructive, system errors; never in search */
 	--color-sheet: #fffefa; /* page renders: same in both themes, never inverted */
 	--color-sheet-rule: #d6d2c8; /* edge of a page render */
@@ -54,6 +59,9 @@
 :root {
 	color-scheme: light dark;
 	--sheet-dim: 1;
+	/* Layout: the content column (header, main, footer share it) and the site footer's height. */
+	--column: 72rem;
+	--site-footer: 5rem;
 }
 :root[data-theme='light'] {
 	color-scheme: light;
@@ -86,7 +94,7 @@ body {
 }
 
 main {
-	max-width: 72rem;
+	max-width: var(--column);
 	margin: 0 auto;
 	padding: 2rem max(1rem, env(safe-area-inset-right)) 4rem max(1rem, env(safe-area-inset-left));
 }

@@ -1,7 +1,7 @@
 <!--
 	A step's generated summary (docs/ui.md "Answer states"): the label, one flag, then each
 	sentence by its check state, every marker coloured by its own citation's status. The text is
-	minimal markdown (`answerBlocks`: paragraphs, lists, bold, italic, code), rendered as elements
+	minimal markdown (`answerBlocks`: paragraphs, lists, bold, italic, code spans and blocks), rendered as elements
 	from our own tree, never as HTML. A Not found
 	is a normal result, read against the pages searched. `children`: what follows a Not found
 	(the widen action). Choosing a marker is the page's business (`onchoose`).
@@ -82,6 +82,18 @@
 		<p>
 			{#each b.children as n, i (i)}{@render inline(n)}{/each}
 		</p>
+	{:else if b.kind === 'code'}
+		<!-- Focusable so a keyboard can scroll a long line (axe: scrollable-region-focusable); the
+		     language tag shows via CSS, so a copy is just the code. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<pre
+			class="code"
+			data-lang={b.lang}
+			role="region"
+			tabindex="0"
+			aria-label={b.lang ? `Code, ${b.lang}` : 'Code'}><code
+				>{#each b.children as r, i (i)}{@render run(r)}{/each}</code
+			></pre>
 	{:else if b.ordered}
 		<ol start={b.start}>
 			{#each b.items as item, i (i)}<li>
@@ -124,7 +136,11 @@
 								onchoose(m, null);
 							}}
 							onblur={() => (focused = null)}
-							onclick={(e) => onchoose(m, e.currentTarget)}>{one ? `[${m.ref}]` : m.ref}</a
+							onclick={(e) => {
+								// The page shows the result (and may open an overlay); no hash entry in history.
+								e.preventDefault();
+								onchoose(m, e.currentTarget);
+							}}>{one ? `[${m.ref}]` : m.ref}</a
 						>{/each}{#if !one}]{/if}</span
 				>{:else}{seg.text}{/if}{/each}{#if r.last && r.status === 'unsupported'}<span
 				class={['why', r.sentence !== null && focused === r.sentence && 'shown']}
@@ -138,6 +154,10 @@
 	}
 	.summary p {
 		margin: 0 0 0.5rem;
+	}
+	/* A narrow steps column (beside the evidence) wraps the state's label. */
+	.status .flag {
+		white-space: normal;
 	}
 	.eyebrow {
 		font-size: 0.9375rem;
@@ -174,7 +194,37 @@
 		font-weight: 600;
 	}
 	.text code {
-		font: 400 0.9375em/1 var(--font-mono);
+		font: 400 0.875em/1 var(--font-mono);
+		padding: 0.1em 0.3em;
+		border-radius: 3px;
+		background: var(--color-code);
+		overflow-wrap: anywhere;
+	}
+	.text pre {
+		margin: 0 0 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 4px;
+		background: var(--color-code);
+		overflow-x: auto;
+		font: 400 0.875rem/1.5 var(--font-mono);
+		tab-size: 4;
+	}
+	.text pre:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+	.text pre[data-lang]::before {
+		content: attr(data-lang);
+		display: block;
+		color: var(--color-muted);
+		font-size: 0.75rem;
+		user-select: none;
+	}
+	.text pre code {
+		font: inherit;
+		padding: 0;
+		background: none;
+		overflow-wrap: normal;
 	}
 	.searched {
 		font: 400 0.875rem/1.5 var(--font-mono);

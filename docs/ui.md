@@ -10,7 +10,9 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 | Role          | Use                                                  |
 | ------------- | ---------------------------------------------------- |
 | `page`        | Page background                                      |
-| `surface`     | Raised surfaces                                      |
+| `surface`     | Raised surfaces (menus, selected rows): above all    |
+| `sidebar`     | Search: the trail sidebar's area                     |
+| `pane`        | Search: the evidence pane's area (and its overlay)   |
 | `ink`         | Text                                                 |
 | `muted`       | Secondary text                                       |
 | `rule`        | Hairline dividers only (1.2:1, never a control edge) |
@@ -20,12 +22,17 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 | `verified`    | Answer state: verified                               |
 | `unsupported` | Answer state: unsupported                            |
 | `highlight`   | Wash behind quoted passages                          |
+| `code`        | Subtle wash behind code (spans and blocks)           |
 | `danger`      | Destructive actions and system errors                |
 | `sheet`       | Page renders: same in both themes, never inverted    |
 
 - No red in search results or answer states. `danger` is for destructive actions and
   system errors elsewhere.
 - Green (`verified`, `accent`) is never decorative.
+- The search screen has three areas, each a step apart: `page` (the conversation), `sidebar`,
+  `pane`. Light steps darker, dark steps lighter, `surface` sits above all three; text roles
+  stay AA on each (lowest: `muted` on `pane`, 4.6:1 light). Sticky bars inside an area take
+  that area's role as their background.
 - Light and dark follow `prefers-color-scheme` unless the user picks one on `/account`
   (`<html data-theme>`); every colour role is one `light-dark(light, dark)` value.
 
@@ -38,6 +45,9 @@ Three roles, and the role says whose words they are.
 | `font-sans`  | Schibsted Grotesk | Headings, UI, summaries, queries (default)    |
 | `font-serif` | Source Serif 4    | Quoted passages from documents only           |
 | `font-mono`  | JetBrains Mono    | Locators, page numbers, times, counts, states |
+
+Code in a generated summary (markdown code spans and fenced blocks) is `font-mono` on `code`;
+blocks keep their whitespace and scroll sideways rather than wrap.
 
 Headings are upright, one colour: no italics, no coloured words. A quote always shows its
 locator (`VOL 3 · §12.6 · P.412`), and a locator opens the PDF at that page.

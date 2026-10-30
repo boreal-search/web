@@ -34,8 +34,8 @@ export default defineConfig(
 		}
 	},
 	{
-		// Override or add rule settings here, such as:
-		// 'svelte/button-has-type': 'error'
-		rules: {}
+		// Keep components small enough to edit in parallel and read in one go.
+		files: ['**/*.svelte'],
+		rules: { 'max-lines': ['error', { max: 300, skipBlankLines: true, skipComments: true }] }
 	}
 );

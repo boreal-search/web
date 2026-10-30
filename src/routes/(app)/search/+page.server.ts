@@ -3,12 +3,13 @@
 // trail actions.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { withDataSources, type Access } from '#lib/server/access.js';
+import { CONTEXT_COOKIE, getAccess, withDataSources, type Access } from '#lib/server/access.js';
 import { requireUser } from '#lib/server/auth.js';
 import type { EngineFailure } from '#lib/failure.js';
 import { classifyEngineError, engine } from '#lib/server/engine.js';
 import { canSign } from '#lib/server/files.js';
 import {
+	branchTrail,
 	deleteTrail,
 	loadTrail,
 	renameTrail,
@@ -55,7 +56,8 @@ export const load: PageServerLoad = async ({
 	parent,
 	fetch,
 	url,
-	locals
+	locals,
+	untrack
 }): Promise<{
 	groups: PickerGroup[];
 	engineFailure: EngineFailure | null;
@@ -65,7 +67,9 @@ export const load: PageServerLoad = async ({
 	trail: PageTrail | null;
 }> => {
 	const user = requireUser();
-	const { access } = await parent();
+	// Untracked: the search layout re-runs on its own (the trail list after each stored step)
+	// without re-running this. A context switch invalidates everything anyway.
+	const { access } = await untrack(() => parent());
 	const orgId = access.context.kind === 'org' ? access.context.org.id : null;
 	const trailId = url.searchParams.get('trail');
 
@@ -139,7 +143,7 @@ async function pickerGroups(
 	}
 }
 
-/** The owner's trail actions. Every form posts `trail_id`; RLS refuses anyone but the owner. */
+/** Trail actions. Every form posts `trail_id`; RLS refuses anyone but the owner (branch: any reader). */
 const field = (form: FormData, name: string) => String(form.get(name) ?? '').trim();
 
 export const actions: Actions = {
@@ -183,6 +187,22 @@ export const actions: Actions = {
 		requireUser();
 		const problem = await deleteTrail(locals.supabase, field(await request.formData(), 'trail_id'));
 		if (problem) return fail(400, { error: problem });
-		redirect(303, resolve('/(app)/trails'));
+		redirect(303, resolve('/(app)/search'));
+	},
+
+	/** A new trail of the user's own, seeded with steps 01..n of one they can read (RLS). */
+	branch: async ({ request, locals, cookies }) => {
+		const user = requireUser();
+		const form = await request.formData();
+		const { context } = await getAccess(locals.supabase, user.id, cookies.get(CONTEXT_COOKIE));
+		const made = await branchTrail(
+			locals.supabase,
+			user.id,
+			field(form, 'trail_id'),
+			Number(field(form, 'n')),
+			context.kind === 'org' ? context.org.id : null
+		);
+		if ('error' in made) return fail(400, { error: made.error });
+		redirect(303, `${resolve('/(app)/search')}?trail=${made.id}`);
 	}
 };

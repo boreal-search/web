@@ -158,9 +158,11 @@ export type AnswerInline =
 	| { kind: 'break' }
 	| { kind: 'strong' | 'emphasis' | 'code'; children: AnswerInline[] };
 
-/** The summary's markdown, reduced to what the summary shows: paragraphs and lists. */
+/** The summary's markdown, reduced to what the summary shows: paragraphs, lists and code. */
 export type AnswerBlock =
 	| { kind: 'paragraph'; children: AnswerInline[] }
+	/** Preformatted code: whitespace kept, markers in it left as text. `lang`: the fence's tag. */
+	| { kind: 'code'; lang: string | null; children: AnswerRun[] }
 	| { kind: 'list'; ordered: boolean; start: number | null; items: AnswerBlock[][] };
 
 /** `text[from, to)`: one cited sentence, or text outside any (status and sentence null). */
@@ -239,12 +241,18 @@ function lowerBound(xs: readonly number[], x: number) {
 	return lo;
 }
 
+/** A fence's language tag, if it is a plain word (it is shown as a label, nothing more). */
+const fenceLang = (lang: string | null | undefined) =>
+	lang && /^[\w+#.-]{1,24}$/.test(lang) ? lang : null;
+
 /**
  * The summary as blocks of minimal markdown (CommonMark: paragraphs, lists, strong, emphasis,
- * code), its text cut into pieces at sentence edges, each with its sentence's status and its
- * markers. Model output is untrusted, so nothing else becomes markup: headings read as bold
- * paragraphs, quotes as their contents, links as their text (no hrefs), and images, HTML, code
- * blocks, rules and definitions as their source text. A marker split across nodes stays text.
+ * inline code, code blocks), its text cut into pieces at sentence edges, each with its
+ * sentence's status and its markers. Model output is untrusted, so nothing else becomes markup:
+ * headings read as bold paragraphs, quotes as their contents, links as their text (no hrefs),
+ * and images, HTML, rules and definitions as their source text. A marker split across nodes, or
+ * inside code, stays text. A code span alone on its line with a fence's backticks
+ * (```` ``` make x ``` ````, which CommonMark reads as inline) is a code block.
  */
 export function answerBlocks(
 	answer: Pick<Answer, 'text' | 'citations'>,
@@ -322,10 +330,54 @@ export function answerBlocks(
 				return raw(n);
 		}
 	};
+	/** A ```-span with nothing else on its line (within the paragraph `p`). */
+	const ownLine = (n: Nodes, p: readonly [number, number]) => {
+		const at = offsets(n);
+		if (n.type !== 'inlineCode' || !at || !text.startsWith('```', at[0])) return false;
+		const lineStart = text.lastIndexOf('\n', at[0] - 1) + 1;
+		const lineEnd = text.indexOf('\n', at[1]);
+		return (
+			text.slice(Math.max(lineStart, p[0]), at[0]).trim() === '' &&
+			text.slice(at[1], Math.min(lineEnd < 0 ? text.length : lineEnd, p[1])).trim() === ''
+		);
+	};
+	const blank = (xs: AnswerInline[]) =>
+		xs.every(
+			(x) => x.kind === 'run' && x.segments.every((s) => s.kind === 'text' && !s.text.trim())
+		);
+	/** A paragraph, split around its own-line ```-spans. */
+	const paragraph = (n: Nodes & { type: 'paragraph' }): AnswerBlock[] => {
+		const at = offsets(n);
+		const out: AnswerBlock[] = [];
+		let children: AnswerInline[] = [];
+		const flush = () => {
+			if (!blank(children)) out.push({ kind: 'paragraph', children });
+			children = [];
+		};
+		for (const c of n.children) {
+			if (at && c.type === 'inlineCode' && ownLine(c, at)) {
+				flush();
+				out.push({ kind: 'code', lang: null, children: value(c, false) });
+			} else children.push(...inline(c));
+		}
+		flush();
+		return out;
+	};
 	const block = (n: Nodes): AnswerBlock[] => {
 		switch (n.type) {
 			case 'paragraph':
-				return [{ kind: 'paragraph', children: n.children.flatMap(inline) }];
+				return paragraph(n);
+			case 'code': {
+				const at = offsets(n);
+				// A fenced block's value starts after its opening line (the fence and its tag).
+				const fenced = at !== null && /^\s*(`{3,}|~{3,})/.test(text.slice(...at));
+				const from = at && fenced ? text.indexOf('\n', at[0]) + 1 || at[1] : at?.[0];
+				const children =
+					at && from !== undefined
+						? leaf(n.value, from, at[1], false)
+						: [piece(OUTSIDE, plain(n.value))];
+				return [{ kind: 'code', lang: fenceLang(n.lang), children }];
+			}
 			case 'heading':
 				return [
 					{

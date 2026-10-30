@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { trailJson, trailMarkdown } from './trail-export.js';
+import { trailFileName, trailJson, trailMarkdown } from './trail-export.js';
 import { applyEvent } from './trail.js';
 import { answer, step } from './trail.fixture.js';
 
@@ -76,6 +76,16 @@ Exported 2026-10-28 21:02 UTC · reviewer@example.com · Kettle Ridge Review
 			'    Two rules:\n    - **Fines** apply [1].\n    - Notice is due [2].\n'
 		);
 	});
+
+	it('keeps code blocks as written', () => {
+		const a = answer({
+			text: 'Build   it [1]:\n\n```sh\ncd  src\n\n  make -j4   \n```\n``` make x.efi ```\nRun `a  b`.'
+		});
+		expect(trailMarkdown(meta, [step(1, { answer: a })])).toContain(
+			'    Build it [1]:\n    ```sh\n    cd  src\n\n      make -j4\n    ```\n' +
+				'    ``` make x.efi ```\n    Run `a b`.\n'
+		);
+	});
 });
 
 describe('trailJson', () => {
@@ -95,5 +105,18 @@ describe('trailJson', () => {
 			]
 		});
 		expect(JSON.stringify(parsed)).not.toMatch(/sig=|page_image_url/);
+	});
+});
+
+describe('trailFileName', () => {
+	it('slugs the title and dates the file', () => {
+		expect(trailFileName('Chinook habitat: 2.4 ha?', '2026-10-29T12:00:00Z', 'md')).toBe(
+			'boreal-trail-chinook-habitat-2-4-ha-2026-10-29.md'
+		);
+	});
+	it('falls back to "search" for a title with no letters or digits', () => {
+		expect(trailFileName('—', '2026-10-29T12:00:00Z', 'json')).toBe(
+			'boreal-trail-search-2026-10-29.json'
+		);
 	});
 });
