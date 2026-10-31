@@ -40,14 +40,17 @@ export const contextValue = (c: SearchContext) => (c.kind === 'org' ? c.org.slug
 export const contextLabel = (c: SearchContext) => (c.kind === 'org' ? c.org.name : 'Public');
 
 /**
- * Contexts a user may pick: their orgs by name, then Public. Public is offered when public
- * corpora exist, and is the only context for a user with no org (so they always have one).
+ * Contexts a user may pick: their orgs by name, then Public. Public is the only context for a
+ * user with no org (so they always have one). With orgs it's offered when public corpora exist,
+ * except to a user with exactly one org: their org context already searches every public corpus,
+ * so Public would be a choice that adds nothing (and they get no switcher).
  */
 export function availableContexts(memberships: Membership[], hasPublic: boolean): SearchContext[] {
 	const orgs: SearchContext[] = [...memberships]
 		.sort((a, b) => a.name.localeCompare(b.name) || a.slug.localeCompare(b.slug))
 		.map((org) => ({ kind: 'org', org }));
-	return hasPublic || orgs.length === 0 ? [...orgs, { kind: 'public' }] : orgs;
+	const offerPublic = orgs.length === 0 || (hasPublic && orgs.length > 1);
+	return offerPublic ? [...orgs, { kind: 'public' }] : orgs;
 }
 
 /** The context the cookie names, if it is one the user may use; else the first available. */

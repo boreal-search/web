@@ -1,6 +1,8 @@
 <!--
 	The search screen's trail list: "New search" (an empty trail), then the user's trails and
 	those shared with them, most recent first. Each reopens the trail; the one shown is marked.
+	One line per trail: the title, cut with an ellipsis (whole title, context and date on hover),
+	and a small "shared" marker on trails someone else shared.
 -->
 <script module lang="ts">
 	export interface SidebarTrail {
@@ -16,7 +18,7 @@
 
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { day, stamp } from '#lib/format.js';
+	import { stamp } from '#lib/format.js';
 
 	let {
 		trails,
@@ -37,6 +39,9 @@
 
 	const searchHref = resolve('/(app)/search');
 	const trailHref = (id: string) => `${searchHref}?trail=${id}`;
+	/** The row's tooltip: the whole title, then where and when (the row shows only the title). */
+	const hint = (t: SidebarTrail) =>
+		`${t.title}\n${t.owned ? '' : 'Shared with you · '}${t.org_name ?? 'Public'} · ${stamp(t.updated_at)}`;
 </script>
 
 <div class="sidebar">
@@ -57,16 +62,14 @@
 					<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved, plus ?trail= -->
 					<a
 						href={trailHref(t.id)}
+						title={hint(t)}
 						aria-current={t.id === currentId ? 'page' : undefined}
 						onclick={onpick}
 					>
 						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						<span class="title">{t.title}</span>
-						<span class="meta">
-							{#if !t.owned}<span class="shared">shared with you</span> ·{/if}
-							{t.org_name ?? 'Public'} ·
-							<time datetime={t.updated_at} title={stamp(t.updated_at)}>{day(t.updated_at)}</time>
-						</span>
+						{#if !t.owned}<span class="shared">shared<span class="sr-only"> with you</span></span
+							>{/if}
 					</a>
 				</li>
 			{/each}
@@ -102,46 +105,43 @@
 	}
 	ul {
 		list-style: none;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1px;
 		margin: 0 -0.5rem;
 		padding: 0;
 	}
 	li a {
 		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		padding: 0.5rem;
-		border-left: 2px solid transparent;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 2rem;
+		padding: 0.25rem 0.5rem;
 		color: var(--color-ink);
+		font-size: 0.875rem;
+		line-height: 1.4;
 		text-decoration: none;
 	}
 	li a:hover {
 		background: var(--color-surface);
 	}
 	li a[aria-current='page'] {
-		border-left-color: var(--color-ink);
 		background: var(--color-surface);
-	}
-	.title {
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-		overflow-wrap: anywhere;
-		font-size: 0.9375rem;
-		line-height: 1.35;
-	}
-	li a[aria-current='page'] .title {
+		box-shadow: inset 2px 0 0 var(--color-ink);
 		font-weight: 600;
 	}
-	.meta {
-		font: 400 0.8125rem/1.4 var(--font-mono);
-		color: var(--color-muted);
+	.title {
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.shared {
-		color: var(--color-ink);
+		flex: none;
+		font: 400 0.6875rem/1 var(--font-mono);
+		color: var(--color-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
 	}
 </style>

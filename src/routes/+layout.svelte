@@ -20,13 +20,6 @@
 	let switchBackTo = $derived(
 		page.route.id === '/(app)/data-sources/[id]' ? '/' : page.url.pathname
 	);
-	let contextName = $derived(
-		data.access
-			? data.access.context.kind === 'org'
-				? data.access.context.org.name
-				: 'Public'
-			: null
-	);
 
 	/** `page` on the item's own page, `true` on pages under it (a data source under Data sources). */
 	function current(href: string, section = false): 'page' | 'true' | undefined {
@@ -84,22 +77,19 @@
 		<AccountMenu user={data.user} />
 	</div>
 
-	{#if data.nav && contextName}
+	<!-- Only when there is a choice (2+ contexts): one org already searches every public corpus. -->
+	{#if data.nav && data.nav.contexts.length > 0}
 		<div class="context">
-			{#if data.nav.contexts.length > 0}
-				<form method="POST" action={resolve('/switch-org')}>
-					<input type="hidden" name="redirectTo" value={switchBackTo} />
-					<label for="context-switch">Searching in</label>
-					<select id="context-switch" name="org">
-						{#each data.nav.contexts as c (c.value)}
-							<option value={c.value} selected={c.current}>{c.label}</option>
-						{/each}
-					</select>
-					<button type="submit">Switch</button>
-				</form>
-			{:else}
-				<p>Searching in <b>{contextName}</b></p>
-			{/if}
+			<form method="POST" action={resolve('/switch-org')}>
+				<input type="hidden" name="redirectTo" value={switchBackTo} />
+				<label for="context-switch">Searching in</label>
+				<select id="context-switch" name="org">
+					{#each data.nav.contexts as c (c.value)}
+						<option value={c.value} selected={c.current}>{c.label}</option>
+					{/each}
+				</select>
+				<button type="submit">Switch</button>
+			</form>
 		</div>
 	{/if}
 </header>
@@ -192,8 +182,7 @@
 		font: 400 0.8125rem/1.5 var(--font-mono);
 		color: var(--color-muted);
 	}
-	.context form,
-	.context p {
+	.context form {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -201,10 +190,6 @@
 		margin-block: 0;
 		min-height: 2.75rem;
 		padding-block: 0.375rem;
-	}
-	.context b {
-		color: var(--color-ink);
-		font-weight: 500;
 	}
 	.context select {
 		width: auto;

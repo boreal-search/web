@@ -5,10 +5,11 @@
 	// follow-up from the latest step. Streaming lives in `LiveTrail`, the results view's state in
 	// `Evidence`; this page wires them to the composer.
 	import { afterNavigate } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import Composer from '#lib/components/search/Composer.svelte';
+	import { glide, spot, type ComposerSpot } from '#lib/components/search/composer-glide.js';
 	import EvidencePane from '#lib/components/search/EvidencePane.svelte';
 	import EvidencePanes, { type EvidenceClose } from '#lib/components/search/EvidencePanes.svelte';
 	import { Evidence } from '#lib/components/search/evidence.svelte.js';
@@ -83,6 +84,20 @@
 		pickFrom(next.steps);
 	});
 
+	// An empty trail centres the composer; the first step pins it under the steps (and back).
+	let fresh = $derived(trail.steps.length === 0);
+	let movedFrom: ComposerSpot | null = null;
+	$effect.pre(() => {
+		void fresh;
+		movedFrom = untrack(spot);
+	});
+	$effect(() => {
+		void fresh;
+		const from = movedFrom;
+		movedFrom = null;
+		if (from) untrack(() => glide(from));
+	});
+
 	/** The stored trail as loaded, when it's the one shown: title, owner, people. */
 	let stored = $derived(data.trail && data.trail.id === trail.trailId ? data.trail : null);
 	let canRefine = $derived(stored ? stored.canRefine : true);
@@ -92,7 +107,7 @@
 	let title = $derived(stored?.title ?? trail.steps[0]?.query ?? '');
 	let contextNote = $derived(
 		stored?.isOwner && !stored.canRefine
-			? `This trail was searched in ${orgName(stored.org_id)}. Switch back to it to refine, or start a new search.`
+			? `This trail was searched in ${orgName(stored.org_id)}. ${data.access.contexts.length > 1 ? 'Switch back to it to refine, or start a new search.' : 'Start a new search to search again.'}`
 			: null
 	);
 	let actionNotice = $derived(
@@ -150,9 +165,9 @@
 	}
 </script>
 
-<div class="page-head">
-	<h1>Search</h1>
-</div>
+{#snippet head()}
+	<div class="page-head"><h1>Search</h1></div>
+{/snippet}
 
 {#snippet composer()}
 	{#if data.access.dataSourceIds.length === 0}
@@ -211,9 +226,10 @@
 	/>
 {/snippet}
 
-{#if trail.steps.length === 0}
-	{@render composer()}
+{#if fresh}
+	<div class="start">{@render head()}{@render composer()}</div>
 {:else}
+	{@render head()}
 	<EvidencePanes selectedKey={trail.selected?.created_at} split={data.split} {composer} {evidence}>
 		{#snippet steps({ beside, open })}
 			<section class="trail" aria-labelledby="trail-heading">
@@ -275,6 +291,20 @@
 			overflow: hidden;
 			clip-path: inset(50%);
 		}
+	}
+	/* A new search: the composer (and Search options, opening below it) in the middle of the area. */
+	.start {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 0.75rem;
+		min-height: max(16rem, calc(100dvh - var(--site-footer) - 16rem));
+		padding-bottom: 4rem;
+	}
+	.start > :global(*) {
+		width: 100%;
+		max-width: 52rem;
+		margin-inline: auto;
 	}
 	.note {
 		margin: 0 0 0.75rem;

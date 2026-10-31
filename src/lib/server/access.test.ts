@@ -47,6 +47,11 @@ describe('availableContexts', () => {
 		expect(values(availableContexts([beta, acme], false))).toEqual(['acme', 'beta']);
 	});
 
+	it('gives a one-org user only their org: it already searches public corpora', () => {
+		expect(values(availableContexts([acme], true))).toEqual(['acme']);
+		expect(values(availableContexts([acme], false))).toEqual(['acme']);
+	});
+
 	it('always gives a user with no org the Public context', () => {
 		expect(values(availableContexts([], false))).toEqual(['public']);
 		expect(values(availableContexts([], true))).toEqual(['public']);

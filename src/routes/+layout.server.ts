@@ -46,7 +46,7 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 		nav: {
 			isPlatformAdmin: platformAdmin,
 			adminOrgs: access.memberships.filter((m) => m.role === 'admin'),
-			// Switcher only when there is a choice: 2+ orgs, or an org plus public corpora.
+			// Switcher only when there is a choice: 2+ orgs (one org already searches public corpora).
 			contexts:
 				access.contexts.length > 1
 					? access.contexts.map((c) => ({
