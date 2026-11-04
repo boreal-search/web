@@ -22,7 +22,7 @@
 		the pages that answer the question, each one opened at the right page.
 	</p>
 	<div class="actions">
-		<a class="button primary" href={resolve('/signup')}>Sign up</a>
+		<a class="button primary" href={resolve('/signup')}>Request access</a>
 		<a class="button" href={resolve('/login')}>Log in</a>
 	</div>
 </header>
@@ -94,23 +94,12 @@
 </section>
 
 <section class="band" aria-labelledby="access-h">
-	<h2 id="access-h">What you can search</h2>
-	<ol class="rows">
-		<li>
-			<span class="key">Now</span>
-			<span
-				>Sign up to search the federal environmental Acts: the Canadian Environmental Protection
-				Act, 1999, the Impact Assessment Act and the Species at Risk Act.</span
-			>
-		</li>
-		<li>
-			<span class="key">Your documents</span>
-			<span>Once you've signed up, request access to search your organization's documents.</span>
-		</li>
-	</ol>
+	<h2 id="access-h">Request a demo or request access</h2>
 	<div class="actions">
-		<a class="button primary" href={resolve('/signup')}>Sign up</a>
-		<a class="button" href={resolve('/login')}>Log in</a>
+		<a class="button primary" href={resolve('/signup')}>Request access</a>
+		<a class="button" href="mailto:support@borealsearch.app?subject=Boreal%20demo%20request"
+			>Request a demo</a
+		>
 	</div>
 </section>
 

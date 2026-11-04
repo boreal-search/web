@@ -64,10 +64,7 @@
 
 {#if granted === 0}
 	{#if noOrg}
-		<p class="empty">
-			You're not in an org yet, and there are no public data sources. Ask your org admin for an
-			invite.
-		</p>
+		<p class="empty">You're not in an org yet, and there are no public data sources.</p>
 		{@render requestAccess()}
 	{:else}
 		<p class="empty">

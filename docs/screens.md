@@ -12,7 +12,7 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 - Nav items (signed in): Data sources, Search, "Manage {org name}" (one per owned org), Admin (platform admin only). Anon: no nav, only Log in.
 - [ ] Anon vs signed in header; many owned orgs (nav grows); long org name / long email
 - [ ] No active-page indicator exists today; no sign-out confirmation; no mobile layout (single flex row)
-- [ ] In progress: add Account link, Sign up link for anon; "not in an org" state must still render nav
+- [ ] In progress: add Account link, Request access link (to `/signup`) for anon; "not in an org" state must still render nav
 - Context switcher: form "Searching in [select] Switch" (POST `/switch-org`, works without JS; returns to the same page, or `/` from a data source page). Shown only when there are 2+ contexts: 2+ orgs, or 1 org plus public corpora. Options: the user's orgs by name, then "Public" (omitted when no corpora are public). Invalid choice: 400 error page.
 - [ ] Switcher: 2 orgs + Public; many orgs; long org names; current context visible only as the selected option (no other indicator)
 
@@ -65,7 +65,7 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 
 - Who: signed-in user with zero memberships. Their only context is Public; no switcher.
 - With public corpora: Data sources and Search work over the public corpora (picker group "Public"), plus the line "Want your own documents? Contact us." (plain text; no contact address yet).
-- No public corpora: empty state "You're not in an org yet, and there are no public data sources. Ask your org admin for an invite, or contact us to search your own documents." on `/` and `/search`.
+- No public corpora: empty state "You're not in an org yet, and there are no public data sources." on `/`, with the request-access link below it; "You're not in an org yet, and there are no public data sources. Ask your org admin for an invite, or contact us to search your own documents." on `/search`.
 - [ ] Needs: a real contact link; sign out / change account; nav has no Manage links
 - [ ] Pending invite for their email is claimed only when the email is confirmed; unconfirmed user needs "confirm your email" copy _(inferred)_
 

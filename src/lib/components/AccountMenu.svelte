@@ -1,4 +1,4 @@
-<!-- The masthead's account corner: the signed-in user's menu (Account, Log out), else Log in / Sign up. -->
+<!-- The masthead's account corner: the signed-in user's menu (Account, Log out), else Log in / Request access. -->
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -36,7 +36,7 @@
 		</details>
 	{:else}
 		<a href={resolve('/login')} aria-current={current(resolve('/login'))}>Log in</a>
-		<a class="button primary" href={resolve('/signup')}>Sign up</a>
+		<a class="button primary" href={resolve('/signup')}>Request access</a>
 	{/if}
 </div>
 
