@@ -1,8 +1,8 @@
 -- Search review: founders read what was searched and what came back, and mark answers good or bad.
 --   search_events gains what the user saw (as searched, the summary, the result locators) and,
 --     when the step was stored, where it is in its trail. The text columns follow
---     orgs.log_queries like `query`: off = null. Trails themselves stay private to their owner;
---     the review reads only search_events.
+--     orgs.log_queries like `query`: off = null. The trail tables stay owner-only; the review
+--     reads search_events, so platform admins see queries and answers where log_queries is on.
 --   search_ratings: one rating per (target, user); the target is a search (one response) or a
 --     whole trail (the conversation). Users rate their own; platform admins rate any search as
 --     reviewers (a row by someone other than the searcher is a reviewer verdict) and read all.

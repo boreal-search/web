@@ -1,6 +1,8 @@
 -- The search trail (infra/docs/handovers/2026-10-28-search-trail.md): each search is a
 -- numbered step with its own scope, results and checked summary, kept as a record.
---   trails: private to their owner. Not the org, not org admins, not platform admins.
+--   trails: the trail tables are private to their owner (not the org, org admins or
+--     platform admins). The same queries and answers also reach Boreal's quality review
+--     through search_events while the org's log_queries is on (20261116000001/2).
 --   trail_shares: the owner shares a trail read-only with named members of its org.
 --   trail_steps: snapshots of what the user saw (no signed URLs). Inserted when results
 --     arrive, completed once with the summary and readout; never edited after that.

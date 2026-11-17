@@ -6,7 +6,8 @@ import type { PageServerLoad } from './$types';
 
 /**
  * One search for review: what the user saw, the other searches in the same trail (from
- * search_events: trails stay private to their owner), and this admin's own verdict.
+ * search_events, kept while the org's log_queries is on; the trail tables are owner-only), and
+ * this admin's own verdict.
  */
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const admin = await requirePlatformAdmin();

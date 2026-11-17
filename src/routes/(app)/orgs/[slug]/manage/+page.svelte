@@ -10,7 +10,7 @@
 	let { data, form }: PageProps = $props();
 
 	/** Where an action's notice or error is shown: next to the form that sent it. */
-	type Slot = 'members' | 'add' | 'invites' | 'grants' | 'domains' | 'settings';
+	type Slot = 'members' | 'add' | 'invites' | 'review' | 'grants' | 'domains' | 'settings';
 	// Set on submit when JS runs. Without JS it stays null and feedback shows in the top slot.
 	let from = $state<Slot | null>(null);
 
@@ -229,6 +229,31 @@
 	{@render feedback('invites')}
 </section>
 
+<section class="band" aria-labelledby="review-heading">
+	<h2 id="review-heading">Quality review</h2>
+	<form method="POST" action="?/saveReview" class="stack" use:enhance={submit('review', false)}>
+		<div class="field">
+			<label class="check">
+				<input
+					type="checkbox"
+					name="log_queries"
+					checked={data.org.log_queries}
+					aria-describedby="log-queries-help"
+				/>
+				Let Boreal review searches to improve answers
+			</label>
+			<span class="help" id="log-queries-help">
+				When on, Boreal keeps each search's query and the answer it showed (the summary and the
+				pages it cited), and Boreal staff read them to check answer quality. When off, only the
+				query's length, the data sources, result count, timings and outcome are kept. Applies to new
+				searches. Members' own trails are a separate setting.
+			</span>
+		</div>
+		{@render feedback('review')}
+		<div class="actions"><button type="submit" class="primary">Save</button></div>
+	</form>
+</section>
+
 {#if data.platform}
 	<section class="band" aria-labelledby="grants-heading">
 		<h2 id="grants-heading">Data source access</h2>
@@ -353,21 +378,6 @@
 					and existing members don't change.
 				</span>
 			</label>
-			<div class="field">
-				<label class="check">
-					<input
-						type="checkbox"
-						name="log_queries"
-						checked={data.org.log_queries}
-						aria-describedby="log-queries-help"
-					/>
-					Store query text in search analytics
-				</label>
-				<span class="help" id="log-queries-help">
-					Every search is logged either way. When off, the query text isn't stored: only its length,
-					the data sources, result count, top score, time and outcome. Applies to new searches.
-				</span>
-			</div>
 			<div class="field">
 				<label class="check">
 					<input

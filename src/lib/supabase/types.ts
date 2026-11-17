@@ -43,6 +43,8 @@ export interface Database {
 					id: string;
 					slug: string;
 					name: string;
+					/** Keep queries, summaries and results in search_events for Boreal's quality review
+					 * (default on; org admins switch it with `set_org_log_queries`). */
 					log_queries: boolean;
 					/** Off: no trails are stored for this org (separate from log_queries). */
 					conversation_history: boolean;
@@ -409,6 +411,8 @@ export interface Database {
 			can_read_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			can_write_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			owns_search_event: { Args: { p_id: string }; Returns: boolean };
+			/** Platform admins and the org's admins. */
+			set_org_log_queries: { Args: { p_org_id: string; p_on: boolean }; Returns: undefined };
 			keeps_trails: { Args: { p_org_id: string | null }; Returns: boolean };
 			/** Owner, shares, and (to the owner only) org members it could be shared with. */
 			trail_people: {
