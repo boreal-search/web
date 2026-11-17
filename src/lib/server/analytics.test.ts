@@ -6,6 +6,7 @@ vi.mock('@vercel/functions', () => ({ waitUntil }));
 import type { Database } from '#lib/supabase/types.js';
 import { buildSearchEvent, recordSearchEvent } from './analytics';
 import type { SearchResponse } from './engine.types';
+import { answer, step } from '#lib/trail.fixture.js';
 
 const response: SearchResponse = {
 	query: 'noise limits',
@@ -75,6 +76,37 @@ describe('buildSearchEvent', () => {
 			retrieval_ms: null,
 			error: '502 upstream'
 		});
+	});
+
+	const seen = {
+		step: step(2, { resolved: 'noise limits at night', answer: answer() }),
+		at: { trail_id: 'trail-1', n: 2 }
+	};
+
+	it('keeps what the user saw and where it sits in their trail', () => {
+		const row = buildSearchEvent({ ...input, id: 'e1', seen }, true);
+		expect(row).toMatchObject({
+			id: 'e1',
+			trail_id: 'trail-1',
+			step_n: 2,
+			resolved_query: 'noise limits at night',
+			answer: { abstained: false },
+			total_ms: 3400
+		});
+		expect(row.results).toHaveLength(seen.step.results.length);
+		expect(JSON.stringify(row.results)).not.toMatch(/page_image_url/);
+	});
+
+	it('drops the summary and results with the query text when the org opts out', () => {
+		const row = buildSearchEvent({ ...input, seen }, false);
+		expect(row).toMatchObject({
+			resolved_query: null,
+			answer: null,
+			results: null,
+			trail_id: 'trail-1',
+			total_ms: 3400
+		});
+		expect(row).not.toHaveProperty('id');
 	});
 });
 

@@ -51,7 +51,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 	);
 	const orgId = context.kind === 'org' ? context.org.id : null;
 	// Attributed to the current org (null in Public). See analytics.ts.
-	const record = (outcome: Pick<SearchEventInput, 'status' | 'response' | 'error'>) =>
+	const record = (
+		outcome: Pick<SearchEventInput, 'status' | 'response' | 'error' | 'id' | 'seen'>
+	) =>
 		recordSearchEvent(locals.supabase, {
 			orgId,
 			userId: user.id,
@@ -184,7 +186,14 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 				store,
 				timedOut: () => deadline.aborted
 			});
-			await record(streamOutcome(result.step, result.results));
+			// The row's id goes to the browser last, so the step can be rated.
+			const id = crypto.randomUUID();
+			await record({
+				...streamOutcome(result.step, result.results),
+				id,
+				seen: { step: result.step, at: result.at }
+			});
+			send({ type: 'recorded', search_id: id });
 			try {
 				controller.close();
 			} catch {

@@ -1,12 +1,15 @@
 <!--
 	One trail step: its number and query (a control that selects it), scope chips, the
-	query as searched, the waiting bar, the checked summary, the readout, the widen action and,
-	on earlier steps of a stored trail, "Branch from here" (a new trail seeded with 01..this one).
+	query as searched, the waiting bar, the checked summary, the readout, the widen action, Good /
+	Bad once the user's own search is recorded and, on earlier steps of a stored trail, "Branch
+	from here" (a new trail seeded with 01..this one).
 -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { Mark } from '#lib/answer.js';
+	import Rate from '#lib/components/Rate.svelte';
 	import { count, plural } from '#lib/format.js';
+	import type { RatingValue } from '#lib/rating.js';
 	import { indexedDay, stepReadout, summaryProblem, type WaitClock } from '#lib/step-view.js';
 	import { isNarrowed, scopeLabel, stepNumber, type TrailStep } from '#lib/trail.js';
 	import StepSummary from './StepSummary.svelte';
@@ -25,7 +28,8 @@
 		onchoose,
 		onwiden,
 		onview,
-		branchFrom
+		branchFrom,
+		rating = null
 	}: {
 		step: TrailStep;
 		selected: boolean;
@@ -47,6 +51,8 @@
 		onview?: () => void;
 		/** The stored trail this step can be branched from (an earlier step); null: no branch. */
 		branchFrom: string | null;
+		/** The user's own rating of this step's search, as loaded. */
+		rating?: RatingValue | null;
 	} = $props();
 
 	let branching = $state(false);
@@ -130,6 +136,9 @@
 					>View pages ({s.results.length})</button
 				>
 			</p>
+		{/if}
+		{#if s.search_id && s.readout.finished}
+			<Rate target={{ kind: 'search', id: s.search_id }} initial={rating} label="This response" />
 		{/if}
 	</div>
 

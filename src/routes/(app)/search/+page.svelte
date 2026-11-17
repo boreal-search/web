@@ -240,6 +240,7 @@
 					email={data.user?.email ?? ''}
 					context={stored ? orgName(stored.org_id) : contextName}
 					notice={actionNotice}
+					rating={stored?.ratings?.trail ?? null}
 				/>
 				{#if !data.history && canRefine}
 					<p class="note">
@@ -272,6 +273,7 @@
 										void open();
 									}}
 							branchFrom={branchFrom(s)}
+							rating={s.search_id ? (stored?.ratings?.searches[s.search_id] ?? null) : null}
 						/>
 					{/each}
 				</ol>

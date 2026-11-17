@@ -8,6 +8,7 @@ import { requireUser } from '#lib/server/auth.js';
 import type { EngineFailure } from '#lib/failure.js';
 import { classifyEngineError, engine } from '#lib/server/engine.js';
 import { canSign } from '#lib/server/files.js';
+import { trailRatings, type TrailRatings } from '#lib/server/ratings.js';
 import {
 	branchTrail,
 	deleteTrail,
@@ -44,6 +45,8 @@ export interface PageTrail {
 	canRefine: boolean;
 	steps: TrailStep[];
 	people: TrailPerson[];
+	/** The owner's own ratings; null for a reader. */
+	ratings: TrailRatings | null;
 }
 
 /**
@@ -92,6 +95,15 @@ export const load: PageServerLoad = async ({
 	if (trailId && !loaded) {
 		error(404, 'Trail not found', { failure: { kind: 'not_found', what: 'trail' } });
 	}
+	const ratings =
+		loaded?.isOwner === true
+			? await trailRatings(
+					locals.supabase,
+					user.id,
+					loaded.trail.id,
+					loaded.steps.flatMap((s) => (s.search_id ? [s.search_id] : []))
+				)
+			: null;
 	const trail = loaded && {
 		id: loaded.trail.id,
 		title: loaded.trail.title,
@@ -99,7 +111,8 @@ export const load: PageServerLoad = async ({
 		isOwner: loaded.isOwner,
 		canRefine: loaded.isOwner && loaded.trail.org_id === orgId,
 		steps: loaded.steps,
-		people: loaded.people
+		people: loaded.people,
+		ratings
 	};
 
 	return {

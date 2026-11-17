@@ -64,6 +64,9 @@ export interface TrailStep {
 	wants_answer: boolean;
 	readout: StepReadout;
 	created_at: string;
+	/** The search's analytics record (search_events.id), what ratings attach to; null until it is
+	 * recorded, and for steps with none (shown to someone else, branched, or older). Not stored. */
+	search_id: string | null;
 }
 
 /** What starts a step, before the engine has answered. */
@@ -100,11 +103,15 @@ export type EngineEvent =
 
 /**
  * What web's `/search/stream` sends the browser: the engine's events, unchanged, plus
- * `stored` once the step is saved (never when the org doesn't keep search history), and
- * `timeout` (web's own deadline) in place of an engine error.
+ * `stored` once the step is saved (never when the org doesn't keep search history),
+ * `timeout` (web's own deadline) in place of an engine error, and last, `recorded` with the
+ * search's analytics id.
  */
 export type StreamEvent =
-	EngineEvent | { type: 'stored'; trail_id: string; n: number } | { type: 'timeout' };
+	| EngineEvent
+	| { type: 'stored'; trail_id: string; n: number }
+	| { type: 'timeout' }
+	| { type: 'recorded'; search_id: string };
 
 /** A new step, before any event. `indexed_at`/names come from the engine's data source list. */
 export function newStep(
@@ -139,7 +146,8 @@ export function newStep(
 			error: null,
 			finished: false
 		},
-		created_at: now
+		created_at: now,
+		search_id: null
 	};
 }
 
@@ -187,6 +195,8 @@ export function applyEvent(step: TrailStep, event: StreamEvent, from: number | n
 			};
 		case 'stored':
 			return { ...step, n: event.n };
+		case 'recorded':
+			return { ...step, search_id: event.search_id };
 		case 'stage':
 			return step;
 	}

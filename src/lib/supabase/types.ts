@@ -9,6 +9,8 @@ export type SearchStatus =
 export type AddMemberResult = 'added' | 'invited';
 export type AccessRequestStatus = 'open' | 'done';
 export type TrailRelation = 'owner' | 'shared' | 'member';
+/** A thumbs up or down on a search or a whole trail (search_ratings). */
+export type Rating = 'good' | 'bad';
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface Database {
@@ -204,6 +206,16 @@ export interface Database {
 					retrieval_ms: number | null;
 					reranked: boolean | null;
 					error: string | null;
+					/** The stored trail step this search became; null when not stored. */
+					trail_id: string | null;
+					step_n: number | null;
+					/** null when orgs.log_queries is false (as `query`). */
+					resolved_query: string | null;
+					/** The summary (Answer), or null; null when orgs.log_queries is false. */
+					answer: Json | null;
+					/** StepResult[] without signed URLs; null when orgs.log_queries is false. */
+					results: Json | null;
+					total_ms: number | null;
 					created_at: string;
 				};
 				Insert: {
@@ -221,9 +233,37 @@ export interface Database {
 					retrieval_ms?: number | null;
 					reranked?: boolean | null;
 					error?: string | null;
+					trail_id?: string | null;
+					step_n?: number | null;
+					resolved_query?: string | null;
+					answer?: Json | null;
+					results?: Json | null;
+					total_ms?: number | null;
 					created_at?: string;
 				};
 				Update: Record<string, never>;
+				Relationships: [];
+			};
+			/** One per (target, user): a search (one response) or a whole trail, never both. */
+			search_ratings: {
+				Row: {
+					search_event_id: string | null;
+					trail_id: string | null;
+					user_id: string;
+					rating: Rating;
+					note: string | null;
+					updated_at: string;
+				};
+				/** `user_id` defaults to the caller. */
+				Insert: {
+					search_event_id?: string | null;
+					trail_id?: string | null;
+					user_id?: string;
+					rating: Rating;
+					note?: string | null;
+					updated_at?: string;
+				};
+				Update: { rating?: Rating; note?: string | null; updated_at?: string };
 				Relationships: [];
 			};
 			trails: {
@@ -311,6 +351,40 @@ export interface Database {
 			};
 		};
 		Views: {
+			/** /admin/searches: a search with the searcher's ratings and the latest reviewer verdict. */
+			search_review: {
+				Row: {
+					id: string;
+					created_at: string;
+					org_id: string | null;
+					org_name: string | null;
+					user_id: string | null;
+					user_email: string | null;
+					query: string | null;
+					query_length: number;
+					resolved_query: string | null;
+					data_source_ids: string[];
+					status: SearchStatus;
+					error: string | null;
+					result_count: number | null;
+					retrieval_ms: number | null;
+					total_ms: number | null;
+					trail_id: string | null;
+					step_n: number | null;
+					answer: Json | null;
+					results: Json | null;
+					user_rating: Rating | null;
+					user_note: string | null;
+					/** The searcher's rating of the whole trail. */
+					trail_rating: Rating | null;
+					trail_note: string | null;
+					/** The latest rating by someone other than the searcher (a platform admin). */
+					review_rating: Rating | null;
+					review_note: string | null;
+					reviewer_email: string | null;
+				};
+				Relationships: [];
+			};
 			org_search_daily: {
 				Row: {
 					/** null: the Public context (visible to platform admins only). */
@@ -334,6 +408,7 @@ export interface Database {
 			owns_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			can_read_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			can_write_trail: { Args: { p_trail_id: string }; Returns: boolean };
+			owns_search_event: { Args: { p_id: string }; Returns: boolean };
 			keeps_trails: { Args: { p_org_id: string | null }; Returns: boolean };
 			/** Owner, shares, and (to the owner only) org members it could be shared with. */
 			trail_people: {
@@ -354,7 +429,7 @@ export interface Database {
 				Returns: { user_id: string; last_sign_in_at: string | null }[];
 			};
 		};
-		Enums: { org_role: OrgRole; search_status: SearchStatus };
+		Enums: { org_role: OrgRole; search_status: SearchStatus; search_rating: Rating };
 		CompositeTypes: Record<string, never>;
 	};
 }
