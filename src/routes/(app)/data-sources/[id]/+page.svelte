@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
+	import PlatformOnly from '#lib/components/PlatformOnly.svelte';
 	import { count, humanise, plural, stamp } from '#lib/format.js';
 	import type { PageProps } from './$types';
 
@@ -10,7 +11,8 @@
 	let detail = $derived(data.detail);
 	let ds = $derived(detail?.dataSource ?? null);
 	let documents = $derived(detail?.documents.items ?? []);
-	let jobs = $derived(detail?.jobs ?? []);
+	/** Null unless the viewer is a platform admin: the load doesn't fetch them for anyone else. */
+	let jobs = $derived(detail?.jobs ?? null);
 	let total = $derived(detail?.documents.total ?? 0);
 	let shownCount = $derived(documents.length);
 	let here = $derived(resolve('/(app)/data-sources/[id]', { id: data.id }));
@@ -18,8 +20,10 @@
 	let prevOffset = $derived(Math.max(data.offset - data.pageSize, 0));
 	let hasPrev = $derived(data.offset > 0 && shownCount > 0);
 	let hasNext = $derived(nextOffset < total);
-	let active = $derived(jobs.filter((j) => j.status === 'queued' || j.status === 'running').length);
-	let failed = $derived(jobs.filter((j) => j.status === 'failed').length);
+	let active = $derived(
+		jobs?.filter((j) => j.status === 'queued' || j.status === 'running').length ?? 0
+	);
+	let failed = $derived(jobs?.filter((j) => j.status === 'failed').length ?? 0);
 </script>
 
 <p class="back"><a href={resolve('/(app)')}>← Data sources</a></p>
@@ -49,7 +53,9 @@
 {#if data.engineFailure}
 	<FailureNotice
 		failure={data.engineFailure}
-		effect="Documents and ingestion jobs for this data source can't be loaded."
+		effect={data.showJobs
+			? "Documents and ingestion jobs for this data source can't be loaded."
+			: "Documents for this data source can't be loaded."}
 	/>
 {:else}
 	<section class="band" aria-labelledby="documents">
@@ -109,7 +115,9 @@
 			{/if}
 		{/if}
 	</section>
+{/if}
 
+{#if jobs}
 	<section class="band" aria-labelledby="jobs">
 		<div class="band-head">
 			<h2 id="jobs">Ingestion jobs</h2>
@@ -121,6 +129,7 @@
 				</p>
 			{/if}
 		</div>
+		<PlatformOnly note="Other users don't see this section." />
 
 		{#if jobs.length === 0}
 			<p class="empty">No ingestion jobs recorded.</p>

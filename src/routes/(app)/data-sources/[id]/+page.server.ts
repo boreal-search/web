@@ -9,23 +9,26 @@ const notFound = () =>
 	error(404, 'Data source not found', { failure: { kind: 'not_found', what: 'data_source' } });
 
 export const load: PageServerLoad = async ({ params, url, parent, fetch }) => {
-	const { access } = await parent();
+	const { access, nav } = await parent();
 	if (!access.dataSourceIds.includes(params.id)) notFound();
 	// Known without the engine: the id and which group grants it.
 	const group = access.groups.find((g) => g.ids.includes(params.id))?.label ?? null;
 
 	const offset = Math.max(Number(url.searchParams.get('offset') ?? 0) || 0, 0);
 	const api = engine(fetch);
+	// Ingestion jobs are platform admins' business; nobody else's load asks the engine for them.
+	const showJobs = nav?.isPlatformAdmin ?? false;
 
 	try {
 		const [dataSource, documents, jobs] = await Promise.all([
 			api.getDataSource(params.id),
 			api.listDocuments(params.id, { limit: PAGE_SIZE, offset }),
-			api.listJobs({ data_source_id: params.id, limit: 20 })
+			showJobs ? api.listJobs({ data_source_id: params.id, limit: 20 }) : null
 		]);
 		return {
 			id: params.id,
 			group,
+			showJobs,
 			detail: { dataSource, documents, jobs },
 			engineFailure: null,
 			offset,
@@ -37,6 +40,7 @@ export const load: PageServerLoad = async ({ params, url, parent, fetch }) => {
 		return {
 			id: params.id,
 			group,
+			showJobs,
 			detail: null,
 			engineFailure: classifyEngineError(e),
 			offset,

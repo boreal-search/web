@@ -1,3 +1,5 @@
+import { isUuid } from './trails.js';
+
 // /admin/users: query parsing, page math and the PostgREST search filter. Pure; the load does
 // the queries and RLS decides who may read them.
 
@@ -11,16 +13,31 @@ const MAX_PAGE = 100_000;
 export interface UsersQuery {
 	/** Trimmed search text, '' for none. */
 	q: string;
+	/** Members of this org only (its id); null for everyone. */
+	org: string | null;
 	/** 1-based. */
 	page: number;
 }
 
-/** `?q=` and `?page=` from the URL. A missing, malformed or < 1 page is page 1. */
+/**
+ * `?q=`, `?org=` and `?page=` from the URL. A missing, malformed or < 1 page is page 1; an org
+ * that isn't an id is no filter.
+ */
 export function parseUsersQuery(params: URLSearchParams): UsersQuery {
 	const q = (params.get('q') ?? '').trim().replace(/\s+/g, ' ').slice(0, MAX_QUERY);
+	const org = params.get('org') ?? '';
 	const raw = params.get('page') ?? '';
 	const n = /^\d+$/.test(raw) ? Number(raw) : 1;
-	return { q, page: Math.min(Math.max(n, 1), MAX_PAGE) };
+	return { q, org: isUuid(org) ? org : null, page: Math.min(Math.max(n, 1), MAX_PAGE) };
+}
+
+/** `?…` for a page of this view; page 1 and empty filters are left out. */
+export function usersSearch(query: UsersQuery, page: number): string {
+	const entries: [string, string][] = [];
+	if (query.q) entries.push(['q', query.q]);
+	if (query.org) entries.push(['org', query.org]);
+	if (page > 1) entries.push(['page', String(page)]);
+	return entries.length ? `?${new URLSearchParams(entries)}` : '';
 }
 
 /** Rows `from`..`to` (0-based, inclusive) of a page, for `.range()`. */

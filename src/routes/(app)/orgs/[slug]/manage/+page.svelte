@@ -3,6 +3,8 @@
 	   platform-only sections) to get under 300 lines. */
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
+	import PlatformOnly from '#lib/components/PlatformOnly.svelte';
+	import OrgAdminLinks from '#lib/components/OrgAdminLinks.svelte';
 	import { plural, stamp } from '#lib/format.js';
 	import { ORG_ROLES, ROLE_LABELS } from '#lib/roles.js';
 	import type { PageProps } from './$types';
@@ -46,10 +48,6 @@
 	{/if}
 {/snippet}
 
-{#snippet scope()}
-	<p class="scope"><span>Platform admin only</span> Org admins don't see this section.</p>
-{/snippet}
-
 <div class="page-head">
 	<h1>{data.org.name}</h1>
 	<p class="readout">
@@ -67,6 +65,7 @@
 			></span
 		>
 	</p>
+	{#if data.platform}<p><OrgAdminLinks orgId={data.org.id} orgName={data.org.name} /></p>{/if}
 </div>
 
 {@render feedback(null)}
@@ -257,7 +256,7 @@
 {#if data.platform}
 	<section class="band" aria-labelledby="grants-heading">
 		<h2 id="grants-heading">Data source access</h2>
-		{@render scope()}
+		<PlatformOnly note="Org admins don't see this section." />
 		{#if data.platform.engineFailure}
 			<FailureNotice
 				failure={data.platform.engineFailure}
@@ -298,7 +297,7 @@
 
 	<section class="band" aria-labelledby="domains-heading">
 		<h2 id="domains-heading">Email domains</h2>
-		{@render scope()}
+		<PlatformOnly note="Org admins don't see this section." />
 		<p id="domains-help" class="muted">
 			Anyone who confirms an address at one of these domains (a new account or an email change)
 			joins {data.org.name} as <strong>{ROLE_LABELS[data.org.default_role]}</strong>, the role set
@@ -357,7 +356,7 @@
 
 	<section class="band" aria-labelledby="settings-heading">
 		<h2 id="settings-heading">Settings</h2>
-		{@render scope()}
+		<PlatformOnly note="Org admins don't see this section." />
 		<form
 			method="POST"
 			action="?/saveSettings"
@@ -473,19 +472,6 @@
 	}
 	.confirm .help {
 		margin: 0;
-	}
-
-	.scope {
-		margin: -0.5rem 0 1rem;
-		font-size: 0.875rem;
-		color: var(--color-muted);
-	}
-	.scope span {
-		margin-right: 0.5rem;
-		font: 500 0.75rem/1.4 var(--font-mono);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--color-ink);
 	}
 
 	.split {

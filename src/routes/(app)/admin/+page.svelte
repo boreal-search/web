@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { day } from '#lib/format.js';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
+	import OrgAdminLinks from '#lib/components/OrgAdminLinks.svelte';
 	import AdminNav from './AdminNav.svelte';
 	import type { PageProps } from './$types';
 
@@ -111,7 +112,8 @@
 <section class="band" aria-labelledby="orgs-heading">
 	<h2 id="orgs-heading">Orgs</h2>
 	<p id="orgs-help" class="muted">
-		Open an org to manage its members, data source access, email domains and settings.
+		Open an org to manage its members, data source access, email domains and settings, or go
+		straight to its users or searches.
 	</p>
 	{#if data.orgs.length === 0}
 		<p class="empty">No orgs yet.</p>
@@ -123,6 +125,7 @@
 					<th scope="col">Slug</th>
 					<th scope="col" class="num">Members</th>
 					<th scope="col">Data sources</th>
+					<th scope="col"><span class="sr-only">Links</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -139,6 +142,9 @@
 							{:else}
 								{org.dataSourceIds.map((id) => names.get(id) ?? id).join(', ')}
 							{/if}
+						</td>
+						<td class="row-actions">
+							<OrgAdminLinks orgId={org.id} orgName={org.name} />
 						</td>
 					</tr>
 				{/each}

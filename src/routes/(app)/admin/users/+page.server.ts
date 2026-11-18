@@ -4,7 +4,8 @@ import {
 	PAGE_SIZE,
 	pageRange,
 	pageWindow,
-	parseUsersQuery
+	parseUsersQuery,
+	usersSearch
 } from '#lib/server/users.js';
 import type { OrgRole } from '#lib/supabase/types.js';
 import type { PageServerLoad } from './$types';
@@ -18,17 +19,26 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const query = parseUsersQuery(url.searchParams);
 	const { from, to } = pageRange(query.page);
 
-	// RLS ("profiles: admin read") lets a platform admin read every profile.
+	// RLS ("profiles: admin read") lets a platform admin read every profile. With an org, the
+	// inner join keeps only its members.
 	const profiles = () => {
-		const base = locals.supabase
-			.from('profiles')
-			.select('id, email, display_name, created_at', { count: 'exact' });
+		const base = query.org
+			? locals.supabase
+					.from('profiles')
+					.select('id, email, display_name, created_at, org_members!inner(org_id)', {
+						count: 'exact'
+					})
+					.eq('org_members.org_id', query.org)
+			: locals.supabase
+					.from('profiles')
+					.select('id, email, display_name, created_at', { count: 'exact' });
 		return query.q ? base.or(containsFilter(['email', 'display_name'], query.q)) : base;
 	};
-	const pageResult = await profiles()
-		.order('created_at', { ascending: false })
-		.order('id')
-		.range(from, to);
+	const [pageResult, orgs] = await Promise.all([
+		profiles().order('created_at', { ascending: false }).order('id').range(from, to),
+		locals.supabase.from('orgs').select('id, name').order('name')
+	]);
+	if (orgs.error) throw orgs.error;
 
 	let rows = pageResult.data ?? [];
 	let total = pageResult.count ?? 0;
@@ -70,6 +80,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	return {
 		query,
+		orgs: orgs.data,
+		/** `?…` for page 1 and the pages either side of this one, keeping the filters. */
+		pages: {
+			first: usersSearch(query, 1),
+			previous: usersSearch(query, query.page - 1),
+			next: usersSearch(query, query.page + 1)
+		},
 		total,
 		pageSize: PAGE_SIZE,
 		window: pageWindow(query.page, total),

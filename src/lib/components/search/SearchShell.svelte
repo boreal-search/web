@@ -11,15 +11,17 @@
 	import { MediaQuery } from 'svelte/reactivity';
 	import { rememberSidebar, type SidebarChoice } from './layout-prefs.js';
 	import Modal from './Modal.svelte';
-	import TrailSidebar, { type SidebarTrail } from './TrailSidebar.svelte';
+	import TrailSidebar, { type SidebarTrail, type TrailView } from './TrailSidebar.svelte';
 
 	let {
 		trails,
+		view,
 		currentId,
 		sidebar,
 		children
 	}: {
 		trails: readonly SidebarTrail[];
+		view: TrailView;
 		/** The stored trail shown on the page, if any. */
 		currentId: string | null;
 		/** The viewer's remembered choice, from the load. */
@@ -64,7 +66,7 @@
 			<span aria-hidden="true">+</span><span class="sr-only">New search</span>
 		</a>
 		<div id="trail-sidebar">
-			<TrailSidebar {trails} {currentId} />
+			<TrailSidebar {trails} {view} {currentId} />
 		</div>
 	</aside>
 
@@ -85,7 +87,7 @@
 </div>
 
 <Modal bind:open={sheetOpen} title="Trails" full onclose={() => opener?.focus()}>
-	<TrailSidebar {trails} {currentId} heading={false} onpick={() => (sheetOpen = false)} />
+	<TrailSidebar {trails} {view} {currentId} heading={false} onpick={() => (sheetOpen = false)} />
 </Modal>
 
 <style>

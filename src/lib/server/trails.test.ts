@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { step } from '#lib/trail.fixture.js';
-import { branchSeed, branchTitle, TITLE_MAX } from './trails.js';
+import type { SearchContext } from './access.js';
+import { branchSeed, branchTitle, TITLE_MAX, trailListView } from './trails.js';
 
 describe('branchSeed', () => {
 	const steps = [
@@ -34,5 +35,33 @@ describe('branchTitle', () => {
 		const long = branchTitle('x'.repeat(TITLE_MAX));
 		expect(long.length).toBe(TITLE_MAX);
 		expect(long.endsWith(' (branch)')).toBe(true);
+	});
+});
+
+describe('trailListView', () => {
+	const org = (slug: string): SearchContext => ({
+		kind: 'org',
+		org: { id: `${slug}-id`, slug, name: slug, role: 'member' }
+	});
+	const [acme, beta] = [org('acme'), org('beta')];
+	const contexts: SearchContext[] = [acme, beta, { kind: 'public' }];
+	const view = (s: string, cs = contexts) => trailListView(cs, acme, new URLSearchParams(s));
+
+	it('defaults to the current context, latest only', () => {
+		expect(view('')).toEqual({ context: acme, all: false, keep: '' });
+	});
+	it('picks another of the user contexts and keeps it on links', () => {
+		expect(view('org=beta')).toEqual({ context: beta, all: false, keep: 'org=beta' });
+		expect(view('org=public&all=1')).toEqual({
+			context: { kind: 'public' },
+			all: true,
+			keep: 'org=public&all=1'
+		});
+	});
+	it('ignores an org the user is not in', () => {
+		expect(view('org=other').context).toBe(acme);
+	});
+	it('lists every context for a user with only one', () => {
+		expect(view('org=acme&all=1', [acme])).toEqual({ context: null, all: true, keep: 'all=1' });
 	});
 });

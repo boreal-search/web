@@ -10,6 +10,7 @@ import {
 	type StepScope,
 	type TrailStep
 } from '#lib/trail.js';
+import { contextValue, type SearchContext } from './access.js';
 import type { Answer } from './engine.types';
 
 type Db = SupabaseClient<Database>;
@@ -112,14 +113,28 @@ export interface TrailSummary {
 	owned: boolean;
 }
 
-/** The user's trails and those shared with them, most recently added to first. */
-export async function listTrails(db: Db, userId: string): Promise<TrailSummary[]> {
-	const { data, error } = await db
+/**
+ * The user's trails and those shared with them, most recently added to first: those in
+ * `context` (every context when null), at most `limit` (all when null). `more`: some were left out.
+ */
+export async function listTrails(
+	db: Db,
+	userId: string,
+	context: SearchContext | null,
+	limit: number | null
+): Promise<{ trails: TrailSummary[]; more: boolean }> {
+	let q = db
 		.from('trails')
 		.select('id, title, org_id, user_id, updated_at, orgs(name), trail_steps(count)')
-		.order('updated_at', { ascending: false });
+		.order('updated_at', { ascending: false })
+		.order('id');
+	if (context?.kind === 'org') q = q.eq('org_id', context.org.id);
+	else if (context?.kind === 'public') q = q.is('org_id', null);
+	// One past the limit says whether there are more.
+	const { data, error } = await (limit === null ? q : q.limit(limit + 1));
 	if (error) throw error;
-	return data.map((t) => ({
+	const more = limit !== null && data.length > limit;
+	const trails = (more ? data.slice(0, limit) : data).map((t) => ({
 		id: t.id,
 		title: t.title,
 		org_id: t.org_id,
@@ -128,6 +143,39 @@ export async function listTrails(db: Db, userId: string): Promise<TrailSummary[]
 		updated_at: t.updated_at,
 		owned: t.user_id === userId
 	}));
+	return { trails, more };
+}
+
+/** Trails the sidebar lists before "View all". */
+export const TRAIL_LIMIT = 20;
+
+export interface TrailListView {
+	/** The context whose trails are listed; null (every context) when the user has only one. */
+	context: SearchContext | null;
+	/** Every trail, not just the latest TRAIL_LIMIT. */
+	all: boolean;
+	/** Search params that keep this view on the sidebar's links (`org=`, `all=1`), '' for none. */
+	keep: string;
+}
+
+/**
+ * The sidebar's view from `?org=` (a context value) and `?all=1`. The org only picks among the
+ * user's own `contexts`; anything else is the current context.
+ */
+export function trailListView(
+	contexts: readonly SearchContext[],
+	current: SearchContext,
+	params: URLSearchParams
+): TrailListView {
+	const wanted = params.get('org');
+	const picked = contexts.find((c) => contextValue(c) === wanted) ?? current;
+	const context = contexts.length > 1 ? picked : null;
+	const all = params.get('all') === '1';
+	const keep = new URLSearchParams();
+	if (context && contextValue(context) !== contextValue(current))
+		keep.set('org', contextValue(context));
+	if (all) keep.set('all', '1');
+	return { context, all, keep: keep.toString() };
 }
 
 /** Where a stored step is: its trail and the n the database gave it. */

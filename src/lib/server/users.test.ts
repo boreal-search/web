@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { containsFilter, escapeLike, pageRange, pageWindow, parseUsersQuery } from './users';
+import {
+	containsFilter,
+	escapeLike,
+	pageRange,
+	pageWindow,
+	parseUsersQuery,
+	usersSearch
+} from './users';
 
 const parse = (s: string) => parseUsersQuery(new URLSearchParams(s));
 
 describe('parseUsersQuery', () => {
 	it('defaults to no search, page 1', () => {
-		expect(parse('')).toEqual({ q: '', page: 1 });
+		expect(parse('')).toEqual({ q: '', org: null, page: 1 });
 	});
 	it('trims and collapses spaces in q', () => {
-		expect(parse('q=%20%20Jane%20%20Doe%20')).toEqual({ q: 'Jane Doe', page: 1 });
+		expect(parse('q=%20%20Jane%20%20Doe%20')).toEqual({ q: 'Jane Doe', org: null, page: 1 });
 	});
 	it('caps q at 200 characters', () => {
 		expect(parse(`q=${'a'.repeat(300)}`).q).toHaveLength(200);
@@ -21,6 +28,21 @@ describe('parseUsersQuery', () => {
 	});
 	it('caps huge pages', () => {
 		expect(parse('page=99999999999').page).toBe(100_000);
+	});
+	it('reads an org id and ignores anything else', () => {
+		const id = '0b5f3c2e-8a1d-4c7e-9f00-123456789abc';
+		expect(parse(`org=${id}`).org).toBe(id);
+		expect(parse('org=acme').org).toBeNull();
+	});
+});
+
+describe('usersSearch', () => {
+	const id = '0b5f3c2e-8a1d-4c7e-9f00-123456789abc';
+	it('leaves out page 1 and empty filters', () => {
+		expect(usersSearch({ q: '', org: null, page: 1 }, 1)).toBe('');
+	});
+	it('keeps the search and org across pages', () => {
+		expect(usersSearch({ q: 'jane', org: id, page: 1 }, 2)).toBe(`?q=jane&org=${id}&page=2`);
 	});
 });
 

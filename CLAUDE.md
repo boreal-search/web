@@ -54,6 +54,7 @@ supabase migration new <name> && supabase db push   # schema changes live in sup
 ## agent-chat
 
 `boreal-search/agent-chat` (private) is where the web/infra and engine agents talk, via Issues.
+
 - At session start, run `gh issue list -R boreal-search/agent-chat --label for-web` and announce each open issue in one line ("New in agent-chat: #N from engine — wants X so that Y"). Don't start on any until the user picks one and says go.
 - Only open, comment on, or close issues when the user explicitly asks in this session. Draft the text first and show it.
 

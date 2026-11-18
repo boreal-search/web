@@ -14,6 +14,17 @@
 		/** false: shared with the user by someone else. */
 		owned: boolean;
 	}
+
+	/** Which trails the list shows, from the search layout's load. */
+	export interface TrailView {
+		/** Contexts to pick from (value: org slug or `public`); empty when there's no choice. */
+		options: { value: string; label: string }[];
+		value: string | null;
+		/** Search params that keep this view on links (`org=`, `all=1`), '' for none. */
+		keep: string;
+		/** More trails than the list shows: offer "View all". */
+		more: boolean;
+	}
 </script>
 
 <script lang="ts">
@@ -22,11 +33,13 @@
 
 	let {
 		trails,
+		view,
 		currentId,
 		heading = true,
 		onpick
 	}: {
 		trails: readonly SidebarTrail[];
+		view: TrailView;
 		/** The trail shown on the page, if stored. */
 		currentId: string | null;
 		/** Show the "Trails" label (false inside the modal, whose title says it). */
@@ -38,7 +51,19 @@
 	const id = $props.id();
 
 	const searchHref = resolve('/(app)/search');
-	const trailHref = (id: string) => `${searchHref}?trail=${id}`;
+	const trailHref = (id: string) => `${searchHref}?trail=${id}${view.keep && `&${view.keep}`}`;
+	let allHref = $derived(
+		`${searchHref}?${new URLSearchParams([
+			...new URLSearchParams(view.keep),
+			['all', '1'],
+			...(currentId ? [['trail', currentId]] : [])
+		])}`
+	);
+
+	function pickView(e: Event & { currentTarget: HTMLSelectElement }) {
+		onpick?.();
+		e.currentTarget.form?.requestSubmit();
+	}
 	/** The row's tooltip: the whole title, then where and when (the row shows only the title). */
 	const hint = (t: SidebarTrail) =>
 		`${t.title}\n${t.owned ? '' : 'Shared with you · '}${t.org_name ?? 'Public'} · ${stamp(t.updated_at)}`;
@@ -50,6 +75,18 @@
 	</a>
 
 	{#if heading}<h2 class="label" id="{id}-heading">Trails</h2>{/if}
+	{#if view.options.length > 0}
+		<form method="GET" action={searchHref} class="view">
+			{#if currentId}<input type="hidden" name="trail" value={currentId} />{/if}
+			<label>
+				<span class="sr-only">Show trails in</span>
+				<select name="org" value={view.value} onchange={pickView}>
+					{#each view.options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+				</select>
+			</label>
+			<noscript><button type="submit">Show</button></noscript>
+		</form>
+	{/if}
 	{#if trails.length === 0}
 		<p class="empty-note">No trails yet. Each search starts one.</p>
 	{:else}
@@ -74,6 +111,10 @@
 				</li>
 			{/each}
 		</ul>
+		{#if view.more}
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, plus params -->
+			<a class="button quiet all" href={allHref} onclick={onpick}>View all</a>
+		{/if}
 	{/if}
 </div>
 
@@ -97,6 +138,19 @@
 		color: var(--color-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
+	}
+	.view {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.view label,
+	.view select {
+		flex: 1;
+		min-width: 0;
+	}
+	.all {
+		align-self: flex-start;
+		font-size: 0.875rem;
 	}
 	.empty-note {
 		margin: 0;

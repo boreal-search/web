@@ -10,6 +10,7 @@
 
 <SearchShell
 	trails={data.trails}
+	view={data.trailView}
 	currentId={page.url.searchParams.get('trail')}
 	sidebar={data.sidebar}
 >

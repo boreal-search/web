@@ -8,14 +8,9 @@
 	let { data }: PageProps = $props();
 
 	const here = resolve('/(app)/admin/users');
-	/** `?q=…&page=…` for another page of the same search; page 1 and an empty search are left out. */
-	function pageSearch(n: number) {
-		const entries: [string, string][] = [];
-		if (data.query.q) entries.push(['q', data.query.q]);
-		if (n > 1) entries.push(['page', String(n)]);
-		return entries.length ? `?${new URLSearchParams(entries)}` : '';
-	}
 	let w = $derived(data.window);
+	let orgName = $derived(data.orgs.find((o) => o.id === data.query.org)?.name ?? null);
+	let filtered = $derived(Boolean(data.query.q || data.query.org));
 </script>
 
 <svelte:head>
@@ -36,6 +31,7 @@
 			<span><b>{count(data.total)}</b> {plural(data.total, 'user')}</span>
 		{/if}
 		{#if data.query.q}<span>matching <b>{data.query.q}</b></span>{/if}
+		{#if orgName}<span>in <b>{orgName}</b></span>{/if}
 	</p>
 </div>
 
@@ -51,11 +47,15 @@
 			spellcheck="false"
 			aria-describedby="q-help"
 		/>
+		<select name="org" value={data.query.org ?? ''} aria-label="Org">
+			<option value="">Any org</option>
+			{#each data.orgs as o (o.id)}<option value={o.id}>{o.name}</option>{/each}
+		</select>
 		<button type="submit">Find</button>
 	</div>
 	<span class="help" id="q-help">
 		Part of an email or display name.
-		{#if data.query.q}<a href={here}>Show all users</a>{/if}
+		{#if filtered}<a href={here}>Show all users</a>{/if}
 	</span>
 </form>
 
@@ -63,10 +63,10 @@
 	{#if w.outOfRange}
 		<p class="empty">
 			There's no page {count(data.query.page)}.
-			<a href="{here}{pageSearch(1)}">Go to page 1</a>
+			<a href="{here}{data.pages.first}">Go to page 1</a>
 		</p>
-	{:else if data.query.q}
-		<p class="empty">No users match "{data.query.q}".</p>
+	{:else if filtered}
+		<p class="empty">No users match these filters.</p>
 	{:else}
 		<p class="empty">No users yet.</p>
 	{/if}
@@ -127,12 +127,11 @@
 
 {#if w.hasPrevious || w.hasNext}
 	<nav class="pages" aria-label="Pages">
-		{#if w.hasPrevious}<a href="{here}{pageSearch(data.query.page - 1)}" rel="prev">Previous</a
-			>{/if}
+		{#if w.hasPrevious}<a href="{here}{data.pages.previous}" rel="prev">Previous</a>{/if}
 		<span class="readout"
 			><span>page <b>{count(data.query.page)}</b> of <b>{count(w.pageCount)}</b></span></span
 		>
-		{#if w.hasNext}<a href="{here}{pageSearch(data.query.page + 1)}" rel="next">Next</a>{/if}
+		{#if w.hasNext}<a href="{here}{data.pages.next}" rel="next">Next</a>{/if}
 	</nav>
 {/if}
 
@@ -140,7 +139,7 @@
 	.find {
 		display: grid;
 		gap: 0.375rem;
-		max-width: 32rem;
+		max-width: 40rem;
 		margin-bottom: 1.5rem;
 	}
 	.find label {
