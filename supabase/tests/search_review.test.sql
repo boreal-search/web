@@ -2,7 +2,7 @@
 -- target and admin, re-rating replaces); users and org admins neither rate nor read ratings; the
 -- search_review view. Everything rolls back.
 begin;
-select plan(18);
+select plan(23);
 
 insert into auth.users (id, email, email_confirmed_at) values
     ('00000000-0000-0000-0000-00000000000a', 'admin@boreal.test',    now()),
@@ -24,6 +24,8 @@ values
     ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
      '00000000-0000-0000-0000-00000000000c', '{acme-docs}', 'chinook', 7, 10, true, 'ok',
      '20000000-0000-0000-0000-000000000001', 1);
+update public.search_events set answer = '{"text":"secret"}', resolved_query = 'chinook habitat'
+    where id = '30000000-0000-0000-0000-000000000001';
 
 create function pg_temp.act_as(p_user uuid) returns void language sql as $$
     select set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', 'authenticated')::text, true);
@@ -55,6 +57,14 @@ select throws_ok($$ select pg_temp.rate(null, '20000000-0000-0000-0000-000000000
 
 -- ---------------------------------------------------------------- an org admin
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+select is((select count(*)::int from public.search_events where id = '30000000-0000-0000-0000-000000000001'), 0,
+    'an org admin cannot read a member''s search (or its answer)');
+select is((select count(*)::int from public.search_review where id = '30000000-0000-0000-0000-000000000001'), 0,
+    'nor through search_review');
+select throws_ok($$ insert into public.search_events (org_id, user_id, data_source_ids, query_length, top_k, rerank, status, trail_id)
+                    values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', '{x}', 1, 10, true, 'ok',
+                            '20000000-0000-0000-0000-000000000001') $$,
+    '42501', null, 'a search cannot name someone else''s trail');
 select throws_ok($$ select pg_temp.rate('30000000-0000-0000-0000-000000000001', null, 'bad') $$,
     '42501', null, 'an org admin cannot rate their org''s searches');
 
@@ -90,6 +100,16 @@ select is((select count(*)::int from public.search_ratings
 select lives_ok($$ delete from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001' $$,
     'deleting another admin''s rating runs');
 select is(pg_temp.ratings(), 2, 'but removes nothing: admins clear only their own');
+
+-- ---------------------------------------------------------------- the searcher's trail is deleted mid-stream
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select lives_ok($$ insert into public.search_events (id, org_id, user_id, data_source_ids, query_length, top_k, rerank, status, trail_id, step_n)
+                   values ('30000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000001',
+                           '00000000-0000-0000-0000-00000000000c', '{x}', 1, 10, true, 'ok',
+                           '20000000-0000-0000-0000-000000000099', 2) $$,
+    'a search naming a trail that no longer exists is still recorded');
+select is((select count(*)::int from public.search_events where id = '30000000-0000-0000-0000-000000000001'), 1,
+    'the searcher reads their own search');
 
 -- ---------------------------------------------------------------- reading as non-admins
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');

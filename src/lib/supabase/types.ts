@@ -408,6 +408,8 @@ export interface Database {
 			owns_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			can_read_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			can_write_trail: { Args: { p_trail_id: string }; Returns: boolean };
+			/** Not someone else's trail (a missing one is fine). */
+			may_name_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			/** Platform admins and the org's admins. */
 			set_org_log_queries: { Args: { p_org_id: string; p_on: boolean }; Returns: undefined };
 			keeps_trails: { Args: { p_org_id: string | null }; Returns: boolean };

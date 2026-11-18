@@ -103,7 +103,8 @@ describe('buildSearchEvent', () => {
 			resolved_query: null,
 			answer: null,
 			results: null,
-			trail_id: 'trail-1',
+			trail_id: null,
+			step_n: null,
 			total_ms: 3400
 		});
 		expect(row).not.toHaveProperty('id');

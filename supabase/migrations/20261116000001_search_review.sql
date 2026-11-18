@@ -7,15 +7,50 @@
 --     the target is a search (one response) or a whole trail (the conversation). Opening it to
 --     users means widening these policies and `canRate` in src/lib/server/ratings.ts.
 --   search_review: the admin table's rows, with the latest rating of the search and its trail.
+--   Reading search_events: now that rows hold answers, members read only their own searches
+--     (was: their whole org's); platform admins still read all. Nothing in the app read other
+--     members' rows; org_search_daily (invoker) now rolls up only what the reader can see.
+--   The trail tables stay private to their owner; the same queries and answers reach Boreal's
+--     review through search_events while log_queries is on (docs/decisions.md, 2026-11-16).
 
 alter table public.search_events
-    add column trail_id       uuid references public.trails (id) on delete set null,
+    -- No foreign key: a trail deleted while its search streams must not stop the search being
+    -- recorded. Null with log_queries off. The insert policy below checks the caller owns it.
+    add column trail_id       uuid,
     add column step_n         int check (step_n is null or step_n >= 1),
     add column resolved_query text,      -- null when orgs.log_queries is false
     add column answer         jsonb,     -- the summary as shown; null without one or with log_queries off
     add column results        jsonb,     -- result locators (no signed URLs); null with log_queries off
     add column total_ms       integer;   -- the whole search, engine-reported; null on failure
 create index search_events_trail_idx on public.search_events (trail_id, step_n) where trail_id is not null;
+
+drop policy "search_events: read own org" on public.search_events;
+
+create policy "search_events: read own" on public.search_events
+    for select to authenticated
+    using (user_id = (select auth.uid()));
+
+-- A search may name a trail unless it is someone else's. A trail that no longer exists (deleted
+-- while its search streamed) is allowed, so the search is still recorded.
+create function public.may_name_trail(p_trail_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+    select not exists (
+        select 1 from public.trails t where t.id = p_trail_id and t.user_id <> (select auth.uid())
+    );
+$$;
+revoke all on function public.may_name_trail(uuid) from public;
+grant execute on function public.may_name_trail(uuid) to authenticated;
+
+-- On top of the insert policies (own org / Public).
+create policy "search_events: own trail only" on public.search_events
+    as restrictive
+    for insert to authenticated
+    with check (trail_id is null or public.may_name_trail(trail_id));
 
 create type public.search_rating as enum ('good', 'bad');
 

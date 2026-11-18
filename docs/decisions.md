@@ -15,7 +15,11 @@ opening it to users means changing both. What is reviewed lives in
 timings and outcomes are kept. Org admins switch it under "Quality review" on the org manage page
 (`set_org_log_queries`); before, only platform admins could. The trail tables stay private to
 their owner; `conversation_history` still decides only whether trails are stored. Public-context
-searches have no org and are always kept.
+searches have no org and are always kept. Because rows now hold answers, members read only their
+own `search_events` (no longer their whole org's) and `org_search_daily` rolls up only what the
+reader can see; platform admins read all. `trail_id` has no foreign key, so deleting a trail
+mid-search never stops the search being recorded; an insert may not name someone else's trail.
+The `search_trail` migration's "not platform admins" note covers the trail tables only.
 
 ## 2026-10-29 — Public tier and current org
 
