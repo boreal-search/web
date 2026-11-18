@@ -28,7 +28,7 @@
 	/* Search areas, each its own shade beside the page (the conversation): sidebar, then pane.
 	   Light steps darker, dark steps lighter. Rule's family pulled toward brown (OKLCH hue ~70,
 	   chroma ≤0.009, against fog's ~90) so they read warm grey, not ochre; muted stays AA on both. */
-	--color-sidebar: light-dark(#f0ece8, #1d1a18); /* trail sidebar: warm grey, a step off fog */
+	--color-sidebar: light-dark(#f0ece8, #1d1a18); /* app sidebar: warm grey, a step off fog */
 	--color-pane: light-dark(#ebe6e1, #24201d); /* evidence pane: results and pages */
 	--color-ink: light-dark(#1d1b17, #ece7db); /* basalt: text */
 	--color-muted: light-dark(#6a655a, #9c9588); /* bark: secondary text */
@@ -60,9 +60,8 @@
 :root {
 	color-scheme: light dark;
 	--sheet-dim: 1;
-	/* Layout: the content column (header, main, footer share it) and the site footer's height. */
+	/* Layout: the content column (header, main, footer share it). */
 	--column: 72rem;
-	--site-footer: 5rem;
 }
 :root[data-theme='light'] {
 	color-scheme: light;

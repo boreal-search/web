@@ -8,6 +8,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
+	import AccessNote from '#lib/components/search/AccessNote.svelte';
 	import Composer from '#lib/components/search/Composer.svelte';
 	import { glide, spot, type ComposerSpot } from '#lib/components/search/composer-glide.js';
 	import EvidencePane from '#lib/components/search/EvidencePane.svelte';
@@ -171,14 +172,7 @@
 
 {#snippet composer()}
 	{#if data.access.dataSourceIds.length === 0}
-		<p class="empty">
-			{#if noOrg}
-				You're not in an org yet, and there are no public data sources. Ask your org admin for an
-				invite, or contact us to search your own documents.
-			{:else}
-				Your org doesn't have access to any data sources yet. Ask a platform admin to grant it some.
-			{/if}
-		</p>
+		<AccessNote searchable={false} {noOrg} request={data.accessRequest} />
 	{:else}
 		{#if data.engineFailure}
 			<FailureNotice
@@ -210,9 +204,7 @@
 			/>
 			<SearchProblem problem={trail.problem} />
 		</Composer>
-		{#if noOrg}
-			<p class="muted">Want your own documents? Contact us.</p>
-		{/if}
+		<AccessNote searchable {noOrg} request={data.accessRequest} />
 	{/if}
 {/snippet}
 
@@ -283,7 +275,7 @@
 {/if}
 
 <style>
-	/* Phones: the bar above it (Trails, New search) heads the screen; screen readers keep the h1. */
+	/* Phones: the shell's top bar heads the screen; screen readers keep the h1. */
 	@media (max-width: 47.5rem) {
 		.page-head {
 			position: absolute;
@@ -300,7 +292,7 @@
 		flex-direction: column;
 		justify-content: center;
 		gap: 0.75rem;
-		min-height: max(16rem, calc(100dvh - var(--site-footer) - 16rem));
+		min-height: max(16rem, calc(100dvh - 16rem));
 		padding-bottom: 4rem;
 	}
 	.start > :global(*) {

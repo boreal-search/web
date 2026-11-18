@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
 	import '@fontsource-variable/schibsted-grotesk';
 	import '@fontsource-variable/source-serif-4';
 	import '@fontsource-variable/jetbrains-mono';
@@ -8,27 +6,15 @@
 	import favicon from '#lib/assets/favicon.svg';
 	import faviconPng from '#lib/assets/favicon.png';
 	import appleTouchIcon from '#lib/assets/apple-touch-icon.png';
-	import AccountMenu from '#lib/components/AccountMenu.svelte';
 	import type { LayoutProps } from './$types';
 
+	// The chrome is the group's: the app shell for (app), SiteFrame for (site) and errors.
 	let { data, children }: LayoutProps = $props();
 
 	// SSR sets <html data-theme>; keep it in step when the theme changes without a reload.
 	$effect(() => {
 		document.documentElement.dataset.theme = data.theme;
 	});
-
-	// Back to the same page after switching; a data source page may not exist in the new context.
-	let switchBackTo = $derived(
-		page.route.id === '/(app)/data-sources/[id]' ? '/' : page.url.pathname
-	);
-
-	/** `page` on the item's own page, `true` on pages under it (a data source under Data sources). */
-	function current(href: string, section = false): 'page' | 'true' | undefined {
-		if (page.url.pathname === href) return 'page';
-		return section ? 'true' : undefined;
-	}
-	let route = $derived(page.route.id ?? '');
 </script>
 
 <svelte:head>
@@ -40,71 +26,7 @@
 
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="site">
-	<div class="masthead">
-		<a class="wordmark" href={resolve('/(app)')}>boreal</a>
-
-		{#if data.nav}
-			<nav aria-label="Primary">
-				<ul>
-					<li>
-						<a
-							href={resolve('/(app)')}
-							aria-current={current(resolve('/(app)'), route === '/(app)/data-sources/[id]')}
-							>Data sources</a
-						>
-					</li>
-					<li>
-						<a href={resolve('/(app)/search')} aria-current={current(resolve('/(app)/search'))}
-							>Search</a
-						>
-					</li>
-					{#each data.nav.adminOrgs as org (org.slug)}
-						{@const href = resolve('/(app)/orgs/[slug]/manage', { slug: org.slug })}
-						<li>
-							<a {href} aria-current={current(href)} title="Manage {org.name}">Manage {org.name}</a>
-						</li>
-					{/each}
-					{#if data.nav.isPlatformAdmin}
-						<li>
-							<a
-								href={resolve('/(app)/admin')}
-								aria-current={current(resolve('/(app)/admin'), route.startsWith('/(app)/admin/'))}
-								>Platform admin</a
-							>
-						</li>
-					{/if}
-				</ul>
-			</nav>
-		{/if}
-
-		<AccountMenu user={data.user} />
-	</div>
-
-	<!-- Only when there is a choice (2+ contexts): one org already searches every public corpus. -->
-	{#if data.nav && data.nav.contexts.length > 0}
-		<div class="context">
-			<form method="POST" action={resolve('/switch-org')}>
-				<input type="hidden" name="redirectTo" value={switchBackTo} />
-				<label for="context-switch">Searching in</label>
-				<select id="context-switch" name="org">
-					{#each data.nav.contexts as c (c.value)}
-						<option value={c.value} selected={c.current}>{c.label}</option>
-					{/each}
-				</select>
-				<button type="submit">Switch</button>
-			</form>
-		</div>
-	{/if}
-</header>
-
-<main id="main" tabindex="-1">
-	{@render children()}
-</main>
-
-<footer class="site">
-	<p>Designed in Vancouver, BC</p>
-</footer>
+{@render children()}
 
 <style>
 	.skip {
@@ -117,135 +39,5 @@
 	}
 	.skip:focus {
 		top: 0.5rem;
-	}
-
-	header.site {
-		border-bottom: 1px solid var(--color-rule);
-	}
-	/* One column edge for header, context row, footer and main (app.css): rules run full-bleed,
-	   content sits in the --column (wider on the search screen) with the same gutters. */
-	.masthead,
-	.context > *,
-	footer.site p {
-		max-width: var(--column);
-		margin-inline: auto;
-		padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right));
-	}
-	.masthead {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
-		grid-template-areas: 'mark nav account';
-		align-items: center;
-		gap: 0 2rem;
-		min-height: 3.5rem;
-	}
-
-	.wordmark {
-		grid-area: mark;
-		font-weight: 700;
-		font-size: 1.25rem;
-		letter-spacing: -0.03em;
-		color: var(--color-ink);
-		text-decoration: none;
-	}
-
-	nav {
-		grid-area: nav;
-		min-width: 0;
-		overflow-x: auto;
-		scrollbar-width: none;
-	}
-	nav ul {
-		display: flex;
-		gap: 1.5rem;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	nav a {
-		display: block;
-		max-width: 16rem;
-		padding: 1rem 0 calc(1rem - 2px);
-		border-bottom: 2px solid transparent;
-		color: var(--color-muted);
-		text-decoration: none;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	nav a:hover {
-		color: var(--color-ink);
-	}
-	nav a[aria-current] {
-		color: var(--color-ink);
-		border-bottom-color: var(--color-ink);
-	}
-
-	.context {
-		border-top: 1px solid var(--color-rule);
-		font: 400 0.8125rem/1.5 var(--font-mono);
-		color: var(--color-muted);
-	}
-	.context form {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.25rem 0.75rem;
-		margin-block: 0;
-		min-height: 2.75rem;
-		padding-block: 0.375rem;
-	}
-	.context select {
-		width: auto;
-		max-width: min(20rem, 100%);
-		min-height: 2.25rem;
-		padding-block: 0.25rem;
-		font-family: var(--font-sans);
-		font-size: 0.9375rem;
-	}
-	.context button {
-		min-height: 2.25rem;
-		padding-block: 0.25rem;
-		font-size: 0.875rem;
-	}
-
-	main:focus {
-		outline: none;
-	}
-
-	footer.site {
-		box-sizing: border-box;
-		min-height: var(--site-footer);
-		padding: 1.5rem 0 2rem;
-		border-top: 1px solid var(--color-rule);
-		font: 400 0.8125rem/1.5 var(--font-mono);
-		color: var(--color-muted);
-	}
-	footer.site p {
-		margin-block: 0;
-	}
-
-	@media (max-width: 40rem) {
-		.masthead {
-			grid-template-columns: auto minmax(0, 1fr);
-			grid-template-areas:
-				'mark account'
-				'nav nav';
-			gap: 0 1rem;
-		}
-		nav {
-			margin-inline: calc(-1 * max(1rem, env(safe-area-inset-left)));
-			padding-inline: max(1rem, env(safe-area-inset-left));
-			border-top: 1px solid var(--color-rule);
-		}
-		nav ul {
-			flex-wrap: wrap;
-			column-gap: 1.25rem;
-			row-gap: 0;
-		}
-		nav a {
-			max-width: calc(100vw - 2rem);
-			padding-block: 0.625rem calc(0.625rem - 2px);
-		}
 	}
 </style>

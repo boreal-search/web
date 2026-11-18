@@ -39,16 +39,15 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Theme: the profile row is the source of truth (the root layout mirrors it into the cookie on
+	 * Theme (posted from the user menu): the profile row is the source of truth (the root layout mirrors it into the cookie on
 	 * every load), so the cookie changes only once the row is saved.
 	 */
 	theme: async ({ request, locals, cookies }) => {
 		const user = requireUser();
 		const theme = parseTheme((await request.formData()).get('theme'));
 		const { error } = await locals.supabase.from('profiles').update({ theme }).eq('id', user.id);
-		if (error) return fail(503, { themeSaved: 'failed' as const });
+		if (error) return fail(503, { themeFailed: true });
 		cookies.set(THEME_COOKIE, theme, THEME_COOKIE_OPTIONS);
 		locals.theme = theme;
-		return { themeSaved: 'account' as const };
 	}
 };

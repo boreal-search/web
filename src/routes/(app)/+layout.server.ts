@@ -1,15 +1,37 @@
-import { error, redirect } from '@sveltejs/kit';
-import { resolve } from '$app/paths';
+// Everything under (app) requires a session and renders in the app shell: the sidebar lists
+// the current context's trails (yours and shared with you, most recent first), only the latest
+// TRAIL_LIMIT unless `?all=1`. Trail actions re-run this; a stored step invalidates
+// TRAILS_DEPENDENCY, so a new or added-to trail comes to the top. Child loads read `access`
+// via `await parent()`.
+import { error } from '@sveltejs/kit';
 import { requireUser } from '#lib/server/auth.js';
+import { listTrails, TRAIL_LIMIT } from '#lib/server/trails.js';
+import {
+	parseSidebar,
+	SIDEBAR_COOKIE,
+	TRAILS_DEPENDENCY
+} from '#lib/components/search/layout-prefs.js';
 import type { LayoutServerLoad } from './$types';
 
-/** Everything under (app) requires a session. Child loads read `access` via `await parent()`. */
-export const load: LayoutServerLoad = async ({ locals, route, parent }) => {
-	// Logged out, `/` is the splash; every other (app) page goes to log in.
-	if (!locals.user && route.id === '/(app)') redirect(303, resolve('/welcome'));
-	requireUser();
+export const load: LayoutServerLoad = async ({ locals, cookies, depends, url, parent }) => {
+	const user = requireUser();
+	depends(TRAILS_DEPENDENCY);
 	const { access } = await parent();
 	// The root layout loads access for every signed-in user.
 	if (!access) error(500, 'Access not loaded');
-	return { access };
+	const all = url.searchParams.get('all') === '1';
+	// With one context, every trail (older ones may predate joining the org).
+	const context = access.contexts.length > 1 ? access.context : null;
+	const { trails, more } = await listTrails(
+		locals.supabase,
+		user.id,
+		context,
+		all ? null : TRAIL_LIMIT
+	);
+	return {
+		access,
+		trails,
+		trailView: { all, more },
+		sidebarCollapsed: parseSidebar(cookies.get(SIDEBAR_COOKIE))
+	};
 };

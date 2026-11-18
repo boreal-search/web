@@ -70,8 +70,8 @@ describe('describeFailure', () => {
 
 	it('suggests switching context for a missing data source only when there is a switcher', () => {
 		const f: Failure = { kind: 'not_found', what: 'data_source' };
-		expect(describeFailure(f, { canSwitch: true }).next).toMatch(/Searching in/);
-		expect(describeFailure(f).next).not.toMatch(/Searching in/);
+		expect(describeFailure(f, { canSwitch: true }).next).toMatch(/Switch org/);
+		expect(describeFailure(f).next).not.toMatch(/Switch org/);
 	});
 
 	it('names who can open a gated page', () => {

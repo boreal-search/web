@@ -22,7 +22,8 @@ async function savedTheme(
  * Everyone: the theme (cookie; signed in, the saved choice wins and is mirrored into the cookie
  * so the next SSR is right on this device too).
  * Signed in: the user's access for this request (current context and searchable set; (app)
- * pages read it via `parent()`) plus nav. Every admin/manage route re-checks its own access.
+ * pages read it via `parent()`) plus nav (user menu, context switcher). Every admin/manage route
+ * re-checks its own access.
  */
 export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 	const { supabase } = locals;
@@ -47,15 +48,12 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 		nav: {
 			isPlatformAdmin: platformAdmin,
 			adminOrgs: access.memberships.filter((m) => m.role === 'admin'),
-			// Switcher only when there is a choice: 2+ orgs (one org already searches public corpora).
-			contexts:
-				access.contexts.length > 1
-					? access.contexts.map((c) => ({
-							value: contextValue(c),
-							label: contextLabel(c),
-							current: contextValue(c) === current
-						}))
-					: []
+			// The switcher offers a choice only with 2+ (one org already searches public corpora).
+			contexts: access.contexts.map((c) => ({
+				value: contextValue(c),
+				label: contextLabel(c),
+				current: contextValue(c) === current
+			}))
 		}
 	};
 };

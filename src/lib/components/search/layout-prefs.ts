@@ -1,17 +1,14 @@
 // The search screen's per-viewer layout choices, kept in cookies so the server paints them on the
-// first frame: the trail sidebar (open, collapsed, or unset: then medium screens start collapsed)
-// and the steps column's share of the divided panes. Read by the search load, written by the browser.
+// first frame: the app sidebar (open unless collapsed) and the steps column's share of the divided
+// panes. Read by the loads, written by the browser.
 export const SIDEBAR_COOKIE = 'boreal_sidebar';
 export const SPLIT_COOKIE = 'boreal_split';
 
-/** The search layout's trail list depends on this; invalidate it once a step is stored. */
+/** The app layout's trail list depends on this; invalidate it once a step is stored. */
 export const TRAILS_DEPENDENCY = 'app:trails';
 
-/** The viewer's sidebar choice; null until they choose (medium screens then start collapsed). */
-export type SidebarChoice = 'open' | 'collapsed' | null;
-
-export const parseSidebar = (v: string | undefined): SidebarChoice =>
-	v === 'open' || v === 'collapsed' ? v : null;
+/** Whether the viewer collapsed the sidebar to a rail. */
+export const parseSidebar = (v: string | undefined): boolean => v === 'collapsed';
 
 /** The steps column's default share (%) of the two panes; double-clicking the divider restores it. */
 export const DEFAULT_SPLIT = 40;

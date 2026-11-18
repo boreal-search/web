@@ -24,7 +24,7 @@ const supabase: Handle = async ({ event, resolve }) => {
 	}
 
 	if (event.locals.user && (event.url.pathname === '/login' || event.url.pathname === '/signup')) {
-		redirect(303, resolvePath('/(app)'));
+		redirect(303, resolvePath('/(app)/search'));
 	}
 
 	return resolve(event, {

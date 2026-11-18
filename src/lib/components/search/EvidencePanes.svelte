@@ -185,7 +185,7 @@
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
-		min-height: calc(100dvh - var(--site-footer));
+		min-height: 100dvh;
 		padding: 1.5rem 1.25rem 0 0;
 	}
 	/* The evidence closed: the conversation takes the area, at a reading measure. */
@@ -245,11 +245,11 @@
 		background: var(--color-pane);
 		box-shadow: 1rem 0 0 var(--color-pane);
 	}
-	/* Fits the viewport above the site footer, so the pane never scrolls off. */
+	/* Fits the viewport, so the pane never scrolls off. */
 	.evidence-col {
 		position: sticky;
 		top: 0;
-		max-height: calc(100dvh - var(--site-footer));
+		max-height: 100dvh;
 		overflow: hidden auto;
 		overscroll-behavior: contain;
 	}

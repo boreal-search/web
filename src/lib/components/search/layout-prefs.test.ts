@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SPLIT, parseSidebar, parseSplit } from './layout-prefs.js';
 
 describe('parseSidebar', () => {
-	it('keeps an explicit choice and treats anything else as unset', () => {
-		expect(parseSidebar('open')).toBe('open');
-		expect(parseSidebar('collapsed')).toBe('collapsed');
-		expect(parseSidebar(undefined)).toBeNull();
-		expect(parseSidebar('yes')).toBeNull();
+	it('is collapsed only when the viewer chose it', () => {
+		expect(parseSidebar('collapsed')).toBe(true);
+		for (const v of ['open', undefined, 'yes']) expect(parseSidebar(v)).toBe(false);
 	});
 });
 

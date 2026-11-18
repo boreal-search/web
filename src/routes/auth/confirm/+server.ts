@@ -32,7 +32,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	if (tokenHash && type === 'recovery') {
 		redirect(
 			303,
-			`${resolve('/account/password')}?${new URLSearchParams({ token_hash: tokenHash })}`
+			`${resolve('/(site)/account/password')}?${new URLSearchParams({ token_hash: tokenHash })}`
 		);
 	}
 
@@ -42,8 +42,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	} else if (tokenHash && type) {
 		ok = !(await locals.supabase.auth.verifyOtp({ type, token_hash: tokenHash })).error;
 	}
-	if (!ok) redirect(303, `${resolve('/login')}?error=invalid_link`);
+	if (!ok) redirect(303, `${resolve('/(site)/login')}?error=invalid_link`);
 
 	// A PKCE code doesn't say what the link was for; the new session's AMR does.
-	redirect(303, (await hasRecentRecovery(locals.supabase)) ? resolve('/account/password') : next);
+	redirect(
+		303,
+		(await hasRecentRecovery(locals.supabase)) ? resolve('/(site)/account/password') : next
+	);
 };

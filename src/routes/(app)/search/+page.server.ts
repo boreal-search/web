@@ -10,7 +10,9 @@ import {
 	withDataSources,
 	type Access
 } from '#lib/server/access.js';
+import { loadAccessRequest, type OpenAccessRequest } from '#lib/server/access-requests.js';
 import { requireUser } from '#lib/server/auth.js';
+import { parseSplit, SPLIT_COOKIE } from '#lib/components/search/layout-prefs.js';
 import type { EngineFailure } from '#lib/failure.js';
 import { classifyEngineError, engine } from '#lib/server/engine.js';
 import { canSign } from '#lib/server/files.js';
@@ -60,13 +62,15 @@ export interface PageTrail {
  * Picker groups ("<Org name>", "Public"). If the engine listing fails, ids stand in for names.
  * `permanentLinks`: page images go through `/pages/…` (web signs); else the engine's URLs.
  * `history`: the current context keeps trails (Public always; an org when it keeps search
- * history). `query`: `?q=` prefills the search box.
+ * history). `query`: `?q=` prefills the search box. `split`: the viewer's divider position.
+ * `accessRequest`: a user in no org is offered "request access", or sees their open request.
  */
 export const load: PageServerLoad = async ({
 	parent,
 	fetch,
 	url,
 	locals,
+	cookies,
 	untrack
 }): Promise<{
 	groups: PickerGroup[];
@@ -75,9 +79,11 @@ export const load: PageServerLoad = async ({
 	history: boolean;
 	query: string;
 	trail: PageTrail | null;
+	split: number;
+	accessRequest: OpenAccessRequest | null;
 }> => {
 	const user = requireUser();
-	// Untracked: the search layout re-runs on its own (the trail list after each stored step)
+	// Untracked: the app layout re-runs on its own (the trail list after each stored step)
 	// without re-running this. A context switch invalidates everything anyway.
 	const { access } = await untrack(() => parent());
 	const orgId = access.context.kind === 'org' ? access.context.org.id : null;
@@ -85,9 +91,10 @@ export const load: PageServerLoad = async ({
 
 	// Good / Bad is for platform admins only for now (`canRate`): others get no ids or ratings.
 	const rates = trailId ? canRate(locals.supabase) : Promise.resolve(false);
-	const [picker, loaded] = await Promise.all([
+	const [picker, loaded, accessRequest] = await Promise.all([
 		pickerGroups(access, fetch),
-		trailId ? rates.then((r) => loadTrail(locals.supabase, trailId, user.id, r)) : null
+		trailId ? rates.then((r) => loadTrail(locals.supabase, trailId, user.id, r)) : null,
+		access.memberships.length === 0 ? loadAccessRequest(locals.supabase, user.id) : null
 	]);
 
 	if (trailId && !loaded) {
@@ -118,7 +125,9 @@ export const load: PageServerLoad = async ({
 		permanentLinks: canSign(),
 		history: keepsHistory(access.context),
 		query: url.searchParams.get('q') ?? '',
-		trail
+		trail,
+		split: parseSplit(cookies.get(SPLIT_COOKIE)),
+		accessRequest
 	};
 };
 

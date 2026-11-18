@@ -10,7 +10,7 @@ import {
 	type StepScope,
 	type TrailStep
 } from '#lib/trail.js';
-import { contextValue, type SearchContext } from './access.js';
+import type { SearchContext } from './access.js';
 import type { Answer } from './engine.types';
 
 type Db = SupabaseClient<Database>;
@@ -150,35 +150,6 @@ export async function listTrails(
 
 /** Trails the sidebar lists before "View all". */
 export const TRAIL_LIMIT = 20;
-
-export interface TrailListView {
-	/** The context whose trails are listed; null (every context) when the user has only one. */
-	context: SearchContext | null;
-	/** Every trail, not just the latest TRAIL_LIMIT. */
-	all: boolean;
-	/** Search params that keep this view on the sidebar's links (`org=`, `all=1`), '' for none. */
-	keep: string;
-}
-
-/**
- * The sidebar's view from `?org=` (a context value) and `?all=1`. The org only picks among the
- * user's own `contexts`; anything else is the current context.
- */
-export function trailListView(
-	contexts: readonly SearchContext[],
-	current: SearchContext,
-	params: URLSearchParams
-): TrailListView {
-	const wanted = params.get('org');
-	const picked = contexts.find((c) => contextValue(c) === wanted) ?? current;
-	const context = contexts.length > 1 ? picked : null;
-	const all = params.get('all') === '1';
-	const keep = new URLSearchParams();
-	if (context && contextValue(context) !== contextValue(current))
-		keep.set('org', contextValue(context));
-	if (all) keep.set('all', '1');
-	return { context, all, keep: keep.toString() };
-}
 
 /** Where a stored step is: its trail and the n the database gave it. */
 export interface StoredAt {

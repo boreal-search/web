@@ -8,11 +8,11 @@
 </script>
 
 <span class="links">
-	<a href="{resolve('/(app)/admin/users')}{query}"
+	<a href="{resolve('/(site)/admin/users')}{query}"
 		>Users<span class="sr-only"> in {orgName}</span></a
 	>
 	<span aria-hidden="true">·</span>
-	<a href="{resolve('/(app)/admin/searches')}{query}"
+	<a href="{resolve('/(site)/admin/searches')}{query}"
 		>Searches<span class="sr-only"> in {orgName}</span></a
 	>
 </span>

@@ -13,7 +13,7 @@
 		type TrailExportMeta
 	} from '#lib/trail-export.js';
 	import type { TrailStep } from '#lib/trail.js';
-	import Modal from './Modal.svelte';
+	import Modal from '#lib/components/Modal.svelte';
 	import TrailShare, { type StoredTrail } from './TrailShare.svelte';
 
 	let {

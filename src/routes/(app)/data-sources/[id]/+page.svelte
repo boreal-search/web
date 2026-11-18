@@ -26,7 +26,7 @@
 	let failed = $derived(jobs?.filter((j) => j.status === 'failed').length ?? 0);
 </script>
 
-<p class="back"><a href={resolve('/(app)')}>← Data sources</a></p>
+<p class="back"><a href={resolve('/(app)/data-sources')}>← Data sources</a></p>
 
 <svelte:head>
 	<title>{ds?.name ?? data.id} · Boreal Search</title>

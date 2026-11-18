@@ -45,7 +45,7 @@ interface FailureCopy {
 }
 
 interface FailureContext {
-	/** The user has more than one context, so the "Searching in" switcher is shown. */
+	/** The user has more than one context, so the sidebar switcher offers a choice. */
 	canSwitch?: boolean;
 }
 
@@ -102,13 +102,13 @@ export function describeFailure(f: Failure, ctx: FailureContext = {}): FailureCo
 				retry: true
 			};
 		case 'not_found': {
-			const home = 'Go to your data sources.';
+			const home = 'Go back to search.';
 			if (f.what === 'page') {
 				return {
 					...base,
 					title: 'Page not found',
 					cause: 'The address may be mistyped, or the page may have moved.',
-					next: 'Check the address, or start again from your data sources.'
+					next: 'Check the address, or start again from search.'
 				};
 			}
 			if (f.what === 'trail') {
@@ -131,9 +131,7 @@ export function describeFailure(f: Failure, ctx: FailureContext = {}): FailureCo
 				...base,
 				title: 'Data source not found',
 				cause: "It may not exist, or it may belong to an org you're not searching in right now.",
-				next: ctx.canSwitch
-					? 'Switch org with "Searching in" at the top of the page, or go to your data sources.'
-					: home
+				next: ctx.canSwitch ? 'Switch org at the top of the sidebar, or go back to search.' : home
 			};
 		}
 		case 'forbidden':

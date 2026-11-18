@@ -15,7 +15,7 @@ export function requireUser() {
 	const { locals, url } = getRequestEvent();
 	if (!locals.user) {
 		const redirectTo = url.pathname + url.search;
-		redirect(303, `${resolve('/login')}?${new URLSearchParams({ redirectTo })}`);
+		redirect(303, `${resolve('/(site)/login')}?${new URLSearchParams({ redirectTo })}`);
 	}
 	return locals.user;
 }

@@ -22,7 +22,7 @@
 
 {#if data.accessRequest}
 	<AccessRequestSent request={data.accessRequest} {partial} />
-	<p><a href={resolve('/(app)')}>Back to data sources</a></p>
+	<p><a href={resolve('/(app)/search')}>Back to search</a></p>
 {:else}
 	<p class="muted intro">
 		Search your organization's own documents. Tell us who you are and what you want to search, and

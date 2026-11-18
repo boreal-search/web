@@ -1,5 +1,5 @@
 <!--
-	The user's open access request: on the dashboard (no org) and on /request-access.
+	The user's open access request: on /search (no org) and on /request-access.
 	`partial`: saved, but the email to support didn't go out (founders still see it on /admin).
 -->
 <script lang="ts">

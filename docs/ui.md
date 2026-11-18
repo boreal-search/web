@@ -11,7 +11,7 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
 | ------------- | ---------------------------------------------------- |
 | `page`        | Page background                                      |
 | `surface`     | Raised surfaces (menus, selected rows): above all    |
-| `sidebar`     | Search: the trail sidebar's area                     |
+| `sidebar`     | The app sidebar's area                               |
 | `pane`        | Search: the evidence pane's area (and its overlay)   |
 | `ink`         | Text                                                 |
 | `muted`       | Secondary text                                       |
@@ -35,7 +35,7 @@ Use the theme roles, never literal colours. Tailwind's default palette is cleare
   are warm greys (Rule's family pulled toward brown, low chroma), never ochre or yellow, so
   they sit apart from fog by hue as well as lightness. Sticky bars inside an area take that
   area's role as their background.
-- Light and dark follow `prefers-color-scheme` unless the user picks one on `/account`
+- Light and dark follow `prefers-color-scheme` unless the user picks one in the user menu
   (`<html data-theme>`); every colour role is one `light-dark(light, dark)` value.
 
 ## Type
@@ -103,7 +103,8 @@ Shared classes in `src/app.css` (listed at its top). Prefer these over one-off s
 layout beyond them uses Tailwind utilities from the theme.
 
 - Layout: `.page-head` (h1, then a `.readout` line), `.band` (a `<section>` under a full-width
-  rule; bands, not boxes), `.actions` (button row). The shell is in `+layout.svelte`.
+  rule; bands, not boxes), `.actions` (button row). The app shell is `routes/(app)/+layout.svelte`;
+  other pages use `SiteFrame`.
 - Text: `.muted`, `.readout` (mono readings, `<b>` = value), `.loc` (locator; `a.loc` opens the
   PDF), `.source` (serif, document words only, always with a `.loc`), `.empty`.
 - Forms: `form.stack`, `.field` (label, control, `.help`, `.field-error` linked by

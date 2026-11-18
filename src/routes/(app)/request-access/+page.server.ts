@@ -48,7 +48,7 @@ export const actions: Actions = {
 			await sendEmail(
 				accessRequestEmail(
 					{ email: data.email, ...parsed.value },
-					`${url.origin}${resolve('/(app)/admin')}`
+					`${url.origin}${resolve('/(site)/admin')}`
 				),
 				fetch
 			);

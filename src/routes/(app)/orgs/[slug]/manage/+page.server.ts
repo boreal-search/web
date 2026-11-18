@@ -96,7 +96,10 @@ export const actions: Actions = {
 		if (result === 'added') return { notice: `Added ${email} as ${ROLE_LABELS[role]}.` };
 
 		try {
-			await sendEmail(inviteEmail(email, org.name, `${url.origin}${resolve('/login')}`), fetch);
+			await sendEmail(
+				inviteEmail(email, org.name, `${url.origin}${resolve('/(site)/login')}`),
+				fetch
+			);
 			return {
 				notice: `Invite sent to ${email}. They join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
 			};
@@ -104,7 +107,7 @@ export const actions: Actions = {
 			const reason = e instanceof EmailError ? e.message : String(e);
 			return {
 				partial: true,
-				notice: `Invite for ${email} saved, but the email wasn't sent (${reason}). Send them ${url.origin}${resolve('/login')}: they join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
+				notice: `Invite for ${email} saved, but the email wasn't sent (${reason}). Send them ${url.origin}${resolve('/(site)/login')}: they join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
 			};
 		}
 	},

@@ -6,26 +6,28 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 
 ## Screens
 
-### Global shell (`+layout.svelte`)
+### App shell (`(app)/+layout.svelte`)
 
-- Who: all. Header: "Boreal" link, primary nav, user email, Log out (POST button) or "Log in" link.
-- Nav items (signed in): Data sources, Search, "Manage {org name}" (one per owned org), Admin (platform admin only). Anon: no nav, only Log in.
-- [ ] Anon vs signed in header; many owned orgs (nav grows); long org name / long email
-- [ ] No active-page indicator exists today; no sign-out confirmation; no mobile layout (single flex row)
-- [ ] In progress: add Account link, Request access link (to `/signup`) for anon; "not in an org" state must still render nav
-- Context switcher: form "Searching in [select] Switch" (POST `/switch-org`, works without JS; returns to the same page, or `/` from a data source page). Shown only when there are 2+ contexts: 2+ orgs, or 1 org plus public corpora. Options: the user's orgs by name, then "Public" (omitted when no corpora are public). Invalid choice: 400 error page.
-- [ ] Switcher: 2 orgs + Public; many orgs; long org names; current context visible only as the selected option (no other indicator)
+- Who: signed in, on every `(app)` page (search, data sources, account, request access, org manage). `/` redirects to `/search` (anon: `/welcome`).
+- Sidebar | content. Sidebar: wordmark, collapse toggle (rail with New search only; remembered in the `boreal_sidebar` cookie), "New search", the context switcher, the current context's trails (latest 20, "View all" = `?all=1`), user button at the foot.
+- Context switcher (`ContextSwitch`): a select labelled "Org" that posts to `/switch-org` on change (Switch button without JS; returns to the same page, or `/data-sources` from a data source page); a static name with one context. Options: the user's orgs by name, then "Public" (omitted when no corpora are public). Invalid choice: 400 error page.
+- User menu (`UserMenu`, a popover): Data sources, "Manage {org}" (one per org the user administers), Admin (platform admins), Account, Theme (System / Light / Dark, saved to the profile), Sign out.
+- Phones (≤ 760px): a top bar (Menu, wordmark, New search); Menu opens the sidebar as a drawer (`<dialog>`: focus trapped, Escape closes, focus back to Menu).
+
+### Site frame (`SiteFrame`)
+
+- `(site)` pages (log in, sign up, forgot, welcome, set password, platform admin) and the error page: a header with the wordmark and, signed in, "Back to search" + the user menu; anon: Log in, Request access. No sidebar.
 
 ### Error page (`+error.svelte`)
 
-- Who: all. Copy from `describeFailure` (`src/lib/failure.ts`) by `App.Error.failure`, else by status: title, why, what to do; readout `Error {status}` plus mono readings (engine status/detail, `ref` + UTC time for 500s); "Try again" when it can help, always "Go to data sources".
-- Codes raised: 403 platform admin / org admin gates (says who can open it and how to get access); 404 data source (may belong to another org; suggests "Searching in" when the switcher is shown) / org / unknown route; 400 bad request; 500 "Something went wrong on Boreal's side" with a ref matching the `[boreal] ref=…` log line (`handleError` in `src/lib/server/errors.ts`).
-- [ ] 403, 404, 500, 502 variants; long message; anon 404 (link goes to dashboard, which redirects to login)
+- Who: all. Copy from `describeFailure` (`src/lib/failure.ts`) by `App.Error.failure`, else by status: title, why, what to do; readout `Error {status}` plus mono readings (engine status/detail, `ref` + UTC time for 500s); "Try again" when it can help, always "Go to search".
+- Codes raised: 403 platform admin / org admin gates (says who can open it and how to get access); 404 data source (may belong to another org; suggests the sidebar switcher when it offers a choice) / org / unknown route; 400 bad request; 500 "Something went wrong on Boreal's side" with a ref matching the `[boreal] ref=…` log line (`handleError` in `src/lib/server/errors.ts`).
+- [ ] 403, 404, 500, 502 variants; long message; anon 404 ("Go to search" redirects to login)
 - [ ] Redirect-to-login for anon is a 303, not an error page
 
 ### `/login`
 
-- Who: anon (signed-in users are redirected to `/`).
+- Who: anon (signed-in users are redirected to `/search`).
 - Purpose: sign in by password or by emailed magic link.
 - Data: `redirectTo` (same-origin relative path only, else `/`).
 - Fields: Work email (required), Password (optional; blank means magic link). Button label switches: "Email me a sign-in link" / "Sign in"; busy: "Sending…" / "Signing in…".
@@ -49,9 +51,10 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 
 - POST only, no UI; redirects to `/login`. [ ] Consider a "signed out" notice _(inferred)_
 
-### `/` Data sources (dashboard)
+### `/data-sources` Data sources
 
 - Who: member+ (any signed-in user). Anon redirects to `/login?redirectTo=…`.
+- "Data sources for" switcher (same context switch as the sidebar) when the user has 2+ contexts.
 - Purpose: list corpora searchable in the current context (current org's grants ∪ public corpora; Public context: public only), one table per group: "<Org name>", then "Public".
 - Data per row: name (link), description, status, document count, page count. Footer link "Search these data sources →".
 - [ ] Loading: none shown (server load); decide on skeleton/streaming
@@ -64,8 +67,8 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 ### No org: Public search
 
 - Who: signed-in user with zero memberships. Their only context is Public; no switcher.
-- With public corpora: Data sources and Search work over the public corpora (picker group "Public"), plus the line "Want your own documents? Contact us." (plain text; no contact address yet).
-- No public corpora: empty state "You're not in an org yet, and there are no public data sources." on `/`, with the request-access link below it; "You're not in an org yet, and there are no public data sources. Ask your org admin for an invite, or contact us to search your own documents." on `/search`.
+- With public corpora: Data sources and Search work over the public corpora (picker group "Public"); `/search` adds "Want to search your own documents? Request access for your organization." (or their open request).
+- No public corpora: `/search` shows an empty state with a large "Request access" button (to `/request-access`), or the open request's status; `/data-sources` says so with a request-access link.
 - [ ] Needs: a real contact link; sign out / change account; nav has no Manage links
 - [ ] Pending invite for their email is claimed only when the email is confirmed; unconfirmed user needs "confirm your email" copy _(inferred)_
 
@@ -179,7 +182,7 @@ Roles in code today: platform admin (global), org `owner`, org `member`. The ren
 ## Cross-cutting
 
 - Navigation: current-page state absent; admin and manage links conditional on role; header repeated on every page; breadcrumbs only on data source detail ("← Data sources"). Logout is a POST form-button styled in the nav row.
-- Auth redirects: unauthenticated access to any `(app)` route goes to `/login?redirectTo=<path+query>`; no explanatory message. Logged-in visit to `/login` redirects to `/`.
+- Auth redirects: unauthenticated access to any `(app)` route goes to `/login?redirectTo=<path+query>`; no explanatory message. Logged-in visit to `/login` or `/signup` redirects to `/search`.
 - Flash/notice messages: none global. Manage page uses one inline status/alert slot; login/search/admin use inline `form.error`. Define one pattern: placement, auto-dismiss or not, partial-success (invite saved, email not sent) style, success after redirect (create org shows none).
 - Form validation: server-side only, via 400 `fail` with field values echoed back (passwords never). Browser `required` / `type=email` also apply. Errors are single strings, not per-field; no `aria-invalid` or field association. Parsers: slug `^[a-z0-9][a-z0-9-]{1,62}$`, email regex, domain regex, role owner|member (normalised lowercase/trimmed). Per-field help text is requested for admin pages.
 - Progressive enhancement: forms work without JS; `use:enhance` shows busy state only on login and search.
