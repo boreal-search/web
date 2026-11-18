@@ -1,8 +1,8 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { isMissingTable } from '#lib/server/access-requests.js';
+import { resolve } from '$app/paths';
 import { requirePlatformAdmin } from '#lib/server/auth.js';
 import { classifyEngineError, engine, FAILURE_HTTP_STATUS } from '#lib/server/engine.js';
-import { parseSlug, planGrantChanges } from '#lib/server/orgs.js';
+import { parseSlug, syncGrants } from '#lib/server/orgs.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, fetch }) => {
@@ -25,10 +25,9 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 	]);
 	if (error) throw error;
 	if (pub.error) throw pub.error;
-	// Null until the access_requests migration is applied; the band says so.
-	if (requests.error && !isMissingTable(requests.error)) throw requests.error;
+	if (requests.error) throw requests.error;
 	return {
-		accessRequests: requests.error ? null : requests.data,
+		accessRequests: requests.data,
 		publicCorpora: {
 			publicIds: pub.data.map((p) => p.data_source_id),
 			dataSources: sources.list.map((ds) => ({ id: ds.id, name: ds.name })),
@@ -56,27 +55,8 @@ export const actions: Actions = {
 			const publicFailure = classifyEngineError(e);
 			return fail(FAILURE_HTTP_STATUS[publicFailure.kind], { publicFailure });
 		}
-		const current = await locals.supabase.from('public_data_sources').select('data_source_id');
-		if (current.error) return fail(400, { publicError: current.error.message });
-
-		const { add, remove } = planGrantChanges(
-			current.data.map((p) => p.data_source_id),
-			desired,
-			known
-		);
-		if (add.length > 0) {
-			const { error } = await locals.supabase
-				.from('public_data_sources')
-				.insert(add.map((data_source_id) => ({ data_source_id })));
-			if (error) return fail(400, { publicError: error.message });
-		}
-		if (remove.length > 0) {
-			const { error } = await locals.supabase
-				.from('public_data_sources')
-				.delete()
-				.in('data_source_id', remove);
-			if (error) return fail(400, { publicError: error.message });
-		}
+		const error = await syncGrants(locals.supabase, null, desired, known);
+		if (error) return fail(400, { publicError: error.message });
 		return { publicNotice: 'Public data sources saved.' };
 	},
 
@@ -116,6 +96,6 @@ export const actions: Actions = {
 				error.code === '23505' ? `Another org already uses the slug ${slug}.` : error.message;
 			return fail(400, { name, slug, error: message });
 		}
-		redirect(303, `/orgs/${slug}/manage`);
+		redirect(303, resolve('/(app)/orgs/[slug]/manage', { slug }));
 	}
 };

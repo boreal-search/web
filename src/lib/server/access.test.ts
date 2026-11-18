@@ -3,6 +3,8 @@ import {
 	availableContexts,
 	contextValue,
 	findForbiddenDataSources,
+	keepsHistory,
+	logsQueries,
 	resolveContext,
 	searchableGroups,
 	withDataSources,
@@ -34,8 +36,22 @@ describe('findForbiddenDataSources', () => {
 	});
 });
 
-const acme: Membership = { id: 'o-acme', slug: 'acme', name: 'Acme', role: 'member' };
-const beta: Membership = { id: 'o-beta', slug: 'beta', name: 'Beta', role: 'admin' };
+const acme: Membership = {
+	id: 'o-acme',
+	slug: 'acme',
+	name: 'Acme',
+	role: 'member',
+	log_queries: true,
+	conversation_history: true
+};
+const beta: Membership = {
+	id: 'o-beta',
+	slug: 'beta',
+	name: 'Beta',
+	role: 'admin',
+	log_queries: true,
+	conversation_history: true
+};
 const values = (cs: SearchContext[]) => cs.map(contextValue);
 
 describe('availableContexts', () => {
@@ -125,5 +141,21 @@ describe('withDataSources', () => {
 			{ label: 'Acme', dataSources: [{ id: 'b' }, { id: 'a' }] },
 			{ label: 'Public', dataSources: [{ id: 'p' }] }
 		]);
+	});
+});
+
+describe('logsQueries / keepsHistory', () => {
+	const off: SearchContext = {
+		kind: 'org',
+		org: { ...acme, log_queries: false, conversation_history: false }
+	};
+	it("follow the org's switches", () => {
+		expect(logsQueries(off)).toBe(false);
+		expect(keepsHistory(off)).toBe(false);
+		expect(logsQueries({ kind: 'org', org: acme })).toBe(true);
+	});
+	it('are always on in Public', () => {
+		expect(logsQueries({ kind: 'public' })).toBe(true);
+		expect(keepsHistory({ kind: 'public' })).toBe(true);
 	});
 });

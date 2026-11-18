@@ -3,7 +3,13 @@
 // trail actions.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { CONTEXT_COOKIE, getAccess, withDataSources, type Access } from '#lib/server/access.js';
+import {
+	CONTEXT_COOKIE,
+	getAccess,
+	keepsHistory,
+	withDataSources,
+	type Access
+} from '#lib/server/access.js';
 import { requireUser } from '#lib/server/auth.js';
 import type { EngineFailure } from '#lib/failure.js';
 import { classifyEngineError, engine } from '#lib/server/engine.js';
@@ -79,19 +85,8 @@ export const load: PageServerLoad = async ({
 
 	// Good / Bad is for platform admins only for now (`canRate`): others get no ids or ratings.
 	const rates = trailId ? canRate(locals.supabase) : Promise.resolve(false);
-	const [picker, history, loaded] = await Promise.all([
+	const [picker, loaded] = await Promise.all([
 		pickerGroups(access, fetch),
-		orgId === null
-			? true
-			: locals.supabase
-					.from('orgs')
-					.select('conversation_history')
-					.eq('id', orgId)
-					.single()
-					.then(({ data, error: e }) => {
-						if (e) throw e;
-						return data.conversation_history;
-					}),
 		trailId ? rates.then((r) => loadTrail(locals.supabase, trailId, user.id, r)) : null
 	]);
 
@@ -121,7 +116,7 @@ export const load: PageServerLoad = async ({
 	return {
 		...picker,
 		permanentLinks: canSign(),
-		history,
+		history: keepsHistory(access.context),
 		query: url.searchParams.get('q') ?? '',
 		trail
 	};

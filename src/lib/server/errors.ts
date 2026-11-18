@@ -5,7 +5,7 @@
 import type { HandleServerError } from '@sveltejs/kit/hooks';
 
 /** Eight hex characters: short enough to read out, unique enough within a day of logs. */
-export const newRef = () => crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+const newRef = () => crypto.randomUUID().replaceAll('-', '').slice(0, 8);
 
 export const handleError: HandleServerError = ({ kind, error, event }) => {
 	if (kind !== 'unknown') return;

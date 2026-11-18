@@ -44,12 +44,13 @@ describe('buildSearchEvent', () => {
 		dataSourceIds: ['bc-regs'],
 		topK: 10,
 		rerank: true,
+		logQueries: true,
 		status: 'ok' as const,
 		response
 	};
 
 	it('captures result stats from the engine response', () => {
-		expect(buildSearchEvent(input, true)).toMatchObject({
+		expect(buildSearchEvent(input)).toMatchObject({
 			query: 'noise limits',
 			query_length: 12,
 			result_count: 1,
@@ -61,14 +62,19 @@ describe('buildSearchEvent', () => {
 	});
 
 	it('drops query text but keeps its length when the org opts out', () => {
-		expect(buildSearchEvent(input, false)).toMatchObject({ query: null, query_length: 12 });
+		expect(buildSearchEvent({ ...input, logQueries: false })).toMatchObject({
+			query: null,
+			query_length: 12
+		});
 	});
 
 	it('records errors with null result stats', () => {
-		const row = buildSearchEvent(
-			{ ...input, status: 'engine_error', response: undefined, error: '502 upstream' },
-			true
-		);
+		const row = buildSearchEvent({
+			...input,
+			status: 'engine_error',
+			response: undefined,
+			error: '502 upstream'
+		});
 		expect(row).toMatchObject({
 			status: 'engine_error',
 			result_count: null,
@@ -84,7 +90,7 @@ describe('buildSearchEvent', () => {
 	};
 
 	it('keeps what the user saw and where it sits in their trail', () => {
-		const row = buildSearchEvent({ ...input, id: 'e1', seen }, true);
+		const row = buildSearchEvent({ ...input, id: 'e1', seen });
 		expect(row).toMatchObject({
 			id: 'e1',
 			trail_id: 'trail-1',
@@ -98,7 +104,7 @@ describe('buildSearchEvent', () => {
 	});
 
 	it('drops the summary and results with the query text when the org opts out', () => {
-		const row = buildSearchEvent({ ...input, seen }, false);
+		const row = buildSearchEvent({ ...input, seen, logQueries: false });
 		expect(row).toMatchObject({
 			resolved_query: null,
 			answer: null,
@@ -124,60 +130,44 @@ describe('recordSearchEvent', () => {
 		dataSourceIds: ['bc-regs'],
 		topK: 10,
 		rerank: true,
+		logQueries: true,
 		status: 'ok' as const
 	};
 
-	/** Minimal stand-in for the two queries; the org lookup waits until `release()`. */
+	/** The insert waits until `release()`. */
 	function fakeSupabase() {
-		const insert = vi.fn().mockResolvedValue({ error: null });
-		const org = Promise.withResolvers<{ data: { log_queries: boolean }; error: null }>();
-		const client = {
-			from: (table: string) =>
-				table === 'orgs'
-					? { select: () => ({ eq: () => ({ single: () => org.promise }) }) }
-					: { insert }
+		const gate = Promise.withResolvers<void>();
+		const insert = vi.fn(() => gate.promise.then(() => ({ error: null })));
+		const client = { from: () => ({ insert }) };
+		return {
+			insert,
+			release: () => gate.resolve(),
+			supabase: client as unknown as SupabaseClient<Database>
 		};
-		const release = (logQueries = true) =>
-			org.resolve({ data: { log_queries: logQueries }, error: null });
-		return { insert, release, supabase: client as unknown as SupabaseClient<Database> };
 	}
 
 	it('awaits the insert off-Vercel (dev/tests)', async () => {
 		const { insert, release, supabase } = fakeSupabase();
-		const done = recordSearchEvent(supabase, input);
+		let settled = false;
+		const done = recordSearchEvent(supabase, input).then(() => (settled = true));
+		await Promise.resolve();
+		expect(settled).toBe(false);
 		release();
 		await done;
 		expect(waitUntil).not.toHaveBeenCalled();
 		expect(insert).toHaveBeenCalledWith(expect.objectContaining({ org_id: 'org-a', status: 'ok' }));
 	});
 
-	it("applies the org's log_queries switch", async () => {
-		const { insert, release, supabase } = fakeSupabase();
-		const done = recordSearchEvent(supabase, input);
-		release(false);
-		await done;
-		expect(insert).toHaveBeenCalledWith(expect.objectContaining({ org_id: 'org-a', query: null }));
-	});
-
-	it('records a public search with a null org and the query text, without an org lookup', async () => {
-		const { insert, supabase } = fakeSupabase(); // never released: a lookup would hang
-		await recordSearchEvent(supabase, { ...input, orgId: null });
-		expect(insert).toHaveBeenCalledWith(
-			expect.objectContaining({ org_id: null, query: 'noise limits', query_length: 12 })
-		);
-	});
-
 	it('hands the insert to waitUntil on Vercel instead of blocking the response', async () => {
 		vi.stubEnv('VERCEL', '1');
 		const { insert, release, supabase } = fakeSupabase();
 
-		// Resolves while the org lookup is still pending: the response is not held up.
+		// Resolves while the insert is still pending: the response is not held up.
 		await recordSearchEvent(supabase, input);
 		expect(waitUntil).toHaveBeenCalledTimes(1);
-		expect(insert).not.toHaveBeenCalled();
+		expect(insert).toHaveBeenCalledTimes(1);
 
 		release();
-		await waitUntil.mock.calls[0][0];
-		expect(insert).toHaveBeenCalledTimes(1);
+		expect(await waitUntil.mock.calls[0][0]).toBe(true);
 	});
 });

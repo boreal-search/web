@@ -10,7 +10,10 @@ export const RATING_LABELS: Record<Rating, string> = { good: 'Good', bad: 'Bad' 
 export const NOTE_MAX = 1000;
 
 /** What is rated: one search (a response), or a whole stored trail (the conversation). */
-export type RatingTarget = { kind: 'search'; id: string } | { kind: 'trail'; id: string };
+export interface RatingTarget {
+	kind: 'search' | 'trail';
+	id: string;
+}
 
 /** A rating as stored. Setting `null` clears it. */
 export interface RatingValue {
@@ -26,7 +29,7 @@ export interface TrailRatings {
 	searches: Record<string, RatingValue>;
 }
 
-export const isRating = (v: unknown): v is Rating => v === 'good' || v === 'bad';
+export const isRating = (v: unknown): v is Rating => RATINGS.some((r) => r === v);
 
 /** A note as stored: one trimmed string within NOTE_MAX, or null for none. */
 export const cleanNote = (v: unknown): string | null =>

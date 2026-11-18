@@ -14,10 +14,10 @@ export type EngineFailure =
 	| { kind: 'error'; status: number | null; detail: string };
 
 /** What a 404 was about. "Doesn't exist" and "not in your current context" read the same. */
-export type Missing = 'page' | 'data_source' | 'org' | 'trail';
+type Missing = 'page' | 'data_source' | 'org' | 'trail';
 
 /** Who may open a role-gated page. */
-export type Gate = 'platform_admin' | 'org_admin';
+type Gate = 'platform_admin' | 'org_admin';
 
 export type Failure =
 	| EngineFailure
@@ -30,7 +30,7 @@ export type Failure =
 	| { kind: 'internal'; ref: string | null; at: string | null };
 
 /** How a failure reads: a headline, then why, then what to do. */
-export interface FailureCopy {
+interface FailureCopy {
 	title: string;
 	/** Why it happened; null when the title says it all. */
 	cause: string | null;
@@ -44,7 +44,7 @@ export interface FailureCopy {
 	retry: boolean;
 }
 
-export interface FailureContext {
+interface FailureContext {
 	/** The user has more than one context, so the "Searching in" switcher is shown. */
 	canSwitch?: boolean;
 }

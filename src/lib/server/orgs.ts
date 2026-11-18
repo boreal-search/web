@@ -1,13 +1,12 @@
-// Org management: form-input normalisation and the invite email. Pure; the database
-// (RLS + `add_org_member`) is the authority, these only give users an early, clear error.
+// Org management: form-input normalisation, corpus grants and the invite email. The database
+// (RLS + `add_org_member`) is the authority; the parsers only give users an early, clear error.
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 import { ORG_ROLES } from '#lib/roles.js';
-import type { OrgRole } from '#lib/supabase/types.js';
+import type { Database, OrgRole } from '#lib/supabase/types.js';
 import { escapeHtml, type Email } from './email.js';
 
 /** Mirrors `orgs.slug`'s check constraint. */
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
-/** Mirrors `org_invites.email` / `add_org_member`. */
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 /** Mirrors `org_domains.domain`. */
 const DOMAIN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
@@ -16,13 +15,6 @@ export function parseSlug(value: FormDataEntryValue | null): string | null {
 		.trim()
 		.toLowerCase();
 	return SLUG.test(slug) ? slug : null;
-}
-
-export function parseEmail(value: FormDataEntryValue | null): string | null {
-	const email = String(value ?? '')
-		.trim()
-		.toLowerCase();
-	return EMAIL.test(email) ? email : null;
 }
 
 /** Accepts `acme.com`, `@acme.com` or `ACME.com `; returns `acme.com` or null. */
@@ -75,6 +67,52 @@ export function planGrantChanges(
 		add: known.filter((id) => want.has(id) && !has.has(id)),
 		remove: known.filter((id) => has.has(id) && !want.has(id))
 	};
+}
+
+/**
+ * Save the checkbox form's corpus grants: an org's (`orgId`), or the public corpora (null).
+ * Returns the database error, if any.
+ */
+export async function syncGrants(
+	supabase: SupabaseClient<Database>,
+	orgId: string | null,
+	desired: readonly string[],
+	known: readonly string[]
+): Promise<PostgrestError | null> {
+	const current =
+		orgId === null
+			? await supabase.from('public_data_sources').select('data_source_id')
+			: await supabase.from('org_data_sources').select('data_source_id').eq('org_id', orgId);
+	if (current.error) return current.error;
+
+	const { add, remove } = planGrantChanges(
+		current.data.map((g) => g.data_source_id),
+		desired,
+		known
+	);
+	if (add.length > 0) {
+		const { error } =
+			orgId === null
+				? await supabase
+						.from('public_data_sources')
+						.insert(add.map((data_source_id) => ({ data_source_id })))
+				: await supabase
+						.from('org_data_sources')
+						.insert(add.map((data_source_id) => ({ org_id: orgId, data_source_id })));
+		if (error) return error;
+	}
+	if (remove.length > 0) {
+		const { error } =
+			orgId === null
+				? await supabase.from('public_data_sources').delete().in('data_source_id', remove)
+				: await supabase
+						.from('org_data_sources')
+						.delete()
+						.eq('org_id', orgId)
+						.in('data_source_id', remove);
+		if (error) return error;
+	}
+	return null;
 }
 
 /** Invite for an email with no account yet; signing in with it claims the membership. */

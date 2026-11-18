@@ -1,17 +1,18 @@
 import { fail } from '@sveltejs/kit';
+import { resolve } from '$app/paths';
 import { requireOrgAdmin } from '#lib/server/auth.js';
+import { parseEmail } from '#lib/server/credentials.js';
 import { EmailError, sendEmail } from '#lib/server/email.js';
 import { classifyEngineError, engine, FAILURE_HTTP_STATUS } from '#lib/server/engine.js';
 import {
 	inviteEmail,
 	isPublicEmailDomain,
 	parseDomain,
-	parseEmail,
 	parseRole,
-	planGrantChanges
+	syncGrants
 } from '#lib/server/orgs.js';
 import { ROLE_LABELS } from '#lib/roles.js';
-import type { Actions, PageServerLoad } from './$types';
+import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 // The org admin page. Org admins and platform admins both reach it; platform-admin-only
 // sections and actions are gated here and, authoritatively, by RLS and add_org_member.
@@ -65,7 +66,16 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 	};
 };
 
-const platformAdminOnly = () => fail(403, { error: 'Only platform admins can change this.' });
+type Org = Awaited<ReturnType<typeof requireOrgAdmin>>['org'];
+
+/** Wraps an action only platform admins may take. */
+const platformOnly =
+	<T>(action: (event: RequestEvent, org: Org) => Promise<T>) =>
+	async (event: RequestEvent) => {
+		const { org, isPlatformAdmin } = await requireOrgAdmin(event.params.slug);
+		if (!isPlatformAdmin) return fail(403, { error: 'Only platform admins can change this.' });
+		return action(event, org);
+	};
 
 export const actions: Actions = {
 	addMember: async ({ params, request, locals, url, fetch }) => {
@@ -86,7 +96,7 @@ export const actions: Actions = {
 		if (result === 'added') return { notice: `Added ${email} as ${ROLE_LABELS[role]}.` };
 
 		try {
-			await sendEmail(inviteEmail(email, org.name, `${url.origin}/login`), fetch);
+			await sendEmail(inviteEmail(email, org.name, `${url.origin}${resolve('/login')}`), fetch);
 			return {
 				notice: `Invite sent to ${email}. They join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
 			};
@@ -94,7 +104,7 @@ export const actions: Actions = {
 			const reason = e instanceof EmailError ? e.message : String(e);
 			return {
 				partial: true,
-				notice: `Invite for ${email} saved, but the email wasn't sent (${reason}). Send them ${url.origin}/login: they join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
+				notice: `Invite for ${email} saved, but the email wasn't sent (${reason}). Send them ${url.origin}${resolve('/login')}: they join as ${ROLE_LABELS[role]} once they sign up and confirm that address.`
 			};
 		}
 	},
@@ -143,9 +153,7 @@ export const actions: Actions = {
 		return { notice: `Invite for ${email} revoked.` };
 	},
 
-	saveGrants: async ({ params, request, locals, fetch }) => {
-		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
-		if (!isPlatformAdmin) return platformAdminOnly();
+	saveGrants: platformOnly(async ({ request, locals, fetch }, org) => {
 		const desired = (await request.formData()).getAll('data_source_id').map(String);
 
 		let known: string[];
@@ -155,37 +163,12 @@ export const actions: Actions = {
 			const failure = classifyEngineError(e);
 			return fail(FAILURE_HTTP_STATUS[failure.kind], { failure, effect: 'Access not saved.' });
 		}
-		const current = await locals.supabase
-			.from('org_data_sources')
-			.select('data_source_id')
-			.eq('org_id', org.id);
-		if (current.error) return fail(400, { error: current.error.message });
-
-		const { add, remove } = planGrantChanges(
-			current.data.map((g) => g.data_source_id),
-			desired,
-			known
-		);
-		if (add.length > 0) {
-			const { error } = await locals.supabase
-				.from('org_data_sources')
-				.insert(add.map((data_source_id) => ({ org_id: org.id, data_source_id })));
-			if (error) return fail(400, { error: error.message });
-		}
-		if (remove.length > 0) {
-			const { error } = await locals.supabase
-				.from('org_data_sources')
-				.delete()
-				.eq('org_id', org.id)
-				.in('data_source_id', remove);
-			if (error) return fail(400, { error: error.message });
-		}
+		const error = await syncGrants(locals.supabase, org.id, desired, known);
+		if (error) return fail(400, { error: error.message });
 		return { notice: 'Data source access saved.' };
-	},
+	}),
 
-	addDomain: async ({ params, request, locals }) => {
-		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
-		if (!isPlatformAdmin) return platformAdminOnly();
+	addDomain: platformOnly(async ({ request, locals }, org) => {
 		const domain = parseDomain((await request.formData()).get('domain'));
 		if (!domain) return fail(400, { error: 'Enter a domain like acme.com.' });
 		if (isPublicEmailDomain(domain)) {
@@ -200,11 +183,9 @@ export const actions: Actions = {
 			return fail(400, { error: message });
 		}
 		return { notice: `Added @${domain}. New sign-ups from it join ${org.name}.` };
-	},
+	}),
 
-	removeDomain: async ({ params, request, locals }) => {
-		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
-		if (!isPlatformAdmin) return platformAdminOnly();
+	removeDomain: platformOnly(async ({ request, locals }, org) => {
 		const domain = parseDomain((await request.formData()).get('domain'));
 		if (!domain) return fail(400, { error: 'That domain is not valid.' });
 		const { error } = await locals.supabase
@@ -214,7 +195,7 @@ export const actions: Actions = {
 			.eq('domain', domain);
 		if (error) return fail(400, { error: error.message });
 		return { notice: `Removed @${domain}. New sign-ups from it no longer join ${org.name}.` };
-	},
+	}),
 
 	/** Org admins too: whether Boreal keeps queries and answers for quality review. */
 	saveReview: async ({ params, request, locals }) => {
@@ -232,9 +213,7 @@ export const actions: Actions = {
 		};
 	},
 
-	saveSettings: async ({ params, request, locals }) => {
-		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
-		if (!isPlatformAdmin) return platformAdminOnly();
+	saveSettings: platformOnly(async ({ request, locals }, org) => {
 		const form = await request.formData();
 		const defaultRole = parseRole(form.get('default_role'));
 		if (!defaultRole) return fail(400, { error: 'Pick a role for domain sign-ups.' });
@@ -247,5 +226,5 @@ export const actions: Actions = {
 			.eq('id', org.id);
 		if (error) return fail(400, { error: error.message });
 		return { notice: 'Settings saved.' };
-	}
+	})
 };

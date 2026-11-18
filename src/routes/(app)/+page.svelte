@@ -21,17 +21,12 @@
 
 <!-- No org: request access for their organization, or the request already sent. -->
 {#snippet requestAccess()}
-	{#if data.accessRequest?.available && data.accessRequest.open}
-		<AccessRequestSent request={data.accessRequest.open} />
-	{:else if data.accessRequest?.available}
+	{#if data.accessRequest}
+		<AccessRequestSent request={data.accessRequest} />
+	{:else}
 		<p class="muted">
 			Want to search your own documents?
 			<a href={resolve('/(app)/request-access')}>Request access for your organization</a>.
-		</p>
-	{:else}
-		<p class="muted">
-			Want to search your own documents? Email
-			<a href="mailto:support@borealsearch.app">support@borealsearch.app</a>.
 		</p>
 	{/if}
 {/snippet}

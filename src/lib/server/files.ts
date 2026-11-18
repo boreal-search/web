@@ -50,6 +50,7 @@ export async function requireFileAccess(ds: string) {
 	if (!dataSourceIds.includes(ds)) notFound();
 }
 
+/** 404 rather than 403, so a data source the user can't see isn't confirmed to exist. */
 export const notFound = (): never =>
 	error(404, 'Data source not found', { failure: { kind: 'not_found', what: 'data_source' } });
 

@@ -1,12 +1,8 @@
-import { error } from '@sveltejs/kit';
 import { classifyEngineError, engine, EngineError } from '#lib/server/engine.js';
+import { notFound } from '#lib/server/files.js';
 import type { PageServerLoad } from './$types';
 
 const PAGE_SIZE = 50;
-
-// 404 rather than 403 so we don't confirm that a data source exists.
-const notFound = () =>
-	error(404, 'Data source not found', { failure: { kind: 'not_found', what: 'data_source' } });
 
 export const load: PageServerLoad = async ({ params, url, parent, fetch }) => {
 	const { access, nav } = await parent();

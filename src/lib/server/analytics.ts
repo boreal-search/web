@@ -18,6 +18,8 @@ export interface SearchEventInput {
 	dataSourceIds: string[];
 	topK: number;
 	rerank: boolean;
+	/** The context's `log_queries` switch (`logsQueries` in access.ts). */
+	logQueries: boolean;
 	status: SearchStatus;
 	/** The results (the stream's `results` event, or a whole SearchResponse); absent on failure. */
 	response?: Pick<SearchResponse, 'results' | 'retrieval_ms' | 'reranked'>;
@@ -35,14 +37,13 @@ export const FAILURE_STATUS: Record<EngineFailure['kind'], SearchStatus> = {
 };
 
 /**
- * Build the row; `logQueries=false` keeps the length, counts, timings and outcome but drops the
+ * Build the row; `logQueries: false` keeps the length, counts, timings and outcome but drops the
  * text, the summary, the results and where the search sits in a trail.
  */
 export function buildSearchEvent(
-	input: SearchEventInput,
-	logQueries: boolean
+	input: SearchEventInput
 ): Database['public']['Tables']['search_events']['Insert'] {
-	const { response, seen } = input;
+	const { response, seen, logQueries } = input;
 	const text = logQueries ? seen?.step : undefined;
 	return {
 		...(input.id ? { id: input.id } : {}),
@@ -68,27 +69,13 @@ export function buildSearchEvent(
 	};
 }
 
-/** The org's `log_queries` switch. Public searches have no org and always keep the text. */
-async function logsQueries(supabase: SupabaseClient<Database>, orgId: string | null) {
-	if (orgId === null) return true;
-	const { data, error } = await supabase
-		.from('orgs')
-		.select('log_queries')
-		.eq('id', orgId)
-		.single();
-	if (error) throw error;
-	return data.log_queries;
-}
-
 /** Insert the row now. Never throws: false (logged) when it could not be recorded. */
 export async function insertSearchEvent(
 	supabase: SupabaseClient<Database>,
 	input: SearchEventInput
 ): Promise<boolean> {
 	try {
-		const { error } = await supabase
-			.from('search_events')
-			.insert(buildSearchEvent(input, await logsQueries(supabase, input.orgId)));
+		const { error } = await supabase.from('search_events').insert(buildSearchEvent(input));
 		if (error) throw error;
 		return true;
 	} catch (e) {

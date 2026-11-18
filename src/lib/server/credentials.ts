@@ -1,6 +1,17 @@
 import type { AuthError, SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '#lib/supabase/types.js';
 
+/** Mirrors `org_invites.email` / `add_org_member`. */
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** A trimmed, lower-cased email address, or null if it doesn't look like one. */
+export function parseEmail(value: FormDataEntryValue | null): string | null {
+	const email = String(value ?? '')
+		.trim()
+		.toLowerCase();
+	return EMAIL.test(email) ? email : null;
+}
+
 /** Must match `[auth] minimum_password_length` in supabase/config.toml and the hosted project. */
 export const MIN_PASSWORD_LENGTH = 8;
 /** bcrypt ignores bytes past 72; Supabase Auth rejects longer passwords. */

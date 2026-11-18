@@ -5,16 +5,22 @@ import type { Database, OrgRole } from '#lib/supabase/types.js';
 export const CONTEXT_COOKIE = 'boreal_org';
 const PUBLIC = 'public';
 
-/** An org the user belongs to. */
+/** An org the user belongs to, with the settings that shape their searches in it. */
 export interface Membership {
 	id: string;
 	slug: string;
 	name: string;
 	role: OrgRole;
+	log_queries: boolean;
+	conversation_history: boolean;
 }
 
 /** Who a search runs as: one of the user's orgs, or the Public tier (no org, no seat). */
 export type SearchContext = { kind: 'org'; org: Membership } | { kind: 'public' };
+
+/** Public searches have no org: their text and trails are always kept. */
+export const logsQueries = (c: SearchContext) => c.kind === 'public' || c.org.log_queries;
+export const keepsHistory = (c: SearchContext) => c.kind === 'public' || c.org.conversation_history;
 
 /** A labelled slice of the searchable set, for the picker: "<Org name>" then "Public". */
 export interface DataSourceGroup {
@@ -88,7 +94,10 @@ export async function getAccess(
 	cookie: string | undefined
 ): Promise<Access> {
 	const [members, pub] = await Promise.all([
-		supabase.from('org_members').select('role, orgs(id, slug, name)').eq('user_id', userId),
+		supabase
+			.from('org_members')
+			.select('role, orgs(id, slug, name, log_queries, conversation_history)')
+			.eq('user_id', userId),
 		supabase.from('public_data_sources').select('data_source_id')
 	]);
 	if (members.error) throw members.error;

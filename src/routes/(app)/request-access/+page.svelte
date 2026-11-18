@@ -6,7 +6,6 @@
 
 	let { data, form }: PageProps = $props();
 
-	let open = $derived(data.accessRequest.available ? data.accessRequest.open : null);
 	let errors = $derived((form && 'errors' in form ? form.errors : undefined) ?? {});
 	let values = $derived(form && 'values' in form ? form.values : null);
 	let partial = $derived(form && 'partial' in form ? form.partial : false);
@@ -21,15 +20,9 @@
 	<h1>Request access</h1>
 </div>
 
-{#if open}
-	<AccessRequestSent request={open} {partial} />
+{#if data.accessRequest}
+	<AccessRequestSent request={data.accessRequest} {partial} />
 	<p><a href={resolve('/(app)')}>Back to data sources</a></p>
-{:else if !data.accessRequest.available}
-	<p class="empty">
-		Access requests aren't available right now. Email
-		<a href="mailto:support@borealsearch.app">support@borealsearch.app</a> with your organization's name
-		and the documents you want to search.
-	</p>
 {:else}
 	<p class="muted intro">
 		Search your organization's own documents. Tell us who you are and what you want to search, and

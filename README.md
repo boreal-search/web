@@ -1,88 +1,62 @@
 # Boreal Search — web
 
-Dashboard for [Boreal Search](https://github.com/boreal-search): log in, see the data sources
-your organisation can access, and run visual search over them. Results are page images with
-a link into the source PDF.
+The web app for Boreal Search: sign in, see the document collections your organisation can
+access, and search them. Results are the matching PDF pages themselves, shown beside a short
+generated summary whose every sentence cites, and is checked against, the page it came from.
 
-This app is a thin shell on Vercel. Corpora, embeddings and search run in the
-private `engine` service; this repo only handles auth, org → data-source access, and the UI.
+This repo is a thin shell. Ingestion, embeddings and retrieval run in a separate, private
+engine service that the app calls server-side only; this app handles accounts, who may search
+what, and the UI.
+
+## Features
+
+- **Search** — streaming results with page previews, a cited summary with per-sentence check
+  status, follow-up questions that refine a search into a trail, and links that open the PDF
+  at the cited page.
+- **Data sources** — browse the collections and documents available in your current context.
+- **Organisations** — members, invites, roles and per-org data source access. People without
+  an org search the public collections and can request access for their organisation.
+- **Admin** — platform administrators manage orgs and public collections, review searches
+  (filters, ratings, CSV export) and users.
+- Light and dark themes, keyboard-friendly, responsive down to phone width.
+
+## Stack
+
+SvelteKit · Svelte 5 (runes) · TypeScript · Supabase (Auth and Postgres with row-level
+security) · Tailwind v4 (theme tokens) · Vitest · bun · deployed on Vercel.
 
 ## Local setup
 
 ```sh
-mise install                       # bun + node from mise.toml
+mise install            # bun + node versions from mise.toml (or install bun yourself)
 bun install
-cp .env.example .env               # vite dev / preview read .env
-# fill in PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY from your Supabase project,
-# ENGINE_URL / ENGINE_SERVICE_TOKEN from the engine you're pointing at
+cp .env.example .env    # then fill in the values described there
 bun run dev
 ```
 
-Supabase schema (once per project):
+`.env.example` lists every variable: the Supabase project URL and anon key, the engine URL and
+service token, and optional email and file-link settings. Without a reachable engine the app
+still runs; pages that need it show a notice.
 
-```sh
-supabase login
-supabase link --project-ref <ref>
-supabase db push                   # applies supabase/migrations
-```
+The database schema lives in `supabase/migrations`. Apply it to your own Supabase project with
+the Supabase CLI (`supabase link`, then `supabase db push`). Policy tests are pgTAP:
+`supabase start && supabase test db`. Platform administrators are granted in SQL, not in the UI.
 
-Make yourself a platform admin once (after signing in at least once), then manage orgs,
-members, corpus grants and email domains at `/admin`:
+## Commands
 
-```sql
-insert into platform_admins (user_id) select id from profiles where email = '<your email>';
-```
-
-Policy tests: `supabase start && supabase test db` (pgTAP, `supabase/tests/`).
-
-## Scripts
-
-| Command                             | What                                                    |
-| ----------------------------------- | ------------------------------------------------------- |
-| `bun run dev`                       | dev server                                              |
-| `bun run check`                     | type-check (`svelte-check`)                             |
-| `bun run lint` / `bun run format`   | prettier + eslint                                       |
-| `bun run test`                      | vitest                                                  |
-| `bun run build` / `bun run preview` | Vercel build (`.vercel/output`); `vite preview`         |
-| `bun run deploy`                    | `vercel deploy --prod` (pushes to `main` also deploy)   |
-| `bun run gen:engine-client`         | regenerate engine types from `$ENGINE_URL/openapi.json` |
-| `bun run gen:supabase-types`        | regenerate Supabase `Database` types                    |
-
-## Deploy
-
-Vercel Hobby project linked to this repo (pushes to `main` deploy production, PRs get
-preview URLs). Set env vars in the Vercel dashboard or with the CLI, for Production and Preview:
-
-```sh
-bun x vercel login && bun x vercel link
-for v in PUBLIC_SUPABASE_URL PUBLIC_SUPABASE_ANON_KEY ENGINE_URL ENGINE_SERVICE_TOKEN \
-         RESEND_API_KEY EMAIL_FROM; do
-  bun x vercel env add $v production
-done
-bun run deploy                     # optional manual deploy; git push is the normal path
-```
-
-`RESEND_API_KEY` / `EMAIL_FROM` (`Boreal Search <support@borealsearch.app>`) are optional; without
-them `sendEmail` throws. Auth emails (sign-in, confirm, reset) are sent by Supabase: set Auth →
-SMTP Settings to `smtp.resend.com:465`, user `resend`, password = a Resend API key.
-
-> **Required: Auth → Providers → Email → "Confirm email" ON.** Password sign-up is only safe
-> with it: invites and domain auto-joins are claimed on email confirmation, so without it
-> anyone could sign up with a customer's address and join their org. The app can't check this.
-
-Hosted Supabase Auth settings (mirror `supabase/config.toml`):
-
-- Providers → Email: Confirm email **on**, Secure password change **on**, minimum password
-  length **8**.
-- URL Configuration: Site URL `https://www.borealsearch.app`; Redirect URLs
-  `https://www.borealsearch.app/auth/confirm**` and `https://boreal-app.vercel.app/auth/confirm**`.
-  Keep the `**`: links carry `?next=…`, an exact entry doesn't match, and Supabase then quietly
-  uses the Site URL.
-- Email Templates: paste `supabase/templates/confirmation.html` into "Confirm signup" and
-  `supabase/templates/recovery.html` into "Reset password" (subjects are in `config.toml`).
+| Command                             | What                                           |
+| ----------------------------------- | ---------------------------------------------- |
+| `bun run dev`                       | dev server                                     |
+| `bun run check`                     | type-check (`svelte-check`)                    |
+| `bun run lint` / `bun run format`   | prettier + eslint                              |
+| `bun run test`                      | unit tests (vitest)                            |
+| `bun run build` / `bun run preview` | production build; preview it locally           |
+| `bun run gen:engine-client`         | regenerate the engine API types                |
+| `bun run gen:supabase-types`        | regenerate the Supabase `Database` types       |
+| `bun run shots`                     | screenshots of pages (Playwright, test logins) |
 
 ## More
 
-- `CLAUDE.md` — conventions and how to work in this repo.
+- `docs/ui.md` — UI rules: colour roles, type, answer states.
 - `docs/decisions.md` — why things are the way they are.
-- Architecture and API contract: `boreal-search/infra/docs/architecture.md`.
+- `CLAUDE.md` — layout and conventions for working in this repo.

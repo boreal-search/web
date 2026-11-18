@@ -3,10 +3,20 @@ import {
 	authErrorMessage,
 	isRecentRecovery,
 	MIN_PASSWORD_LENGTH,
+	parseEmail,
 	RECOVERY_WINDOW_SECONDS,
 	revealsAccount,
 	validateNewPassword
 } from './credentials';
+
+describe('parseEmail', () => {
+	it('trims and lower-cases', () => {
+		expect(parseEmail('  Jane.Doe@ACME.com ')).toBe('jane.doe@acme.com');
+	});
+	it.each([null, '', 'jane', 'jane@acme', 'ja ne@acme.com', '@acme.com'])('rejects %j', (v) => {
+		expect(parseEmail(v)).toBeNull();
+	});
+});
 
 describe('validateNewPassword', () => {
 	it('accepts a long-enough matching password', () => {

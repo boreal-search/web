@@ -7,13 +7,10 @@ import type {
 	Document,
 	DocumentPage,
 	EngineErrorBody,
-	Health,
 	Job,
 	JobStatus,
 	SearchRequest
 } from './engine.types';
-
-export type { Answer, SearchResponse, SearchResult } from './engine.types';
 
 export class EngineError extends Error {
 	constructor(
@@ -25,7 +22,7 @@ export class EngineError extends Error {
 	}
 }
 
-/** Engine call timeout (ms) for reads: data sources, documents, jobs, health. */
+/** Engine call timeout (ms) for reads: data sources, documents, jobs. */
 export const ENGINE_TIMEOUT_MS = { read: 8_000 } as const;
 
 /**
@@ -116,8 +113,6 @@ function query(params: Record<string, string | number | undefined>) {
  */
 export function engine(fetchFn: typeof fetch = fetch) {
 	return {
-		health: () => request<Health>('/health', fetchFn),
-
 		listDataSources: () => request<DataSource[]>('/data-sources', fetchFn),
 
 		getDataSource: (id: string) =>

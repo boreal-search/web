@@ -17,7 +17,7 @@ import { isUuid, type StoredAt } from './trails.js';
 
 type ResultsEvent = Extract<EngineEvent, { type: 'results' }>;
 
-export const MAX_TOP_K = 50;
+const MAX_TOP_K = 50;
 const MAX_QUERY = 2_000;
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -26,6 +26,8 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 	typeof v === 'object' && v !== null && !Array.isArray(v);
 const isStrings = (v: unknown): v is string[] =>
 	Array.isArray(v) && v.every((s) => typeof s === 'string');
+const isStringRecord = (v: unknown): v is Record<string, string> =>
+	isRecord(v) && isStrings(Object.values(v));
 
 /**
  * Check a StepRequest from the browser. Optional fields take the engine's defaults; present
@@ -44,31 +46,31 @@ export function parseStepRequest(body: unknown): Parsed<StepRequest> {
 	if (!query) return bad('query', 'enter a query.');
 	if (query.length > MAX_QUERY) return bad('query', `at most ${MAX_QUERY} characters.`);
 
-	const { data_source_ids, document_ids, document_titles, context, from, trail_id } = body;
+	const { data_source_ids, document_ids, context } = body;
 	if (!isStrings(data_source_ids) || data_source_ids.length === 0)
 		return bad('data_source_ids', 'select at least one data source.');
 	if (document_ids != null && !isStrings(document_ids))
 		return bad('document_ids', 'a list of document ids, or null.');
-	if (
-		document_titles !== undefined &&
-		!(isRecord(document_titles) && isStrings(Object.values(document_titles)))
-	)
-		return bad('document_titles', 'an object of id → title.');
+	const document_titles = body.document_titles === undefined ? {} : body.document_titles;
+	if (!isStringRecord(document_titles)) return bad('document_titles', 'an object of id → title.');
 
-	const flags = {
-		rewrite: bool('rewrite', true),
-		doc_filter: bool('doc_filter', true),
-		answer: bool('answer', false),
-		rerank: bool('rerank', true)
-	};
-	for (const [key, v] of Object.entries(flags)) if (v === null) return bad(key, 'true or false.');
+	const rewrite = bool('rewrite', true);
+	if (rewrite === null) return bad('rewrite', 'true or false.');
+	const doc_filter = bool('doc_filter', true);
+	if (doc_filter === null) return bad('doc_filter', 'true or false.');
+	const answer = bool('answer', false);
+	if (answer === null) return bad('answer', 'true or false.');
+	const rerank = bool('rerank', true);
+	if (rerank === null) return bad('rerank', 'true or false.');
 
 	const topK = body.top_k === undefined ? 10 : body.top_k;
 	if (typeof topK !== 'number' || !Number.isFinite(topK)) return bad('top_k', 'a number.');
 
-	if (from != null && !(Number.isInteger(from) && (from as number) >= 1))
+	const from = body.from ?? null;
+	if (from !== null && !(typeof from === 'number' && Number.isInteger(from) && from >= 1))
 		return bad('from', 'a step number, or null.');
-	if (trail_id != null && !(typeof trail_id === 'string' && isUuid(trail_id)))
+	const trail_id = body.trail_id ?? null;
+	if (trail_id !== null && !(typeof trail_id === 'string' && isUuid(trail_id)))
 		return bad('trail_id', 'a trail id, or null.');
 
 	const steps = context ?? [];
@@ -87,15 +89,15 @@ export function parseStepRequest(body: unknown): Parsed<StepRequest> {
 			query,
 			data_source_ids,
 			document_ids: document_ids && document_ids.length > 0 ? document_ids : null,
-			rewrite: flags.rewrite as boolean,
-			doc_filter: flags.doc_filter as boolean,
-			answer: flags.answer as boolean,
-			rerank: flags.rerank as boolean,
+			rewrite,
+			doc_filter,
+			answer,
+			rerank,
 			top_k: Math.min(Math.max(Math.trunc(topK), 1), MAX_TOP_K),
-			from: (from as number | null | undefined) ?? null,
+			from,
 			context: parsedContext,
-			document_titles: (document_titles as Record<string, string> | undefined) ?? {},
-			trail_id: (trail_id as string | null | undefined) ?? null
+			document_titles,
+			trail_id
 		}
 	};
 }
@@ -134,7 +136,7 @@ export interface StepStore {
 	complete(at: StoredAt, step: TrailStep): Promise<void>;
 }
 
-export interface DriveOptions {
+interface DriveOptions {
 	events: AsyncIterable<EngineEvent>;
 	/** The step before any event (`newStep`). */
 	step: TrailStep;

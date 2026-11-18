@@ -4,13 +4,13 @@ import { count, day, plural } from './format.js';
 import { seconds } from './search-view.js';
 import type { EngineEvent, TrailStep } from './trail.js';
 
-export type StageEvent = Extract<EngineEvent, { type: 'stage' }>;
+type StageEvent = Extract<EngineEvent, { type: 'stage' }>;
 
 /** Nothing shows for this long: fast searches never flash a bar. */
 export const WAIT_DELAY_MS = 300;
 
 /** The bar's segments: width weight and the typical time each takes, filled linearly. */
-export const SEGMENTS = [
+const SEGMENTS = [
 	{ name: 'search', weight: 0.6, typical_ms: 600 },
 	{ name: 'reading', weight: 1.2, typical_ms: 1500 },
 	{ name: 'checking', weight: 1.2, typical_ms: 2000 }
@@ -49,7 +49,7 @@ export function tickClock(clock: WaitClock, event: EngineEvent | { type: string 
 	};
 }
 
-export interface Segment {
+interface Segment {
 	weight: number;
 	/** 0..1. Sits at 1 when a stage runs long: never stalls short of full, never a percentage. */
 	value: number;

@@ -5,8 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { RATINGS, type Rating } from '#lib/rating.js';
 import type { Database, SearchStatus } from '#lib/supabase/types.js';
 import type { StepResult, TrailStep } from '#lib/trail.js';
-import type { Answer } from './engine.types';
-import { isUuid } from './trails.js';
+import { isUuid, storedAnswer } from './trails.js';
 import { containsFilter, escapeLike, parseUsersQuery } from './users.js';
 
 type ReviewRow = Database['public']['Views']['search_review']['Row'];
@@ -24,7 +23,7 @@ export const OUTCOMES: readonly SearchStatus[] = [
 export type RatingFilter = Rating | 'rated' | 'none';
 const RATING_FILTERS: readonly RatingFilter[] = [...RATINGS, 'rated', 'none'];
 /** The org filter: an org's id, or the Public context. */
-export type OrgFilter = { kind: 'org'; id: string } | { kind: 'public' };
+type OrgFilter = { kind: 'org'; id: string } | { kind: 'public' };
 
 /** The table's sortable columns, in table order. */
 export const SORT_KEYS = [
@@ -38,7 +37,7 @@ export const SORT_KEYS = [
 	'rating'
 ] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
-export type SortDir = 'asc' | 'desc';
+type SortDir = 'asc' | 'desc';
 export interface Sort {
 	key: SortKey;
 	dir: SortDir;
@@ -193,7 +192,7 @@ export function reviewRows<Cols extends string>(
  * aren't kept, so ids stand in and searchedLine stays empty.
  */
 export function reviewStep(row: ReviewRow): TrailStep {
-	const answer = row.answer as unknown as Answer | null;
+	const answer = storedAnswer(row.answer);
 	return {
 		n: row.step_n ?? 1,
 		query: row.query ?? '',

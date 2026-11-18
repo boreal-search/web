@@ -2,7 +2,6 @@ import { fail } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import {
 	accessRequestEmail,
-	isMissingTable,
 	loadAccessRequest,
 	parseAccessRequest,
 	type AccessRequestField
@@ -38,13 +37,10 @@ export const actions: Actions = {
 		// Already open (another tab, a double submit): the reloaded page shows that one.
 		if (error?.code === '23505') return { sent: true };
 		if (error) {
-			const message = isMissingTable(error)
-				? "Access requests can't be saved yet. Email support@borealsearch.app instead."
-				: `Your request wasn't saved (${error.message}). Try again.`;
-			return fail(isMissingTable(error) ? 503 : 400, {
+			return fail(400, {
 				values: { organization, role: role ?? '', useCase },
 				errors: {} as Partial<Record<AccessRequestField, string>>,
-				error: message
+				error: `Your request wasn't saved (${error.message}). Try again.`
 			});
 		}
 

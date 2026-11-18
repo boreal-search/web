@@ -10,7 +10,7 @@ const MAX_QUERY = 200;
 /** Pages past this are treated as out of range rather than sent as a huge offset. */
 const MAX_PAGE = 100_000;
 
-export interface UsersQuery {
+interface UsersQuery {
 	/** Trimmed search text, '' for none. */
 	q: string;
 	/** Members of this org only (its id); null for everyone. */
@@ -46,7 +46,7 @@ export function pageRange(page: number, size = PAGE_SIZE) {
 	return { from, to: from + size - 1 };
 }
 
-export interface PageWindow {
+interface PageWindow {
 	/** 1-based positions of the first and last row shown; 0 when nothing is shown. */
 	first: number;
 	last: number;

@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { resolve } from '$app/paths';
 import {
 	authErrorMessage,
 	hasRecentRecovery,
@@ -17,7 +18,10 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (url.searchParams.get('token_hash')) return;
 	if (await hasRecentRecovery(locals.supabase)) return;
-	redirect(303, locals.user ? '/account' : '/login?error=invalid_link');
+	redirect(
+		303,
+		locals.user ? resolve('/(app)/account') : `${resolve('/login')}?error=invalid_link`
+	);
 };
 
 export const actions: Actions = {
@@ -41,6 +45,6 @@ export const actions: Actions = {
 
 		const { error } = await locals.supabase.auth.updateUser({ password });
 		if (error) return fail(400, { error: authErrorMessage(error), expired: false });
-		redirect(303, '/account?updated');
+		redirect(303, `${resolve('/(app)/account')}?updated`);
 	}
 };

@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { resolve } from '$app/paths';
 import { safeRedirect } from '#lib/server/auth.js';
-import { authErrorMessage } from '#lib/server/credentials.js';
+import { authErrorMessage, parseEmail } from '#lib/server/credentials.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ url }) => {
@@ -17,13 +18,12 @@ export const load: PageServerLoad = ({ url }) => {
 export const actions: Actions = {
 	default: async ({ request, url, locals }) => {
 		const form = await request.formData();
-		const email = String(form.get('email') ?? '').trim();
+		const typed = String(form.get('email') ?? '').trim();
+		const email = parseEmail(typed);
 		const redirectTo = safeRedirect(form.get('redirectTo'));
 		const password = String(form.get('password') ?? '');
 
-		if (!email || !email.includes('@')) {
-			return fail(400, { email, error: 'Enter a valid email address.' });
-		}
+		if (!email) return fail(400, { email: typed, error: 'Enter a valid email address.' });
 
 		// Password set: sign in directly (users created in the Supabase dashboard have one).
 		if (password) {
@@ -33,7 +33,7 @@ export const actions: Actions = {
 		}
 
 		// Magic link: Supabase emails a link to /auth/confirm, which exchanges the token for a session.
-		const confirm = new URL('/auth/confirm', url.origin);
+		const confirm = new URL(resolve('/auth/confirm'), url.origin);
 		confirm.searchParams.set('next', redirectTo);
 
 		const { error } = await locals.supabase.auth.signInWithOtp({

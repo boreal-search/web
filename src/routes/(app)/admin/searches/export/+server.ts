@@ -2,13 +2,13 @@
 // row up to EXPORT_MAX. Platform admins only; RLS on search_review says the same.
 import { CSV_BOM, csvLine, type CsvCell } from '#lib/csv.js';
 import { requirePlatformAdmin } from '#lib/server/auth.js';
-import type { Answer } from '#lib/server/engine.types.js';
 import {
 	EXPORT_MAX,
 	parseReviewQuery,
 	reviewRows,
 	type ReviewQuery
 } from '#lib/server/search-review.js';
+import { storedAnswer } from '#lib/server/trails.js';
 import type { RequestHandler } from './$types';
 
 /** Rows asked for per request (supabase/config.toml max_rows). */
@@ -68,7 +68,7 @@ const cells = (r: Row): CsvCell[] => [
 	r.note,
 	r.trail_rating,
 	r.trail_note,
-	(r.answer as unknown as Answer | null)?.text ?? null
+	storedAnswer(r.answer)?.text ?? null
 ];
 
 export const GET: RequestHandler = async ({ locals, url }) => {

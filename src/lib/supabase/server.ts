@@ -3,14 +3,17 @@ import type { Cookies } from '@sveltejs/kit';
 import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from '$app/env/public';
 import type { Database } from './types';
 
-/** Per-request Supabase client that reads/writes the auth session via SvelteKit cookies. */
+/**
+ * Per-request Supabase client that reads/writes the auth session via SvelteKit cookies.
+ * httpOnly: no browser Supabase client exists, so scripts never need the tokens.
+ */
 export function createSupabaseServerClient(cookies: Cookies) {
 	return createServerClient<Database>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
 		cookies: {
 			getAll: () => cookies.getAll(),
 			setAll: (cookiesToSet) => {
 				for (const { name, value, options } of cookiesToSet) {
-					cookies.set(name, value, { ...options, path: '/' });
+					cookies.set(name, value, { ...options, path: '/', httpOnly: true });
 				}
 			}
 		}

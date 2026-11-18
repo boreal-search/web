@@ -5,7 +5,6 @@ import { THEME_COOKIE, THEME_COOKIE_OPTIONS, type Theme } from '#lib/theme.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { LayoutServerLoad } from './$types';
 
-/** The user's saved theme, or null if it can't be read (e.g. the column isn't migrated yet). */
 async function savedTheme(
 	supabase: SupabaseClient<Database>,
 	userId: string
@@ -15,7 +14,8 @@ async function savedTheme(
 		.select('theme')
 		.eq('id', userId)
 		.maybeSingle();
-	return error || !data ? null : data.theme;
+	if (error) throw error;
+	return data?.theme ?? null;
 }
 
 /**
@@ -25,8 +25,10 @@ async function savedTheme(
  * pages read it via `parent()`) plus nav. Every admin/manage route re-checks its own access.
  */
 export const load: LayoutServerLoad = async ({ locals, cookies }) => {
-	const { session, user, supabase } = locals;
-	if (!user) return { session, user, theme: locals.theme, access: null, nav: null };
+	const { supabase } = locals;
+	// Only what pages render: the full User and the session tokens stay server-side.
+	const user = locals.user && { id: locals.user.id, email: locals.user.email };
+	if (!user) return { user, theme: locals.theme, access: null, nav: null };
 
 	const [platformAdmin, access, saved] = await Promise.all([
 		isPlatformAdmin(supabase),
@@ -39,7 +41,6 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 	}
 	const current = contextValue(access.context);
 	return {
-		session,
 		user,
 		theme: locals.theme,
 		access,

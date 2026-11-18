@@ -23,7 +23,7 @@
 	// "Create the org" on an access request prefills the name (?name=…).
 	const here = resolve('/(app)/admin');
 	let prefillName = $derived(page.url.searchParams.get('name') ?? '');
-	let requestCount = $derived(data.accessRequests?.length ?? 0);
+	let requestCount = $derived(data.accessRequests.length);
 </script>
 
 <svelte:head>
@@ -52,60 +52,54 @@
 
 <section class="band" aria-labelledby="requests-heading">
 	<h2 id="requests-heading">Access requests</h2>
-	{#if data.accessRequests === null}
-		<p class="empty">
-			Access requests aren't in the database yet. Apply the access_requests migration.
-		</p>
+	<p id="requests-help" class="muted">
+		People without an org asking to search their organization's documents. Create the org, add them
+		on its manage page, email them, then mark the request done.
+	</p>
+	{#if form?.requestError}
+		<p class="notice" data-tone="error" role="alert">{form.requestError}</p>
+	{:else if form?.requestNotice}
+		<p class="notice" role="status">{form.requestNotice}</p>
+	{/if}
+	{#if data.accessRequests.length === 0}
+		<p class="empty">No open requests.</p>
 	{:else}
-		<p id="requests-help" class="muted">
-			People without an org asking to search their organization's documents. Create the org, add
-			them on its manage page, email them, then mark the request done.
-		</p>
-		{#if form?.requestError}
-			<p class="notice" data-tone="error" role="alert">{form.requestError}</p>
-		{:else if form?.requestNotice}
-			<p class="notice" role="status">{form.requestNotice}</p>
-		{/if}
-		{#if data.accessRequests.length === 0}
-			<p class="empty">No open requests.</p>
-		{:else}
-			<table class="stacked requests" aria-describedby="requests-help">
-				<thead>
+		<table class="stacked requests" aria-describedby="requests-help">
+			<thead>
+				<tr>
+					<th scope="col">Email</th>
+					<th scope="col">Organization</th>
+					<th scope="col">Role</th>
+					<th scope="col">Use case</th>
+					<th scope="col">Sent</th>
+					<th scope="col"><span class="sr-only">Actions</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each data.accessRequests as r (r.id)}
 					<tr>
-						<th scope="col">Email</th>
-						<th scope="col">Organization</th>
-						<th scope="col">Role</th>
-						<th scope="col">Use case</th>
-						<th scope="col">Sent</th>
-						<th scope="col"><span class="sr-only">Actions</span></th>
+						<td data-label="Email"><a href="mailto:{r.email}">{r.email}</a></td>
+						<td data-label="Organization">{r.organization}</td>
+						<td data-label="Role">
+							{#if r.role}{r.role}{:else}<span class="muted">None given</span>{/if}
+						</td>
+						<td data-label="Use case" class="use-case">{r.use_case}</td>
+						<td data-label="Sent" class="when">
+							<time datetime={r.created_at}>{day(r.created_at)}</time>
+						</td>
+						<td class="row-actions">
+							<a href="{here}?{new URLSearchParams({ name: r.organization })}#create-heading"
+								>Create the org</a
+							>
+							<form method="POST" action="?/markRequestDone" use:enhance>
+								<input type="hidden" name="id" value={r.id} />
+								<button type="submit">Mark done</button>
+							</form>
+						</td>
 					</tr>
-				</thead>
-				<tbody>
-					{#each data.accessRequests as r (r.id)}
-						<tr>
-							<td data-label="Email"><a href="mailto:{r.email}">{r.email}</a></td>
-							<td data-label="Organization">{r.organization}</td>
-							<td data-label="Role">
-								{#if r.role}{r.role}{:else}<span class="muted">None given</span>{/if}
-							</td>
-							<td data-label="Use case" class="use-case">{r.use_case}</td>
-							<td data-label="Sent" class="when">
-								<time datetime={r.created_at}>{day(r.created_at)}</time>
-							</td>
-							<td class="row-actions">
-								<a href="{here}?{new URLSearchParams({ name: r.organization })}#create-heading"
-									>Create the org</a
-								>
-								<form method="POST" action="?/markRequestDone" use:enhance>
-									<input type="hidden" name="id" value={r.id} />
-									<button type="submit">Mark done</button>
-								</form>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		{/if}
+				{/each}
+			</tbody>
+		</table>
 	{/if}
 </section>
 

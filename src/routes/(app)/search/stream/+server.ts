@@ -4,7 +4,13 @@
 // Errors before the stream are JSON: { error } (400/401/403/404/409) or { failure } (engine).
 import { json } from '@sveltejs/kit';
 import type { Config } from '@sveltejs/adapter-vercel';
-import { CONTEXT_COOKIE, findForbiddenDataSources, getAccess } from '#lib/server/access.js';
+import {
+	CONTEXT_COOKIE,
+	findForbiddenDataSources,
+	getAccess,
+	keepsHistory,
+	logsQueries
+} from '#lib/server/access.js';
 import {
 	FAILURE_STATUS,
 	insertSearchEvent,
@@ -63,7 +69,8 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 		query: req.query,
 		dataSourceIds: req.data_source_ids,
 		topK: req.top_k,
-		rerank: req.rerank
+		rerank: req.rerank,
+		logQueries: logsQueries(context)
 	};
 	const record = (outcome: Pick<SearchEventInput, 'status' | 'response' | 'error'>) =>
 		recordSearchEvent(locals.supabase, { ...input, ...outcome });
@@ -100,19 +107,6 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 		}
 	}
 
-	// Public trails are always kept; an org's only when it keeps search history.
-	const historyQuery =
-		orgId === null
-			? Promise.resolve(true)
-			: locals.supabase
-					.from('orgs')
-					.select('conversation_history')
-					.eq('id', orgId)
-					.single()
-					.then(({ data, error }) => {
-						if (error) console.error('conversation_history lookup failed', error);
-						return data?.conversation_history ?? false;
-					});
 	// Names and index dates for the step's scope chip and readout; ids stand in if this fails.
 	const listing = engine(fetch)
 		.listDataSources()
@@ -159,13 +153,13 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 	}
 	const events = ndjson<EngineEvent>(res.body);
 
-	const [history, list] = await Promise.all([historyQuery, listing]);
+	const list = await listing;
 	const names = Object.fromEntries(list.map((ds) => [ds.id, ds.name]));
 	const indexedAt = Object.fromEntries(list.map((ds) => [ds.id, ds.indexed_at]));
 	// n is a placeholder: the database numbers stored steps, the browser numbers unstored ones.
 	const step = newStep(req, 0, names, indexedAt);
 
-	const store: StepStore | null = history
+	const store: StepStore | null = keepsHistory(context)
 		? {
 				insert: (s) => insertStep(locals.supabase, req.trail_id, orgId, s),
 				complete: (at, s) => completeStep(locals.supabase, at, s)

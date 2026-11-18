@@ -92,7 +92,11 @@
 					{#each documents as doc (doc.id)}
 						<tr>
 							<td class="title">
-								<a href={doc.pdf_url} target="_blank" rel="external noopener">{doc.title}</a>
+								<a
+									href={resolve('/pdf/[ds]/[doc]', { ds: data.id, doc: doc.id })}
+									target="_blank"
+									rel="external noopener">{doc.title}</a
+								>
 							</td>
 							<td class="file" data-label="File">{doc.filename}</td>
 							<td class="num" data-label="Pages"

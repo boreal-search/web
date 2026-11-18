@@ -22,7 +22,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (s: string) => UUID.test(s);
 
 /** A trail's title from its first query: one line, within the column's limit. */
-export const trailTitle = (query: string) =>
+const trailTitle = (query: string) =>
 	query.replace(/\s+/g, ' ').trim().slice(0, TITLE_MAX) || 'Untitled trail';
 
 export interface TrailPerson {
@@ -33,7 +33,7 @@ export interface TrailPerson {
 	relation: TrailRelation;
 }
 
-export interface LoadedTrail {
+interface LoadedTrail {
 	trail: Database['public']['Tables']['trails']['Row'];
 	steps: TrailStep[];
 	people: TrailPerson[];
@@ -45,10 +45,12 @@ type StoredReadout = StepReadout & { wants_answer?: boolean };
 
 // jsonb columns hold what `stepRow` wrote; trusted at this boundary.
 const asJson = (v: unknown) => v as Json;
+/** A stored summary (trail_steps / search_events `answer`), as written from the engine's. */
+export const storedAnswer = (v: Json | null) => v as unknown as Answer | null;
 
 function rowStep(row: StepRow): TrailStep {
 	const { wants_answer, ...readout } = row.readout as unknown as StoredReadout;
-	const answer = row.answer as unknown as Answer | null;
+	const answer = storedAnswer(row.answer);
 	return {
 		n: row.n,
 		query: row.query,
@@ -101,7 +103,7 @@ export async function loadTrail(
 	};
 }
 
-export interface TrailSummary {
+interface TrailSummary {
 	id: string;
 	title: string;
 	org_id: string | null;
@@ -324,10 +326,11 @@ export async function branchTrail(
 		return {
 			error: error.code === '42501' ? "This org doesn't keep search history." : error.message
 		};
-	for (const s of seed) {
-		const { error: e } = await db.from('trail_steps').insert({
+	// One insert: the trail_steps_insert trigger numbers the rows in array order.
+	const { error: e } = await db.from('trail_steps').insert(
+		seed.map((s) => ({
 			trail_id: data.id,
-			n: 0, // assigned by the trail_steps_insert trigger
+			n: 0, // assigned by the trigger
 			query: s.query,
 			resolved_query: s.resolved_query,
 			rewrite: s.rewrite,
@@ -336,11 +339,11 @@ export async function branchTrail(
 			results: asJson(s.results),
 			answer: s.answer ? asJson(s.answer) : null,
 			readout: storedReadout(s)
-		});
-		if (e) {
-			await db.from('trails').delete().eq('id', data.id);
-			return { error: `The branch could not be saved: ${e.message}` };
-		}
+		}))
+	);
+	if (e) {
+		await db.from('trails').delete().eq('id', data.id);
+		return { error: `The branch could not be saved: ${e.message}` };
 	}
 	return { id: data.id };
 }

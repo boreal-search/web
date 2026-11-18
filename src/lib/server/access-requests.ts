@@ -8,9 +8,9 @@ import { escapeHtml, type Email } from './email.js';
 export const SUPPORT_EMAIL = 'support@borealsearch.app';
 
 /** Mirror `access_requests`' check constraints (characters, as Postgres counts them). */
-export const LIMITS = { organization: 200, role: 200, useCase: 2000 } as const;
+const LIMITS = { organization: 200, role: 200, useCase: 2000 } as const;
 
-export interface AccessRequestInput {
+interface AccessRequestInput {
 	organization: string;
 	role: string | null;
 	useCase: string;
@@ -18,7 +18,7 @@ export interface AccessRequestInput {
 
 export type AccessRequestField = keyof AccessRequestInput;
 
-export type ParsedAccessRequest =
+type ParsedAccessRequest =
 	| { ok: true; value: AccessRequestInput }
 	| {
 			ok: false;
@@ -33,10 +33,6 @@ export interface OpenAccessRequest {
 	organization: string;
 	createdAt: string;
 }
-
-/** `available: false` when the table can't be read (e.g. the migration isn't applied yet). */
-export type AccessRequestState =
-	{ available: false } | { available: true; open: OpenAccessRequest | null };
 
 const chars = (s: string) => [...s].length;
 /** One line: trimmed, inner whitespace (including newlines) collapsed to single spaces. */
@@ -100,36 +96,17 @@ export function accessRequestEmail(
 	};
 }
 
-/**
- * The table isn't there: Postgres `42P01`, or PostgREST's `PGRST205` (not in its schema
- * cache). Lets pages render before the migration reaches the hosted database.
- */
-export function isMissingTable(error: { code?: string } | null): boolean {
-	return error?.code === '42P01' || error?.code === 'PGRST205';
-}
-
-/**
- * The user's open request, if any. Never throws: a page that shows request state still
- * renders without it (missing table expected until migrated; anything else is logged).
- */
+/** The user's open request, if any. */
 export async function loadAccessRequest(
 	supabase: SupabaseClient<Database>,
 	userId: string
-): Promise<AccessRequestState> {
+): Promise<OpenAccessRequest | null> {
 	const { data, error } = await supabase
 		.from('access_requests')
 		.select('email, organization, created_at')
 		.eq('user_id', userId)
 		.eq('status', 'open')
 		.maybeSingle();
-	if (error) {
-		if (!isMissingTable(error)) console.error('access_requests: load failed', error);
-		return { available: false };
-	}
-	return {
-		available: true,
-		open: data
-			? { email: data.email, organization: data.organization, createdAt: data.created_at }
-			: null
-	};
+	if (error) throw error;
+	return data && { email: data.email, organization: data.organization, createdAt: data.created_at };
 }

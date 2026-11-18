@@ -41,7 +41,14 @@ describe('branchTitle', () => {
 describe('trailListView', () => {
 	const org = (slug: string): SearchContext => ({
 		kind: 'org',
-		org: { id: `${slug}-id`, slug, name: slug, role: 'member' }
+		org: {
+			id: `${slug}-id`,
+			slug,
+			name: slug,
+			role: 'member',
+			log_queries: true,
+			conversation_history: true
+		}
 	});
 	const [acme, beta] = [org('acme'), org('beta')];
 	const contexts: SearchContext[] = [acme, beta, { kind: 'public' }];

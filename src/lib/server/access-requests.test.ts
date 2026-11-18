@@ -1,12 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { Database } from '#lib/supabase/types.js';
-import {
-	accessRequestEmail,
-	isMissingTable,
-	loadAccessRequest,
-	parseAccessRequest
-} from './access-requests';
+import { accessRequestEmail, loadAccessRequest, parseAccessRequest } from './access-requests';
 
 const form = (fields: Record<string, string>) => {
 	const f = new FormData();
@@ -110,15 +105,6 @@ describe('accessRequestEmail', () => {
 	});
 });
 
-describe('isMissingTable', () => {
-	it.each(['42P01', 'PGRST205'])('%s is a missing table', (code) => {
-		expect(isMissingTable({ code })).toBe(true);
-	});
-	it.each([null, {}, { code: '42501' }, { code: 'PGRST116' }])('%j is not', (e) => {
-		expect(isMissingTable(e)).toBe(false);
-	});
-});
-
 describe('loadAccessRequest', () => {
 	/** A client whose `from(...).select().eq().eq().maybeSingle()` resolves to `result`. */
 	const client = (result: { data: unknown; error: unknown }) => {
@@ -139,34 +125,18 @@ describe('loadAccessRequest', () => {
 			'u1'
 		);
 		expect(state).toEqual({
-			available: true,
-			open: { email: 'j@a.com', organization: 'Acme', createdAt: '2026-10-28T10:00:00Z' }
+			email: 'j@a.com',
+			organization: 'Acme',
+			createdAt: '2026-10-28T10:00:00Z'
 		});
 	});
 
 	it('returns no request', async () => {
-		expect(await loadAccessRequest(client({ data: null, error: null }), 'u1')).toEqual({
-			available: true,
-			open: null
-		});
+		expect(await loadAccessRequest(client({ data: null, error: null }), 'u1')).toBeNull();
 	});
 
-	it('tolerates the table not being migrated yet', async () => {
-		const error = {
-			code: 'PGRST205',
-			message: "Could not find the table 'public.access_requests'"
-		};
-		expect(await loadAccessRequest(client({ data: null, error }), 'u1')).toEqual({
-			available: false
-		});
-	});
-
-	it('logs other errors and still does not throw', async () => {
-		const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-		expect(await loadAccessRequest(client({ data: null, error: { code: '42501' } }), 'u1')).toEqual(
-			{ available: false }
-		);
-		expect(log).toHaveBeenCalledOnce();
-		log.mockRestore();
+	it('throws on a database error', async () => {
+		const error = { code: '42501' };
+		await expect(loadAccessRequest(client({ data: null, error }), 'u1')).rejects.toBe(error);
 	});
 });

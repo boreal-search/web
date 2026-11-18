@@ -1,48 +1,37 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { sequence } from '@sveltejs/kit/hooks';
+import { resolve as resolvePath } from '$app/paths';
 import { createSupabaseServerClient } from '#lib/supabase/server.js';
 import { parseTheme, THEME_COOKIE } from '#lib/theme.js';
 
-/** Attach a per-request Supabase client and a validated session to `event.locals`. */
+/** Per-request Supabase client and the validated user on `event.locals`. */
 const supabase: Handle = async ({ event, resolve }) => {
-	event.locals.theme = 'system';
-	event.locals.supabase = createSupabaseServerClient(event.cookies);
+	const client = createSupabaseServerClient(event.cookies);
+	event.locals.supabase = client;
+	event.locals.user = null;
 
-	event.locals.safeGetSession = async () => {
-		const {
-			data: { session }
-		} = await event.locals.supabase.auth.getSession();
-		if (!session) return { session: null, user: null };
-
+	const {
+		data: { session }
+	} = await client.auth.getSession();
+	if (session) {
 		// getUser() validates the JWT with Supabase Auth; getSession() alone trusts the cookie.
 		const {
 			data: { user },
 			error
-		} = await event.locals.supabase.auth.getUser();
-		if (error || !user) return { session: null, user: null };
+		} = await client.auth.getUser();
+		if (!error) event.locals.user = user;
+	}
 
-		return { session, user };
-	};
+	if (event.locals.user && (event.url.pathname === '/login' || event.url.pathname === '/signup')) {
+		redirect(303, resolvePath('/(app)'));
+	}
 
 	return resolve(event, {
 		// Supabase sets these when refreshing the session; let them through to the client.
 		filterSerializedResponseHeaders: (name) =>
 			name === 'content-range' || name === 'x-supabase-api-version'
 	});
-};
-
-/** Resolve the session once per request; routes under /(app) are guarded in their layout load. */
-const auth: Handle = async ({ event, resolve }) => {
-	const { session, user } = await event.locals.safeGetSession();
-	event.locals.session = session;
-	event.locals.user = user;
-
-	if (user && (event.url.pathname === '/login' || event.url.pathname === '/signup')) {
-		redirect(303, '/');
-	}
-
-	return resolve(event);
 };
 
 /**
@@ -57,5 +46,5 @@ const theme: Handle = async ({ event, resolve }) => {
 	});
 };
 
-export const handle = sequence(supabase, auth, theme);
+export const handle = sequence(supabase, theme);
 export { handleError } from '#lib/server/errors.js';

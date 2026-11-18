@@ -10,9 +10,8 @@ import {
 import type { OrgRole } from '#lib/supabase/types.js';
 import type { PageServerLoad } from './$types';
 
-/** PostgREST: offset past the last row (416), and an RPC that isn't in the schema yet. */
+/** PostgREST: offset past the last row (416). */
 const RANGE_NOT_SATISFIABLE = 'PGRST103';
-const FUNCTION_NOT_FOUND = 'PGRST202';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	await requirePlatformAdmin();
@@ -65,8 +64,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				]);
 	if (members?.error) throw members.error;
 	if (admins?.error) throw admins.error;
-	// Until the admin_last_sign_ins migration is applied the column is left out.
-	if (signIns?.error && signIns.error.code !== FUNCTION_NOT_FOUND) throw signIns.error;
+	if (signIns?.error) throw signIns.error;
 
 	const orgsByUser = new Map<string, { slug: string; name: string; role: OrgRole }[]>();
 	for (const m of members?.data ?? []) {
@@ -90,7 +88,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		total,
 		pageSize: PAGE_SIZE,
 		window: pageWindow(query.page, total),
-		showLastSignIn: !signIns?.error,
 		users: rows.map((r) => ({
 			id: r.id,
 			email: r.email,

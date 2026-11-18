@@ -78,7 +78,7 @@
 				<th scope="col">Display name</th>
 				<th scope="col">Orgs</th>
 				<th scope="col">Joined</th>
-				{#if data.showLastSignIn}<th scope="col">Last sign-in</th>{/if}
+				<th scope="col">Last sign-in</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -110,15 +110,13 @@
 					<td data-label="Joined" class="when">
 						<time datetime={u.joinedAt}>{day(u.joinedAt)}</time>
 					</td>
-					{#if data.showLastSignIn}
-						<td data-label="Last sign-in" class="when">
-							{#if u.lastSignInAt}
-								<time datetime={u.lastSignInAt}>{stamp(u.lastSignInAt)}</time>
-							{:else}
-								<span class="muted">Never</span>
-							{/if}
-						</td>
-					{/if}
+					<td data-label="Last sign-in" class="when">
+						{#if u.lastSignInAt}
+							<time datetime={u.lastSignInAt}>{stamp(u.lastSignInAt)}</time>
+						{:else}
+							<span class="muted">Never</span>
+						{/if}
+					</td>
 				</tr>
 			{/each}
 		</tbody>

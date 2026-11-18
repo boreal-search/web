@@ -1,4 +1,4 @@
-import { loadAccessRequest, type AccessRequestState } from '#lib/server/access-requests.js';
+import { loadAccessRequest, type OpenAccessRequest } from '#lib/server/access-requests.js';
 import { withDataSources } from '#lib/server/access.js';
 import { classifyEngineError, engine } from '#lib/server/engine.js';
 import type { PageServerLoad } from './$types';
@@ -6,7 +6,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ parent, fetch, locals }) => {
 	const { access } = await parent();
 	// No org: offer "request access" (or show the open request). Null for org members.
-	const accessRequest: Promise<AccessRequestState | null> =
+	const accessRequest: Promise<OpenAccessRequest | null> =
 		access.memberships.length === 0 && locals.user
 			? loadAccessRequest(locals.supabase, locals.user.id)
 			: Promise.resolve(null);

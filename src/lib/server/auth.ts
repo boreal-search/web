@@ -1,5 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolve } from '$app/paths';
 import { getRequestEvent } from '$app/server';
 import type { Database, OrgRole } from '#lib/supabase/types.js';
 
@@ -14,7 +15,7 @@ export function requireUser() {
 	const { locals, url } = getRequestEvent();
 	if (!locals.user) {
 		const redirectTo = url.pathname + url.search;
-		redirect(303, `/login?${new URLSearchParams({ redirectTo })}`);
+		redirect(303, `${resolve('/login')}?${new URLSearchParams({ redirectTo })}`);
 	}
 	return locals.user;
 }
@@ -26,7 +27,7 @@ export async function isPlatformAdmin(supabase: SupabaseClient<Database>): Promi
 }
 
 /** The user's role in an org, or null if they aren't a member. */
-export async function getOrgRole(
+async function getOrgRole(
 	supabase: SupabaseClient<Database>,
 	orgId: string,
 	userId: string
