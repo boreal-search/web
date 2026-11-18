@@ -90,7 +90,13 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			if (rows.length === 0) return controller.close();
 			controller.enqueue(encoder.encode(rows.map((r) => csvLine(cells(r))).join('')));
 			sent += rows.length;
-			rows = sent < EXPORT_MAX ? await next(sent) : [];
+			try {
+				rows = sent < EXPORT_MAX ? await next(sent) : [];
+			} catch (e) {
+				// Headers are already sent, so the download can only be cut off; log why.
+				console.error(`search export failed after ${sent} rows`, e);
+				controller.error(e);
+			}
 		}
 	});
 

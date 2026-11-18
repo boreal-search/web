@@ -1,6 +1,6 @@
 <!-- A rated conversation (whole trail) none of whose searches is linked: its rating, and, on the
-     admin's own trail, the owner, context and first question, linking to the trail itself.
-     Anyone else's trail stays private, so only the rating shows. -->
+     admin's own trail or one shared with them, the owner, context and first question, linking to
+     the trail itself. Any other trail stays private, so only the rating shows. -->
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { stamp } from '#lib/format.js';
