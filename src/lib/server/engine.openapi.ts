@@ -161,6 +161,74 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/ingest/data-sources/{data_source_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Put Data Source */
+		put: operations['put_data_source_ingest_data_sources__data_source_id__put'];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/ingest/data-sources/{data_source_id}/documents': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Upload Document */
+		post: operations['upload_document_ingest_data_sources__data_source_id__documents_post'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/ingest/data-sources/{data_source_id}/status': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Ingest Status */
+		get: operations['ingest_status_ingest_data_sources__data_source_id__status_get'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/ingest/documents/{document_id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Ingested Document */
+		get: operations['get_ingested_document_ingest_documents__document_id__get'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -376,6 +444,11 @@ export interface components {
 			boxes: [number, number, number, number][];
 			/** Quote */
 			quote: string | null;
+			/**
+			 * Blocks
+			 * @default []
+			 */
+			blocks?: [number, number, number, number][];
 		};
 		/** InferredDocument */
 		InferredDocument: {
@@ -391,6 +464,66 @@ export interface components {
 			 * @default false
 			 */
 			carried?: boolean;
+		};
+		/**
+		 * IngestDataSourceIn
+		 * @description PUT /ingest/data-sources/{id}: the CLI's --name plus corpus.json's data-source keys.
+		 *     Replaces the stored corpus settings (an omitted key = its default), like re-running
+		 *     `boreal ingest` with that corpus.json. Per-document titles/aliases go on each upload.
+		 */
+		IngestDataSourceIn: {
+			/** Name */
+			name?: string | null;
+			/** Description */
+			description?: string | null;
+			/** Rerank Instruction */
+			rerank_instruction?: string | null;
+			/** Target Language */
+			target_language?: string | null;
+			/** Boilerplate Headings */
+			boilerplate_headings?: string[];
+		};
+		/** IngestDocumentOut */
+		IngestDocumentOut: {
+			/**
+			 * Result
+			 * @enum {string}
+			 */
+			result: 'queued' | 'reprocessed' | 'skipped';
+			document: components['schemas']['DocumentOut'];
+		};
+		/** IngestJobError */
+		IngestJobError: {
+			/**
+			 * Job Id
+			 * Format: uuid
+			 */
+			job_id: string;
+			/** Type */
+			type: string;
+			/** Document Id */
+			document_id: string | null;
+			/** Error */
+			error: string | null;
+			/** Finished At */
+			finished_at: string | null;
+		};
+		/** IngestStatusOut */
+		IngestStatusOut: {
+			/** Data Source Id */
+			data_source_id: string;
+			/** Documents */
+			documents: {
+				[key: string]: number;
+			};
+			/** Jobs */
+			jobs: {
+				[key: string]: number;
+			};
+			/** Failed Jobs */
+			failed_jobs: components['schemas']['IngestJobError'][];
+			/** Done */
+			done: boolean;
 		};
 		/** JobOut */
 		JobOut: {
@@ -862,6 +995,155 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['JobOut'][];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	put_data_source_ingest_data_sources__data_source_id__put: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string | null;
+			};
+			path: {
+				data_source_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['IngestDataSourceIn'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DataSourceOut'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	upload_document_ingest_data_sources__data_source_id__documents_post: {
+		parameters: {
+			query: {
+				/** @description Stored as this *.pdf name */
+				filename: string;
+				/** @description Default: detected at render */
+				title?: string | null;
+				/** @description Repeat for each (?aliases=CEPA&aliases=...) */
+				aliases?: string[] | null;
+				/** @description Re-render a PDF already ingested */
+				reprocess?: boolean;
+			};
+			header?: {
+				authorization?: string | null;
+			};
+			path: {
+				data_source_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/pdf': string;
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			202: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IngestDocumentOut'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	ingest_status_ingest_data_sources__data_source_id__status_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string | null;
+			};
+			path: {
+				data_source_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IngestStatusOut'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	get_ingested_document_ingest_documents__document_id__get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string | null;
+			};
+			path: {
+				document_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['DocumentOut'];
 				};
 			};
 			/** @description Validation Error */

@@ -24,6 +24,8 @@ export interface Mark {
 	ref: number;
 	kind: Highlight['kind'];
 	boxes: Box[];
+	/** The engine's `blocks`: paragraphs around `boxes`, which are then highlighted. Text kind only; older answers have none. */
+	frames: Box[];
 	/** Page text that matched (text/table kinds), for tooltips and screen readers. */
 	quote: string | null;
 	/** The answer text this marker backs. */
@@ -31,10 +33,12 @@ export interface Mark {
 	status: CitationStatus;
 }
 
-/** A box to outline on a page render, coloured by its citation's status. */
+/** A box to draw on a page render, coloured by its citation's status. */
 export interface Outline {
 	box: Box;
 	status: CitationStatus;
+	/** box: exactly the box, rounded. frame: a quiet edge set off from its paragraph. words: the cited words, highlighted. */
+	shape: 'box' | 'frame' | 'words';
 }
 
 /** A run of answer text, or one marker (`[1]`, or `[1, 2]` with one mark per ref). */
@@ -71,6 +75,7 @@ function toMark(c: Citation, results: readonly Located[]): Mark | null {
 		ref: c.ref,
 		kind: boxes.length > 0 ? c.highlight.kind : 'page',
 		boxes,
+		frames: boxes.length > 0 ? cleanBoxes(c.highlight.blocks ?? []) : [],
 		quote: boxes.length > 0 ? c.highlight.quote : null,
 		text: c.text,
 		status: c.status
@@ -414,21 +419,30 @@ export function answerBlocks(
 export const answerMarks = (segments: readonly AnswerSegment[]): Mark[] =>
 	segments.flatMap((s) => (s.kind === 'cite' ? s.marks : []));
 
-/** A mark's boxes, each with the mark's status. */
-export const markOutlines = (m: Mark): Outline[] =>
-	m.boxes.map((box) => ({ box, status: m.status }));
+/** A mark's frames and highlighted words, or with no frames its boxes, in the mark's status. */
+export const markOutlines = ({ boxes, frames, status }: Mark): Outline[] =>
+	frames.length > 0
+		? [
+				...frames.map((box) => ({ box, status, shape: 'frame' as const })),
+				...boxes.map((box) => ({ box, status, shape: 'words' as const }))
+			]
+		: boxes.map((box) => ({ box, status, shape: 'box' as const }));
 
-/** Every box the answer cites on result `ref`'s page, once each (the first citation's status). */
+/**
+ * Order for one box several citations share, weakest first. Unsupported is below not_checked:
+ * the check found a problem there, not checking found nothing. Verified needs every citation.
+ */
+const STRENGTH: Record<CitationStatus, number> = { unsupported: 0, not_checked: 1, verified: 2 };
+
+/** Every outline the answer cites on result `ref`'s page, each box once in its weakest status. */
 export function pageOutlines(marks: readonly Mark[], ref: number): Outline[] {
-	const seen = new Set<string>();
-	const out: Outline[] = [];
+	const once = new Map<string, Outline>();
 	for (const o of marks.filter((m) => m.ref === ref).flatMap(markOutlines)) {
-		const key = o.box.join(',');
-		if (seen.has(key)) continue;
-		seen.add(key);
-		out.push(o);
+		const key = `${o.shape}:${o.box.join(',')}`;
+		const seen = once.get(key);
+		if (!seen || STRENGTH[o.status] < STRENGTH[seen.status]) once.set(key, o);
 	}
-	return out;
+	return [...once.values()];
 }
 
 /**

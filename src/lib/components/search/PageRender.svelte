@@ -1,7 +1,8 @@
 <!--
-	A page render with the cited text outlined on it (page fractions as percentages of the frame),
-	or a plain line when the image is missing. width/height are an aspect hint only, to reserve
-	space. `variant`: where it sits (thumbnail, the large viewer, or opened under a row on phones).
+	A page render with the cited words highlighted in their framed paragraphs (a thumbnail shows
+	the frames only; page fractions as percentages of the frame), or a plain line when the image is
+	missing. width/height are an aspect hint only, to reserve space. `variant`: where it sits
+	(thumbnail, the large viewer, or opened under a row on phones).
 -->
 <script lang="ts">
 	import type { Outline } from '#lib/answer.js';
@@ -30,6 +31,9 @@
 	} = $props();
 
 	let src = $derived(pageSrc(r, permanentLinks));
+	let shown = $derived(
+		variant === 'thumb' ? outlines.filter((o) => o.shape !== 'words') : outlines
+	);
 </script>
 
 {#if src === null || failed.has(src)}
@@ -45,9 +49,10 @@
 			decoding="async"
 			onerror={() => failed.add(src)}
 		/>
-		{#each outlines as { box: [x0, y0, x1, y1], status }, i (i)}
+		{#each shown as { box: [x0, y0, x1, y1], status, shape }, i (i)}
 			<span
 				class="mark"
+				data-shape={shape}
 				data-status={status}
 				aria-hidden="true"
 				style:left="{x0 * 100}%"
@@ -65,25 +70,45 @@
 		display: block;
 		position: relative;
 	}
-	/* Moss wash multiplied onto the paper so the words stay black; a light edge by check status
-	   (same in both themes), on the box itself so it doesn't run into the lines around it. */
 	.mark {
+		--status: var(--color-sheet-mark-not-checked);
 		position: absolute;
 		pointer-events: none;
+	}
+	[data-status='verified'] {
+		--status: var(--color-sheet-mark-verified);
+	}
+	[data-status='unsupported'] {
+		--status: var(--color-sheet-mark-unsupported);
+	}
+	/* Colours sit on the paper, so the light values in both themes; multiplied so words stay black. */
+	/* A box with no paragraph around it: moss wash and a light edge by check status. */
+	[data-shape='box'] {
 		background: var(--color-sheet-mark);
 		mix-blend-mode: multiply;
-		outline: 1.5px solid var(--color-sheet-mark-not-checked);
-		outline-offset: 0;
+		outline: 1.5px solid var(--status);
 		border-radius: 2px;
 	}
-	.mark[data-status='verified'] {
-		outline-color: var(--color-sheet-mark-verified);
+	/* The cited words: a highlighter tint in the status colour. */
+	[data-shape='words'] {
+		background: color-mix(in srgb, var(--status) 30%, transparent);
+		mix-blend-mode: multiply;
 	}
-	.mark[data-status='unsupported'] {
-		outline-color: var(--color-sheet-mark-unsupported);
+	/* Their paragraph, as context only. 1 px off its words so the edge doesn't touch the tint;
+	   more would cut the next line when a frame holds only some of a block's lines. */
+	[data-shape='frame'] {
+		outline: 1px solid color-mix(in srgb, var(--status) 35%, transparent);
+		outline-offset: 1px;
+		border-radius: 2px;
 	}
-	.thumb .mark {
+	.thumb [data-shape='box'] {
 		outline-width: 1px;
+	}
+	/* Paragraph gaps there are 2-3 px: the offset would close them. With no words shown, the frame
+	   takes the full status colour or it vanishes at this size. */
+	.thumb [data-shape='frame'] {
+		outline-offset: 0;
+		outline-color: var(--status);
 	}
 	.expired {
 		display: block;

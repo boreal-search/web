@@ -6,6 +6,7 @@ import {
 	answerBlocks,
 	answerSegments,
 	cleanBoxes,
+	markOutlines,
 	pageOutlines,
 	resultAnchorId,
 	type AnswerBlock,
@@ -63,6 +64,7 @@ describe('answerSegments', () => {
 				ref: 1,
 				kind: 'text',
 				boxes: [line],
+				frames: [],
 				quote: 'page words',
 				text: 'cited sentence',
 				status: 'not_checked'
@@ -71,6 +73,7 @@ describe('answerSegments', () => {
 				ref: 2,
 				kind: 'table',
 				boxes: [line],
+				frames: [],
 				quote: 'page words',
 				text: 'cited sentence',
 				status: 'not_checked'
@@ -162,27 +165,119 @@ describe('cleanBoxes', () => {
 	});
 });
 
-describe('pageOutlines', () => {
-	const mark = (ref: number, boxes: Mark['boxes'], status: Mark['status']): Mark => ({
+describe('outlines', () => {
+	type Box = Mark['boxes'][number];
+	const para: Box = [0.1, 0.1, 0.9, 0.4];
+	const para2: Box = [0.1, 0.5, 0.9, 0.7];
+	const other: Box = [0.1, 0.5, 0.2, 0.6];
+	const mark = (ref: number, boxes: Box[], status: Mark['status'], frames: Box[] = []): Mark => ({
 		ref,
 		kind: 'text',
 		boxes,
+		frames,
 		quote: null,
 		text: '',
 		status
 	});
-	it('unions the boxes cited on one page, once each, with their status', () => {
-		const other: [number, number, number, number] = [0.1, 0.5, 0.2, 0.6];
+
+	it('draws a citation with frames as frames and highlighted words', () => {
+		expect(markOutlines(mark(1, [line], 'unsupported', [para]))).toEqual([
+			{ box: para, status: 'unsupported', shape: 'frame' },
+			{ box: line, status: 'unsupported', shape: 'words' }
+		]);
+	});
+
+	it('draws an older citation, or any other kind, with no frames as boxes', () => {
+		expect(markOutlines(mark(1, [line, other], 'verified'))).toEqual([
+			{ box: line, status: 'verified', shape: 'box' },
+			{ box: other, status: 'verified', shape: 'box' }
+		]);
+	});
+
+	it("takes frames from the engine's blocks, and none when it sends none", () => {
+		const mapped = (highlight: Partial<Citation['highlight']>) => {
+			const text = 'Fines reach $1 million for a contravention [1].';
+			const citations = [cite(text, '[1]', 1, highlight)];
+			return answerMarks(answerSegments({ text, citations }, results))[0]!;
+		};
+		// As engine fd4c692 sends it: a match across two paragraphs
+		const engine: Citation['highlight'] = {
+			kind: 'text',
+			boxes: [
+				[0.0784, 0.3581, 0.4804, 0.372],
+				[0.0784, 0.3726, 0.4804, 0.3865]
+			],
+			quote: '(2) The Minister may …',
+			blocks: [
+				[0.0784, 0.3161, 0.1943, 0.3487],
+				[0.0784, 0.3581, 0.4804, 0.4638]
+			]
+		};
+		expect(mapped(engine)).toMatchObject({ boxes: engine.boxes, frames: engine.blocks });
+		expect(mapped({}).frames).toEqual([]);
+		const stored = { kind: 'text', boxes: [line], quote: 'q' } as Citation['highlight'];
+		expect(mapped(stored).frames).toEqual([]);
+		// A page the marker doesn't show: neither boxes nor frames fit it
+		expect(mapped({ kind: 'page', blocks: [[0.1, 0.1, 0.9, 0.4]] }).frames).toEqual([]);
+	});
+
+	it('draws a paragraph once per page, in the weakest status of the citations in it', () => {
+		const framed = (status: Mark['status']) => mark(1, [line], status, [para]);
+		const frameOf = (...statuses: Mark['status'][]) =>
+			pageOutlines(statuses.map(framed), 1).filter((o) => o.shape === 'frame');
+
+		expect(frameOf('verified', 'verified')).toEqual([
+			{ box: para, status: 'verified', shape: 'frame' }
+		]);
+		expect(frameOf('verified', 'not_checked')).toMatchObject([{ status: 'not_checked' }]);
+		expect(frameOf('not_checked', 'verified')).toMatchObject([{ status: 'not_checked' }]);
+		expect(frameOf('verified', 'unsupported')).toMatchObject([{ status: 'unsupported' }]);
+		expect(frameOf('not_checked', 'unsupported')).toMatchObject([{ status: 'unsupported' }]);
+		expect(frameOf('unsupported', 'not_checked', 'verified')).toMatchObject([
+			{ status: 'unsupported' }
+		]);
+	});
+
+	it('keeps frames of different paragraphs apart, never one union of the page', () => {
+		const marks = [mark(1, [line], 'verified', [para]), mark(1, [other], 'verified', [para2])];
+		expect(pageOutlines(marks, 1).filter((o) => o.shape === 'frame')).toEqual([
+			{ box: para, status: 'verified', shape: 'frame' },
+			{ box: para2, status: 'verified', shape: 'frame' }
+		]);
+	});
+
+	it("keeps each highlight's own status in a shared paragraph", () => {
+		const marks = [mark(1, [line], 'verified', [para]), mark(1, [other], 'unsupported', [para])];
+		expect(pageOutlines(marks, 1)).toEqual([
+			{ box: para, status: 'unsupported', shape: 'frame' },
+			{ box: line, status: 'verified', shape: 'words' },
+			{ box: other, status: 'unsupported', shape: 'words' }
+		]);
+	});
+
+	it('gives one line cited twice one highlight, in the weaker status', () => {
+		const marks = [mark(1, [line], 'verified', [para]), mark(1, [line], 'not_checked', [para])];
+		expect(pageOutlines(marks, 1).filter((o) => o.shape === 'words')).toEqual([
+			{ box: line, status: 'not_checked', shape: 'words' }
+		]);
+	});
+
+	it('draws identical boxes without frames once, in the weakest status, per page', () => {
 		const marks = [
 			mark(1, [line], 'verified'),
 			mark(2, [other], 'unsupported'),
 			mark(1, [line, other], 'not_checked')
 		];
 		expect(pageOutlines(marks, 1)).toEqual([
-			{ box: line, status: 'verified' },
-			{ box: other, status: 'not_checked' }
+			{ box: line, status: 'not_checked', shape: 'box' },
+			{ box: other, status: 'not_checked', shape: 'box' }
 		]);
 		expect(pageOutlines(marks, 3)).toEqual([]);
+	});
+
+	it('does not merge a frame and a highlight with the same box', () => {
+		const marks = [mark(1, [para], 'verified', [para])];
+		expect(pageOutlines(marks, 1).map((o) => o.shape)).toEqual(['frame', 'words']);
 	});
 });
 

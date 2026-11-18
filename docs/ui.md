@@ -67,12 +67,18 @@ Query, then the generated summary (labelled as generated, each sentence cited) w
 line and one readout, then the evidence: the selected page render large enough to read beside
 the ranked results. Show rank only; engine scores are not confidence.
 The large page opens on the first result the answer cites. Choosing `[n]` shows that result's
-page with only that sentence's cited text outlined (`sheet-mark` wash multiplied on the paper,
-a 1.5 px edge by check status: `sheet-mark-verified` / `-unsupported` / `-not-checked`, light
-values in both themes); otherwise each page outlines everything the answer cites on it, and a
-citation the engine couldn't place opens its page unmarked, its locator saying "page". Phones
-have no side viewer: a `[n]` or a thumbnail opens the page full width under its row (Close or
-Escape returns focus). Keys: J K next/previous, Space zoom page (`.sheet.zoomed`), O open PDF at
+page with only that sentence's cited text marked. The matched words carry it: a highlighter tint
+in the check-status colour (`sheet-mark-verified` / `-unsupported` / `-not-checked`, light
+values in both themes, 30 % multiplied on the paper), no underline. Their paragraph gets a quiet
+frame for context: no fill, a 1 px edge in the status colour at 35 %. Otherwise each page marks
+everything the answer cites on it; a paragraph several citations share is framed once in the
+weakest status (verified > not checked > unsupported, so green needs all of them) and each
+highlight keeps its citation's. Thumbnails show frames only, edged in the full status colour so
+they stay visible at that size. Other kinds (tables, figures, regions) and older answers have no
+frames: each box draws alone as a `sheet-mark` wash with a 1.5 px status edge. A citation the
+engine couldn't place opens its page unmarked, its locator saying "page". Phones have no side
+viewer: a `[n]` or a thumbnail opens the page full width under its row (Close or Escape returns
+focus). Keys: J K next/previous, Space zoom page (`.sheet.zoomed`), O open PDF at
 page, C copy citation (title · page · permanent PDF link).
 On the search screen the evidence pane (or the overlay on narrower screens) opens only when
 asked: "View pages (N)" on a step, or a `[n]`. Results arriving, a new search, a follow-up or

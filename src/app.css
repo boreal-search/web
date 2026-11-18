@@ -44,7 +44,7 @@
 	--color-sheet: #fffefa; /* page renders: same in both themes, never inverted */
 	--color-sheet-rule: #d6d2c8; /* edge of a page render */
 	/* Cited text on a page render: sits on the paper, so the light values in both themes. Moss
-	   wash multiplied onto the page; outline by the citation's check status (answer-state roles). */
+	   wash behind a lone box; the check-status roles tint the cited words and edge their marks. */
 	--color-sheet-mark: #dde6d5; /* moss wash, mix-blend-mode: multiply */
 	--color-sheet-mark-verified: #1e4a32; /* spruce */
 	--color-sheet-mark-unsupported: #9a5f12; /* resin */
