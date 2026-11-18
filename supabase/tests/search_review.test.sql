@@ -2,7 +2,7 @@
 -- target and admin, re-rating replaces); users and org admins neither rate nor read ratings; the
 -- search_review view. Everything rolls back.
 begin;
-select plan(23);
+select plan(33);
 
 insert into auth.users (id, email, email_confirmed_at) values
     ('00000000-0000-0000-0000-00000000000a', 'admin@boreal.test',    now()),
@@ -116,6 +116,16 @@ select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
 select is((select count(*)::int from public.search_ratings), 0, 'a user reads no ratings');
 select is((select rating::text from public.search_review where id = '30000000-0000-0000-0000-000000000001'),
     null, 'the review view shows a member no rating');
+select is((select count(*)::int from public.search_review
+           where trail_rating is not null or trail_note is not null), 0,
+    'nor any trail rating (what the admin table and its CSV export filter on)');
+select is((select count(*)::int from public.search_review
+           where user_id is distinct from '00000000-0000-0000-0000-00000000000c'), 0,
+    'and only their own searches');
+
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+select is((select count(*)::int from public.search_review where user_email = 'owner@acme.test'), 0,
+    'an org admin reads none of a member''s searches through the view');
 
 -- ---------------------------------------------------------------- clearing
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
@@ -123,6 +133,52 @@ select lives_ok($$ delete from public.search_ratings where search_event_id = '30
     'a platform admin clears their rating');
 reset role;
 select is(pg_temp.ratings(), 1, 'only the search rating is gone; the trail rating stays');
+
+-- ---------------------------------------------------------------- conversation rows
+-- A rated trail none of whose searches is linked gets its own row; T2 is the admin's own, T3 a
+-- member's (rated by the admin, as RLS allows).
+insert into public.trails (id, org_id, user_id, title) values
+    ('20000000-0000-0000-0000-000000000002', null, '00000000-0000-0000-0000-00000000000a', 'Caribou range'),
+    ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001',
+     '00000000-0000-0000-0000-00000000000c', 'Member question');
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
+select pg_temp.rate(null, '20000000-0000-0000-0000-000000000002', 'bad', 'wrong herd');
+select pg_temp.rate(null, '20000000-0000-0000-0000-000000000003', 'good');
+select results_eq(
+    $$ select kind, user_email, query, trail_rating::text, trail_note, status::text
+       from public.search_review where trail_id = '20000000-0000-0000-0000-000000000002' $$,
+    $$ values ('conversation', 'admin@boreal.test', 'Caribou range', 'bad', 'wrong herd', null::text) $$,
+    'an unlinked rated trail appears once, as a conversation row, to its owner');
+select results_eq(
+    $$ select kind, user_id, query, trail_rating::text
+       from public.search_review where trail_id = '20000000-0000-0000-0000-000000000003' $$,
+    $$ values ('conversation', null::uuid, null::text, 'good') $$,
+    'another user''s rated trail appears with its rating only: the trail stays private');
+select is((select count(*)::int from public.search_review where kind = 'conversation'
+           and trail_id = '20000000-0000-0000-0000-000000000001'), 0,
+    'a trail with a linked search has no conversation row');
+
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select is((select count(*)::int from public.search_review where kind = 'conversation'), 0,
+    'a member sees no conversation rows, not even of their own rated trail');
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+select is((select count(*)::int from public.search_review where kind = 'conversation'), 0,
+    'nor does an org admin');
+
+-- A search names T2: the rating moves onto it and the conversation row goes.
+reset role;
+insert into public.search_events (id, org_id, user_id, data_source_ids, query, query_length, top_k, rerank, status, trail_id, step_n)
+values ('30000000-0000-0000-0000-000000000002', null, '00000000-0000-0000-0000-00000000000a',
+        '{x}', 'Caribou range', 13, 10, true, 'ok', '20000000-0000-0000-0000-000000000002', 1);
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
+select is((select count(*)::int from public.search_review where kind = 'conversation'
+           and trail_id = '20000000-0000-0000-0000-000000000002'), 0,
+    'once a search is linked, the conversation row is gone');
+select results_eq(
+    $$ select kind, trail_rating::text from public.search_review where trail_id = '20000000-0000-0000-0000-000000000002' $$,
+    $$ values ('search', 'bad') $$,
+    'and the rating shows on the search instead: listed once');
+reset role;
 
 select * from finish();
 rollback;

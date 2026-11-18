@@ -353,9 +353,15 @@ export interface Database {
 			};
 		};
 		Views: {
-			/** /admin/searches: a search with the latest rating of it and of its trail. */
+			/**
+			 * /admin/searches: a search with the latest rating of it and of its trail; or, for a
+			 * rated trail none of whose searches is linked, the trail rating alone (`conversation`:
+			 * id = trail_id, created_at = rated at, no search fields; user_id null when the trail
+			 * isn't the reader's).
+			 */
 			search_review: {
 				Row: {
+					kind: 'search' | 'conversation';
 					id: string;
 					created_at: string;
 					org_id: string | null;
@@ -366,7 +372,8 @@ export interface Database {
 					query_length: number;
 					resolved_query: string | null;
 					data_source_ids: string[];
-					status: SearchStatus;
+					/** null for a conversation row. */
+					status: SearchStatus | null;
 					error: string | null;
 					result_count: number | null;
 					retrieval_ms: number | null;
@@ -378,6 +385,7 @@ export interface Database {
 					/** The latest rating of this search (platform admins rate). */
 					rating: Rating | null;
 					note: string | null;
+					/** Who gave `rating` (on a conversation row: `trail_rating`). */
 					rated_by: string | null;
 					/** The latest rating of its whole trail. */
 					trail_rating: Rating | null;
