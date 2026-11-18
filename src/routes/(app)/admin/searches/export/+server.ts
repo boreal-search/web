@@ -15,10 +15,11 @@ import type { RequestHandler } from './$types';
 const CHUNK = 1000;
 
 const COLUMNS =
-	'id, created_at, user_email, org_id, org_name, query, resolved_query, data_source_ids, status, result_count, total_ms, rating, note, trail_rating, trail_note, answer';
+	'kind, id, created_at, user_id, user_email, org_id, org_name, query, resolved_query, data_source_ids, status, result_count, total_ms, rating, note, trail_rating, trail_note, answer';
 
 const HEADER = [
 	'time_utc',
+	'kind',
 	'user_email',
 	'context',
 	'query',
@@ -54,8 +55,9 @@ type Row = Awaited<ReturnType<typeof rowsFrom>>[number];
 
 const cells = (r: Row): CsvCell[] => [
 	new Date(r.created_at).toISOString(),
+	r.kind,
 	r.user_email,
-	r.org_id ? r.org_name : 'Public',
+	r.user_id === null && r.kind === 'conversation' ? null : r.org_id ? r.org_name : 'Public',
 	r.query,
 	r.resolved_query,
 	r.data_source_ids.join(' '),

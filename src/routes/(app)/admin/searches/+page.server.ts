@@ -17,7 +17,7 @@ import type { PageServerLoad } from './$types';
 const RANGE_NOT_SATISFIABLE = 'PGRST103';
 
 const COLUMNS =
-	'id, created_at, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, rating, note, rated_by, trail_rating, trail_note';
+	'kind, id, created_at, user_id, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, rating, note, rated_by, trail_rating, trail_note';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	await requirePlatformAdmin();

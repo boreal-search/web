@@ -18,9 +18,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		.from('search_review')
 		.select('*')
 		.eq('id', params.id)
+		.eq('kind', 'search')
 		.maybeSingle();
 	if (e) throw e;
-	if (!row) error(404, 'Search not found');
+	if (!row?.status) error(404, 'Search not found');
+	const { status } = row;
 
 	const [conversation, mine] = await Promise.all([
 		row.trail_id
@@ -46,7 +48,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	return {
 		// The summary and results go once, inside `step`.
-		search: { ...row, answer: null, results: null },
+		search: { ...row, status, answer: null, results: null },
 		step: reviewStep(row),
 		conversation: conversation?.data ?? [],
 		/** This admin's rating of the search; null when they may not rate. */

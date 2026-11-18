@@ -166,8 +166,10 @@ export function reviewRows<Cols extends string>(
 	let q = db.from('search_review').select(columns, count ? { count } : undefined);
 	if (query.q) q = q.or(containsFilter(['query', 'resolved_query'], query.q));
 	if (query.user) q = q.ilike('user_email', `%${escapeLike(query.user)}%`);
-	if (query.org)
-		q = query.org.kind === 'public' ? q.is('org_id', null) : q.eq('org_id', query.org.id);
+	// Public: no org, but not another user's conversation (its context isn't readable).
+	if (query.org?.kind === 'public')
+		q = q.is('org_id', null).or('kind.eq.search,user_id.not.is.null');
+	else if (query.org) q = q.eq('org_id', query.org.id);
 	if (query.source) q = q.contains('data_source_ids', [query.source]);
 	if (query.status) q = q.eq('status', query.status);
 	if (query.rating === 'none') q = q.is('rating', null).is('trail_rating', null);

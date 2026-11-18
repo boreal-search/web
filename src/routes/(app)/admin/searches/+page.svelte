@@ -4,6 +4,7 @@
 	import type { SortKey } from '#lib/server/search-review.js';
 	import { seconds } from '#lib/search-view.js';
 	import AdminNav from '../AdminNav.svelte';
+	import ConversationRow from './ConversationRow.svelte';
 	import RatingMark from './RatingMark.svelte';
 	import ReviewFilters from './ReviewFilters.svelte';
 	import SortHeader from './SortHeader.svelte';
@@ -99,32 +100,38 @@
 			</thead>
 			<tbody>
 				{#each data.searches as s (s.id)}
-					<tr>
-						<td data-label="Time" class="mono"
-							><time datetime={s.created_at}>{stamp(s.created_at)}</time></td
-						>
-						<td data-label="User" class="user">{s.user_email ?? 'Deleted user'}</td>
-						<td data-label="Context">{s.org_id ? (s.org_name ?? 'Deleted org') : 'Public'}</td>
-						<td data-label="Query" class="query">
-							<a href={resolve('/(app)/admin/searches/[id]', { id: s.id })}
-								>{s.query ?? `Not kept (${count(s.query_length)} characters)`}</a
+					{#if s.kind === 'conversation'}
+						<ConversationRow row={s} />
+					{:else}
+						<tr>
+							<td data-label="Time" class="mono"
+								><time datetime={s.created_at}>{stamp(s.created_at)}</time></td
 							>
-							{#if s.step_n && s.step_n > 1}<span class="muted mono">step {s.step_n}</span>{/if}
-						</td>
-						<td data-label="Data sources" class="mono">{s.data_source_ids.join(', ')}</td>
-						<td data-label="Outcome" class="mono">
-							{humanise(s.status)}{#if s.status === 'ok' && s.result_count !== null}<span
-									class="muted">{` · ${count(s.result_count)}`}</span
-								>{/if}
-						</td>
-						<td data-label="Time taken" class="num mono"
-							>{s.total_ms === null ? '' : `${seconds(s.total_ms)} s`}</td
-						>
-						<td data-label="Rating" class="ratings">
-							<RatingMark who="Response" rating={s.rating} note={s.note} />
-							<RatingMark who="Trail" rating={s.trail_rating} note={s.trail_note} />
-						</td>
-					</tr>
+							<td data-label="User" class="user">{s.user_email ?? 'Deleted user'}</td>
+							<td data-label="Context">{s.org_id ? (s.org_name ?? 'Deleted org') : 'Public'}</td>
+							<td data-label="Query" class="query">
+								<a href={resolve('/(app)/admin/searches/[id]', { id: s.id })}
+									>{s.query ?? `Not kept (${count(s.query_length)} characters)`}</a
+								>
+								{#if s.step_n && s.step_n > 1}<span class="muted mono">step {s.step_n}</span>{/if}
+							</td>
+							<td data-label="Data sources" class="mono">{s.data_source_ids.join(', ')}</td>
+							<td data-label="Outcome" class="mono">
+								{s.status
+									? humanise(s.status)
+									: ''}{#if s.status === 'ok' && s.result_count !== null}<span class="muted"
+										>{` · ${count(s.result_count)}`}</span
+									>{/if}
+							</td>
+							<td data-label="Time taken" class="num mono"
+								>{s.total_ms === null ? '' : `${seconds(s.total_ms)} s`}</td
+							>
+							<td data-label="Rating" class="ratings">
+								<RatingMark who="Response" rating={s.rating} note={s.note} />
+								<RatingMark who="Trail" rating={s.trail_rating} note={s.trail_note} />
+							</td>
+						</tr>
+					{/if}
 				{/each}
 			</tbody>
 		</table>
