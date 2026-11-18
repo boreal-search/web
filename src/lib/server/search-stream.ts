@@ -155,11 +155,12 @@ export interface DriveOptions {
  * browser gets `stored`; once the stream ends, the stored step is completed with its summary
  * and final readout. Ends with exactly one of done, error or timeout for the browser: an engine
  * stream that just stops is an error. Never throws; resolves with the final step (and the raw
- * results event, scores included, for analytics) once every write has finished.
+ * results event, scores included, and where the step was stored, for analytics) once every
+ * write has finished.
  */
 export async function driveStep(
 	opts: DriveOptions
-): Promise<{ step: TrailStep; results: ResultsEvent | null }> {
+): Promise<{ step: TrailStep; results: ResultsEvent | null; at: StoredAt | null }> {
 	const { from, send, store, log = console.error } = opts;
 	let step = opts.step;
 	let stored: Promise<StoredAt | null> = Promise.resolve(null);
@@ -225,7 +226,7 @@ export async function driveStep(
 			log('trail step update failed', e);
 		}
 	}
-	return { step, results };
+	return { step, results, at };
 }
 
 /**

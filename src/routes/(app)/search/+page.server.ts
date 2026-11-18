@@ -8,6 +8,8 @@ import { requireUser } from '#lib/server/auth.js';
 import type { EngineFailure } from '#lib/failure.js';
 import { classifyEngineError, engine } from '#lib/server/engine.js';
 import { canSign } from '#lib/server/files.js';
+import type { TrailRatings } from '#lib/rating.js';
+import { canRate, trailRatings } from '#lib/server/ratings.js';
 import {
 	branchTrail,
 	deleteTrail,
@@ -44,6 +46,8 @@ export interface PageTrail {
 	canRefine: boolean;
 	steps: TrailStep[];
 	people: TrailPerson[];
+	/** The viewer's ratings, when they may rate (`canRate`) and own the trail; else null. */
+	ratings: TrailRatings | null;
 }
 
 /**
@@ -73,6 +77,8 @@ export const load: PageServerLoad = async ({
 	const orgId = access.context.kind === 'org' ? access.context.org.id : null;
 	const trailId = url.searchParams.get('trail');
 
+	// Good / Bad is for platform admins only for now (`canRate`): others get no ids or ratings.
+	const rates = trailId ? canRate(locals.supabase) : Promise.resolve(false);
 	const [picker, history, loaded] = await Promise.all([
 		pickerGroups(access, fetch),
 		orgId === null
@@ -86,12 +92,21 @@ export const load: PageServerLoad = async ({
 						if (e) throw e;
 						return data.conversation_history;
 					}),
-		trailId ? loadTrail(locals.supabase, trailId, user.id) : null
+		trailId ? rates.then((r) => loadTrail(locals.supabase, trailId, user.id, r)) : null
 	]);
 
 	if (trailId && !loaded) {
 		error(404, 'Trail not found', { failure: { kind: 'not_found', what: 'trail' } });
 	}
+	const ratings =
+		loaded?.isOwner === true && (await rates)
+			? await trailRatings(
+					locals.supabase,
+					user.id,
+					loaded.trail.id,
+					loaded.steps.flatMap((s) => (s.search_id ? [s.search_id] : []))
+				)
+			: null;
 	const trail = loaded && {
 		id: loaded.trail.id,
 		title: loaded.trail.title,
@@ -99,7 +114,8 @@ export const load: PageServerLoad = async ({
 		isOwner: loaded.isOwner,
 		canRefine: loaded.isOwner && loaded.trail.org_id === orgId,
 		steps: loaded.steps,
-		people: loaded.people
+		people: loaded.people,
+		ratings
 	};
 
 	return {

@@ -216,6 +216,22 @@ export const actions: Actions = {
 		return { notice: `Removed @${domain}. New sign-ups from it no longer join ${org.name}.` };
 	},
 
+	/** Org admins too: whether Boreal keeps queries and answers for quality review. */
+	saveReview: async ({ params, request, locals }) => {
+		const { org } = await requireOrgAdmin(params.slug);
+		const on = (await request.formData()).get('log_queries') === 'on';
+		const { error } = await locals.supabase.rpc('set_org_log_queries', {
+			p_org_id: org.id,
+			p_on: on
+		});
+		if (error) return fail(400, { error: error.message });
+		return {
+			notice: on
+				? 'Saved. New searches are kept for quality review.'
+				: "Saved. New searches' queries and answers are no longer kept."
+		};
+	},
+
 	saveSettings: async ({ params, request, locals }) => {
 		const { org, isPlatformAdmin } = await requireOrgAdmin(params.slug);
 		if (!isPlatformAdmin) return platformAdminOnly();
@@ -225,7 +241,6 @@ export const actions: Actions = {
 		const { error } = await locals.supabase
 			.from('orgs')
 			.update({
-				log_queries: form.get('log_queries') === 'on',
 				conversation_history: form.get('conversation_history') === 'on',
 				default_role: defaultRole
 			})

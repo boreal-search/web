@@ -4,7 +4,8 @@
 
 	const links = [
 		{ href: resolve('/(app)/admin'), label: 'Orgs' },
-		{ href: resolve('/(app)/admin/users'), label: 'Users' }
+		{ href: resolve('/(app)/admin/users'), label: 'Users' },
+		{ href: resolve('/(app)/admin/searches'), label: 'Searches' }
 	];
 </script>
 

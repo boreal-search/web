@@ -2,6 +2,25 @@
 
 Short, dated records of choices that aren't obvious from the code. Newest first.
 
+## 2026-11-16 — Search review is opt-out (`log_queries`)
+
+Migrations `20261116000001_search_review` and `20261116000002_org_admin_log_queries`. Boreal
+reviews answer quality: platform admins read each search's query, the query as searched, the
+generated summary and the cited result locators on `/admin/searches`, and mark them good or bad
+(`search_ratings`; also on their own search screen, per response and per trail). Rating is a
+platform-admin dev tool for now: `canRate` in `src/lib/server/ratings.ts` is the one app gate
+(loads, the stream's search id, `POST /search/rating`) and RLS allows platform admins only;
+opening it to users means changing both. What is reviewed lives in
+`search_events` and follows `orgs.log_queries`, on by default; with it off only lengths, counts,
+timings and outcomes are kept. Org admins switch it under "Quality review" on the org manage page
+(`set_org_log_queries`); before, only platform admins could. The trail tables stay private to
+their owner; `conversation_history` still decides only whether trails are stored. Public-context
+searches have no org and are always kept. Because rows now hold answers, members read only their
+own `search_events` (no longer their whole org's) and `org_search_daily` rolls up only what the
+reader can see; platform admins read all. `trail_id` has no foreign key, so deleting a trail
+mid-search never stops the search being recorded; an insert may not name someone else's trail.
+The `search_trail` migration's "not platform admins" note covers the trail tables only.
+
 ## 2026-10-29 — Public tier and current org
 
 Migration `20261029000001_public_tier_and_current_org`. `public_data_sources (data_source_id)`

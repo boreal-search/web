@@ -1,10 +1,12 @@
 <!--
 	The trail's header: title (renamed in place by its owner), its context chip and, at the top
-	right, the "⋯" menu (rename, share, export, delete). Below: who shared it, for a reader, and
-	the last trail action's outcome. The rename form posts to the search page's action.
+	right, the "⋯" menu (rename, share, export, delete). Below: who shared it, for a reader, or
+	Good / Bad on the whole trail, for an owner who may rate, and the last trail action's outcome. The rename form posts to the search page's action.
 -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import Rate from '#lib/components/Rate.svelte';
+	import type { TrailRatings } from '#lib/rating.js';
 	import type { TrailStep } from '#lib/trail.js';
 	import TrailMenu from './TrailMenu.svelte';
 	import type { StoredTrail } from './TrailShare.svelte';
@@ -15,7 +17,8 @@
 		stored,
 		email,
 		context,
-		notice = null
+		notice = null,
+		ratings = null
 	}: {
 		title: string;
 		steps: readonly TrailStep[];
@@ -26,6 +29,8 @@
 		context: string;
 		/** The last trail action's outcome. */
 		notice?: string | null;
+		/** The viewer's ratings when they may rate this trail (`canRate`, owner); null: no Good / Bad. */
+		ratings?: TrailRatings | null;
 	} = $props();
 
 	let renaming = $state(false);
@@ -73,6 +78,12 @@
 	<p class="note">
 		Shared by {owner ? (owner.display_name ?? owner.email) : 'its owner'} · read-only
 	</p>
+{:else if stored && ratings}
+	<Rate
+		target={{ kind: 'trail', id: stored.id }}
+		initial={ratings.trail}
+		label="This whole trail"
+	/>
 {/if}
 
 {#if notice}<p class="notice" role="status">{notice}</p>{/if}

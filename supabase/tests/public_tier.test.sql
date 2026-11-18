@@ -42,9 +42,10 @@ select lives_ok($$ select pg_temp.event('10000000-0000-0000-0000-000000000001', 
     'member records an org search');
 select throws_ok($$ select pg_temp.event(null, '00000000-0000-0000-0000-00000000000e') $$,
     '42501', null, 'a public search cannot be recorded as another user');
-select is((select count(*)::int from public.search_events), 1, 'member sees their org''s searches only, not null-org rows');
-select is((select count(*)::int from public.search_events where org_id is null), 0, 'member never sees null-org rows');
-select is((select count(*)::int from public.org_search_daily where org_id is null), 0, 'null-org rollup hidden from members');
+select is((select count(*)::int from public.search_events), 2, 'member reads their own searches, org and public');
+select is((select count(*)::int from public.search_events where user_id <> '00000000-0000-0000-0000-00000000000c'), 0,
+    'member never reads anyone else''s searches');
+select is((select count(*)::int from public.org_search_daily where org_id is null), 1, 'the null-org rollup counts only their own');
 
 -- ---------------------------------------------------------------- user with no org
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000e');
@@ -54,7 +55,7 @@ select lives_ok($$ select pg_temp.event(null, '00000000-0000-0000-0000-000000000
     'a user with no org records a public search');
 select throws_ok($$ select pg_temp.event('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000e') $$,
     '42501', null, 'a user with no org cannot attribute a search to an org');
-select is((select count(*)::int from public.search_events), 0, 'a user with no org reads no search events, not even their own public ones');
+select is((select count(*)::int from public.search_events), 1, 'a user with no org reads only their own public search');
 
 -- ---------------------------------------------------------------- platform admin
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');

@@ -5,7 +5,12 @@
 import { json } from '@sveltejs/kit';
 import type { Config } from '@sveltejs/adapter-vercel';
 import { CONTEXT_COOKIE, findForbiddenDataSources, getAccess } from '#lib/server/access.js';
-import { FAILURE_STATUS, recordSearchEvent, type SearchEventInput } from '#lib/server/analytics.js';
+import {
+	FAILURE_STATUS,
+	insertSearchEvent,
+	recordSearchEvent,
+	type SearchEventInput
+} from '#lib/server/analytics.js';
 import {
 	classifyEngineError,
 	engine,
@@ -21,6 +26,7 @@ import {
 	streamOutcome,
 	type StepStore
 } from '#lib/server/search-stream.js';
+import { canRate } from '#lib/server/ratings.js';
 import { completeStep, insertStep } from '#lib/server/trails.js';
 import { ndjson } from '#lib/ndjson.js';
 import { newStep, type EngineEvent, type StreamEvent } from '#lib/trail.js';
@@ -51,16 +57,16 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 	);
 	const orgId = context.kind === 'org' ? context.org.id : null;
 	// Attributed to the current org (null in Public). See analytics.ts.
+	const input = {
+		orgId,
+		userId: user.id,
+		query: req.query,
+		dataSourceIds: req.data_source_ids,
+		topK: req.top_k,
+		rerank: req.rerank
+	};
 	const record = (outcome: Pick<SearchEventInput, 'status' | 'response' | 'error'>) =>
-		recordSearchEvent(locals.supabase, {
-			orgId,
-			userId: user.id,
-			query: req.query,
-			dataSourceIds: req.data_source_ids,
-			topK: req.top_k,
-			rerank: req.rerank,
-			...outcome
-		});
+		recordSearchEvent(locals.supabase, { ...input, ...outcome });
 
 	const forbidden = findForbiddenDataSources(requestedDataSources(req), dataSourceIds);
 	if (forbidden.length > 0) {
@@ -114,6 +120,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 			console.error('data source listing failed', e);
 			return [];
 		});
+
+	// Whether the browser gets the search's id, the handle Good / Bad needs.
+	const rates = canRate(locals.supabase).catch(() => false);
 
 	const deadline = AbortSignal.timeout(
 		req.answer ? STREAM_DEADLINE_MS.answer : STREAM_DEADLINE_MS.search
@@ -184,7 +193,16 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 				store,
 				timedOut: () => deadline.aborted
 			});
-			await record(streamOutcome(result.step, result.results));
+			// Awaited here, not deferred: the stream is still open, and the id goes (last, to
+			// someone who may rate the step) only once the row exists.
+			const id = crypto.randomUUID();
+			const recorded = await insertSearchEvent(locals.supabase, {
+				...input,
+				...streamOutcome(result.step, result.results),
+				id,
+				seen: { step: result.step, at: result.at }
+			});
+			if (recorded && (await rates)) send({ type: 'recorded', search_id: id });
 			try {
 				controller.close();
 			} catch {

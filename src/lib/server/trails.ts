@@ -59,7 +59,8 @@ function rowStep(row: StepRow): TrailStep {
 		answer,
 		wants_answer: wants_answer ?? answer !== null,
 		readout,
-		created_at: row.created_at
+		created_at: row.created_at,
+		search_id: null
 	};
 }
 
@@ -67,22 +68,35 @@ const storedReadout = (step: TrailStep): Json =>
 	asJson({ ...step.readout, wants_answer: step.wants_answer } satisfies StoredReadout);
 
 /** A trail with its steps (in order) and people, or null if it doesn't exist or isn't readable. */
-export async function loadTrail(db: Db, id: string, userId: string): Promise<LoadedTrail | null> {
+export async function loadTrail(
+	db: Db,
+	id: string,
+	userId: string,
+	/** Fill each step's `search_id` (the viewer may rate; their own trail only). */
+	withSearchIds = false
+): Promise<LoadedTrail | null> {
 	if (!isUuid(id)) return null;
 	const { data: trail, error } = await db.from('trails').select('*').eq('id', id).maybeSingle();
 	if (error) throw error;
 	if (!trail) return null;
-	const [steps, people] = await Promise.all([
+	const isOwner = trail.user_id === userId;
+	const [steps, people, searches] = await Promise.all([
 		db.from('trail_steps').select('*').eq('trail_id', id).order('n'),
-		db.rpc('trail_people', { p_trail_id: id })
+		db.rpc('trail_people', { p_trail_id: id }),
+		// The owner's own search records, for rating each step.
+		isOwner && withSearchIds
+			? db.from('search_events').select('id, step_n').eq('trail_id', id).eq('user_id', userId)
+			: null
 	]);
 	if (steps.error) throw steps.error;
 	if (people.error) throw people.error;
+	if (searches?.error) throw searches.error;
+	const searchIds = new Map((searches?.data ?? []).map((e) => [e.step_n, e.id]));
 	return {
 		trail,
-		steps: steps.data.map(rowStep),
+		steps: steps.data.map((row) => ({ ...rowStep(row), search_id: searchIds.get(row.n) ?? null })),
 		people: people.data,
-		isOwner: trail.user_id === userId
+		isOwner
 	};
 }
 

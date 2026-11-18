@@ -182,12 +182,14 @@ describe('driveStep', () => {
 			readout: { finished: true, search: { total_ms: 3400 }, answer: { sentences: 2 } }
 		});
 		expect(out.results).toBe(results);
+		expect(out.at).toEqual({ trail_id: TRAIL, n: 3 });
 	});
 
 	it('stores nothing and sends no stored event where history is off', async () => {
 		const out = await drive(feed([results, done]), null);
 		expect(out.sent).toEqual(['results', 'done']);
 		expect(out.step.readout.finished).toBe(true);
+		expect(out.at).toBeNull();
 	});
 
 	it('keeps streaming when storing fails, and logs it', async () => {
