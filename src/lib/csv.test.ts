@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { csvCell, toCsv } from './csv';
+import { csvCell, csvLine } from './csv';
 
 describe('csvCell', () => {
 	it('leaves plain text and numbers alone', () => {
@@ -24,16 +24,8 @@ describe('csvCell', () => {
 	});
 });
 
-describe('toCsv', () => {
-	it('writes a BOM, the header and CRLF rows', () => {
-		expect(
-			toCsv(
-				['q', 'n'],
-				[
-					['a', 1],
-					['b,c', null]
-				]
-			)
-		).toBe('\uFEFFq,n\r\na,1\r\n"b,c",\r\n');
+describe('csvLine', () => {
+	it('joins the cells and ends the row with CRLF', () => {
+		expect(csvLine(['a', 1, null, 'b,c'])).toBe('a,1,,"b,c"\r\n');
 	});
 });

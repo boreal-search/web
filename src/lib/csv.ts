@@ -4,6 +4,9 @@
 
 export type CsvCell = string | number | null;
 
+/** Starts the file so Excel reads it as UTF-8. */
+export const CSV_BOM = '﻿';
+
 const FORMULA = /^[=+\-@\t\r]/;
 const NEEDS_QUOTES = /[",\r\n]/;
 
@@ -14,7 +17,5 @@ export function csvCell(value: CsvCell): string {
 	return NEEDS_QUOTES.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
-/** The whole file, header first, with a byte-order mark so Excel reads it as UTF-8. */
-export function toCsv(header: readonly string[], rows: readonly (readonly CsvCell[])[]): string {
-	return `\uFEFF${[header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
-}
+/** One row, with its line ending. */
+export const csvLine = (cells: readonly CsvCell[]) => `${cells.map(csvCell).join(',')}\r\n`;
