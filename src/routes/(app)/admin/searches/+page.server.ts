@@ -1,13 +1,23 @@
 import { requirePlatformAdmin } from '#lib/server/auth.js';
-import { OUTCOMES, parseReviewQuery, reviewSearch } from '#lib/server/search-review.js';
-import { containsFilter, PAGE_SIZE, pageRange, pageWindow } from '#lib/server/users.js';
+import {
+	DEFAULT_SORT,
+	EXPORT_MAX,
+	OUTCOMES,
+	parseReviewQuery,
+	reviewRows,
+	reviewSearch,
+	sortBy,
+	SORT_KEYS,
+	type SortKey
+} from '#lib/server/search-review.js';
+import { PAGE_SIZE, pageRange, pageWindow } from '#lib/server/users.js';
 import type { PageServerLoad } from './$types';
 
 /** PostgREST: offset past the last row (416). */
 const RANGE_NOT_SATISFIABLE = 'PGRST103';
 
 const COLUMNS =
-	'id, created_at, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, rating, note, rated_by, trail_rating';
+	'id, created_at, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, rating, note, rated_by, trail_rating, trail_note';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	await requirePlatformAdmin();
@@ -15,19 +25,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const { from, to } = pageRange(query.page);
 
 	// RLS: platform admins read every search, profile, org and rating (search_review is invoker).
-	const rows = () => {
-		let q = locals.supabase.from('search_review').select(COLUMNS, { count: 'exact' });
-		if (query.q) q = q.or(containsFilter(['query', 'resolved_query'], query.q));
-		if (query.status) q = q.eq('status', query.status);
-		if (query.org)
-			q = query.org.kind === 'public' ? q.is('org_id', null) : q.eq('org_id', query.org.id);
-		if (query.rating === 'none') q = q.is('rating', null);
-		else if (query.rating) q = q.eq('rating', query.rating);
-		return q;
-	};
+	const rows = () => reviewRows(locals.supabase, COLUMNS, query, 'exact');
 
 	const [pageResult, orgs] = await Promise.all([
-		rows().order('created_at', { ascending: false }).order('id').range(from, to),
+		rows().range(from, to),
 		locals.supabase.from('orgs').select('id, name').order('name')
 	]);
 	if (orgs.error) throw orgs.error;
@@ -42,16 +43,24 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		total = head.count ?? 0;
 	}
 
+	const firstPage = reviewSearch(query, 1);
 	return {
 		query,
 		outcomes: OUTCOMES,
-		/** `?…` for each page of this view; `filtered`: any filter is set. */
+		/** `?…` for each page of this view (`filtered`: any filter is set; `sorted`: not newest first). */
 		pages: {
-			first: reviewSearch(query, 1),
+			first: firstPage,
 			previous: reviewSearch(query, query.page - 1),
 			next: reviewSearch(query, query.page + 1)
 		},
-		filtered: reviewSearch(query, 1) !== '',
+		/** `?…` for this view sorted by each column (a second click flips it). */
+		sorts: Object.fromEntries(
+			SORT_KEYS.map((k) => [k, reviewSearch(query, 1, sortBy(query.sort, k))])
+		) as Record<SortKey, string>,
+		/** Most rows the CSV export (`export` + `pages.first`) holds. */
+		exportMax: EXPORT_MAX,
+		filtered: reviewSearch({ ...query, sort: DEFAULT_SORT }, 1) !== '',
+		sorted: query.sort.key !== DEFAULT_SORT.key || query.sort.dir !== DEFAULT_SORT.dir,
 		total,
 		pageSize: PAGE_SIZE,
 		window: pageWindow(query.page, total),

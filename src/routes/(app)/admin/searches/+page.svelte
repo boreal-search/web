@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { count, humanise, plural, stamp } from '#lib/format.js';
-	import { RATING_LABELS, RATINGS } from '#lib/rating.js';
+	import type { SortKey } from '#lib/server/search-review.js';
 	import { seconds } from '#lib/search-view.js';
 	import AdminNav from '../AdminNav.svelte';
 	import RatingMark from './RatingMark.svelte';
+	import ReviewFilters from './ReviewFilters.svelte';
+	import SortHeader from './SortHeader.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -12,7 +14,18 @@
 	const here = resolve('/(app)/admin/searches');
 	let w = $derived(data.window);
 	let q = $derived(data.query);
-	let orgValue = $derived(q.org?.kind === 'org' ? q.org.id : (q.org?.kind ?? ''));
+	const exportHref = resolve('/(app)/admin/searches/export');
+
+	const COLUMNS: [SortKey, string][] = [
+		['time', 'Time'],
+		['user', 'User'],
+		['context', 'Context'],
+		['query', 'Query'],
+		['sources', 'Data sources'],
+		['outcome', 'Outcome'],
+		['taken', 'Time taken'],
+		['rating', 'Rating']
+	];
 </script>
 
 <svelte:head>
@@ -32,43 +45,33 @@
 		{:else}
 			<span><b>{count(data.total)}</b> {plural(data.total, 'search', 'searches')}</span>
 		{/if}
-		<span>newest first</span>
+		<span
+			>sorted by <b>{COLUMNS.find(([k]) => k === q.sort.key)?.[1].toLowerCase()}</b>, {q.sort
+				.dir === 'asc'
+				? 'ascending'
+				: 'descending'}</span
+		>
 	</p>
 </div>
 
-<form method="GET" action={here} role="search" class="filters">
-	<label>
-		<span>Query contains</span>
-		<input type="search" name="q" value={q.q} autocomplete="off" spellcheck="false" />
-	</label>
-	<label>
-		<span>Outcome</span>
-		<select name="status" value={q.status ?? ''}>
-			<option value="">Any</option>
-			{#each data.outcomes as o (o)}<option value={o}>{humanise(o)}</option>{/each}
-		</select>
-	</label>
-	<label>
-		<span>Rating</span>
-		<select name="rating" value={q.rating ?? ''}>
-			<option value="">Any</option>
-			{#each RATINGS as r (r)}<option value={r}>{RATING_LABELS[r]}</option>{/each}
-			<option value="none">Not rated</option>
-		</select>
-	</label>
-	<label>
-		<span>Context</span>
-		<select name="org" value={orgValue}>
-			<option value="">Any</option>
-			<option value="public">Public</option>
-			{#each data.orgs as o (o.id)}<option value={o.id}>{o.name}</option>{/each}
-		</select>
-	</label>
-	<div class="go">
-		<button type="submit">Filter</button>
-		{#if data.filtered}<a href={here}>Clear</a>{/if}
-	</div>
-</form>
+<ReviewFilters
+	{q}
+	outcomes={data.outcomes}
+	orgs={data.orgs}
+	filtered={data.filtered}
+	sorted={data.sorted}
+/>
+
+{#if data.total > 0}
+	<p class="export">
+		<a class="button" href="{exportHref}{data.pages.first}" download>Download CSV</a>
+		<span class="muted"
+			>{data.total > data.exportMax
+				? `The first ${count(data.exportMax)} of ${count(data.total)} matching searches, in this order.`
+				: `All ${count(data.total)} matching ${plural(data.total, 'search', 'searches')}, in this order.`}</span
+		>
+	</p>
+{/if}
 
 {#if data.searches.length === 0}
 	{#if w.outOfRange}
@@ -83,14 +86,15 @@
 		<table class="stacked searches">
 			<thead>
 				<tr>
-					<th scope="col">Time</th>
-					<th scope="col">User</th>
-					<th scope="col">Context</th>
-					<th scope="col">Query</th>
-					<th scope="col">Data sources</th>
-					<th scope="col">Outcome</th>
-					<th scope="col" class="num">Time taken</th>
-					<th scope="col">Rating</th>
+					{#each COLUMNS as [key, label] (key)}
+						<SortHeader
+							{key}
+							{label}
+							sort={q.sort}
+							search={data.sorts[key]}
+							num={key === 'taken'}
+						/>
+					{/each}
 				</tr>
 			</thead>
 			<tbody>
@@ -118,7 +122,7 @@
 						>
 						<td data-label="Rating" class="ratings">
 							<RatingMark who="Response" rating={s.rating} note={s.note} />
-							<RatingMark who="Trail" rating={s.trail_rating} />
+							<RatingMark who="Trail" rating={s.trail_rating} note={s.trail_note} />
 						</td>
 					</tr>
 				{/each}
@@ -138,27 +142,13 @@
 {/if}
 
 <style>
-	.filters {
+	.export {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: flex-end;
-		gap: 0.75rem 1rem;
-		margin-bottom: 1.5rem;
-	}
-	.filters label {
-		display: grid;
-		gap: 0.25rem;
+		align-items: baseline;
+		gap: 0.5rem 1rem;
+		margin-bottom: 1rem;
 		font-size: 0.875rem;
-		font-weight: 500;
-	}
-	.filters input {
-		width: 16rem;
-		max-width: 100%;
-	}
-	.go {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
 	}
 	.searches td {
 		vertical-align: top;

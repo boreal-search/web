@@ -2,7 +2,7 @@
 -- target and admin, re-rating replaces); users and org admins neither rate nor read ratings; the
 -- search_review view. Everything rolls back.
 begin;
-select plan(23);
+select plan(26);
 
 insert into auth.users (id, email, email_confirmed_at) values
     ('00000000-0000-0000-0000-00000000000a', 'admin@boreal.test',    now()),
@@ -116,6 +116,16 @@ select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
 select is((select count(*)::int from public.search_ratings), 0, 'a user reads no ratings');
 select is((select rating::text from public.search_review where id = '30000000-0000-0000-0000-000000000001'),
     null, 'the review view shows a member no rating');
+select is((select count(*)::int from public.search_review
+           where trail_rating is not null or trail_note is not null), 0,
+    'nor any trail rating (what the admin table and its CSV export filter on)');
+select is((select count(*)::int from public.search_review
+           where user_id is distinct from '00000000-0000-0000-0000-00000000000c'), 0,
+    'and only their own searches');
+
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+select is((select count(*)::int from public.search_review where user_email = 'owner@acme.test'), 0,
+    'an org admin reads none of a member''s searches through the view');
 
 -- ---------------------------------------------------------------- clearing
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
