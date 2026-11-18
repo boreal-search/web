@@ -23,7 +23,7 @@ export const load: PageServerLoad = async ({ parent, fetch, locals }) => {
 			accessRequest: request
 		};
 	} catch (e) {
-		// Engine down (workstation off, tunnel down): the page lists ids from access instead.
+		// Engine down (engine host off or unreachable): the page lists ids from access instead.
 		return {
 			groups: [],
 			engineFailure: classifyEngineError(e),

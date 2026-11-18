@@ -14,7 +14,7 @@ export interface paths {
 		/**
 		 * Health
 		 * @description Liveness: names the configured models without loading them, so a probe can never
-		 *     start a GPU load (b9a5a66) and doesn't fail while Qdrant or Ollama are down.
+		 *     load a model (b9a5a66) and doesn't fail while Qdrant or Ollama are down.
 		 */
 		get: operations['health_health_get'];
 		put?: never;

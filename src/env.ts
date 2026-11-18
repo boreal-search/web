@@ -27,7 +27,7 @@ export const variables = defineEnvVars({
 		schema: required('PUBLIC_SUPABASE_ANON_KEY')
 	},
 	ENGINE_URL: {
-		description: 'Base URL of the boreal engine API (reached through the Cloudflare Tunnel)',
+		description: 'Base URL of the boreal engine API',
 		schema: required('ENGINE_URL')
 	},
 	ENGINE_SERVICE_TOKEN: {

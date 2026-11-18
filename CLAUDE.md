@@ -6,7 +6,7 @@ service, reached server-side only. Contract: `boreal-search/infra/docs/architect
 
 ## Stack
 
-SvelteKit 3 · Svelte 5 (runes only) · TypeScript strict · bun · Vercel Hobby
+SvelteKit 3 · Svelte 5 (runes only) · TypeScript strict · bun · Vercel
 (`adapter-vercel`, Node) · Supabase (Auth + control-plane Postgres via `@supabase/ssr`) · Resend · vitest ·
 Tailwind v4 (theme only, no preflight) · Fontsource (self-hosted fonts).
 

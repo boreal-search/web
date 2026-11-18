@@ -122,7 +122,7 @@ drop function public.is_org_owner(uuid);
 -- ---------------------------------------------------------------------------
 -- Search outcomes: split engine failures by cause so analytics show *why* searches fail.
 --   timeout     no engine response within the web app's timeout
---   unreachable network error / tunnel 502·504·530: the workstation is off
+--   unreachable network error / proxy 502·504·530: the engine host is off
 --   unavailable 503: engine up, Qdrant or Ollama down
 --   engine_error any other engine error
 -- New values aren't used in this migration (Postgres forbids that before commit).

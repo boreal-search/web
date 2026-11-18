@@ -27,7 +27,7 @@ export const ENGINE_TIMEOUT_MS = { read: 8_000 } as const;
 
 /**
  * Deadline (ms) for a whole /search/stream, results and summary. Drafting and checking a
- * summary run an LLM on the workstation; while Daud is ingesting it can take minutes.
+ * summary run an LLM on the engine host; while it is ingesting it can take minutes.
  */
 export const STREAM_DEADLINE_MS = { answer: 180_000, search: 60_000 } as const;
 
@@ -74,12 +74,12 @@ export const searchStream = (body: SearchRequest, fetchFn: typeof fetch, signal:
 		signal
 	);
 
-/** Statuses the Cloudflare tunnel returns when the engine behind it is down. */
-const TUNNEL_DOWN = new Set([502, 504, 530]);
+/** Proxy statuses returned when the engine behind it is down. */
+const PROXY_DOWN = new Set([502, 504, 530]);
 
 export function classifyEngineError(e: unknown): EngineFailure {
 	if (e instanceof EngineError) {
-		if (TUNNEL_DOWN.has(e.status)) return { kind: 'unreachable' };
+		if (PROXY_DOWN.has(e.status)) return { kind: 'unreachable' };
 		if (e.status === 503) return { kind: 'unavailable', detail: e.message };
 		return { kind: 'error', status: e.status, detail: e.message };
 	}

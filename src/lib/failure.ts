@@ -6,7 +6,7 @@
 export type EngineFailure =
 	/** No response within ENGINE_TIMEOUT_MS. */
 	| { kind: 'timeout' }
-	/** Network error, or the tunnel's 502/504/530: the workstation is off or restarting. */
+	/** Network error, or a proxy 502/504/530: the engine host is off or restarting. */
 	| { kind: 'unreachable' }
 	/** 503: the engine is up but Qdrant or Ollama is down. */
 	| { kind: 'unavailable'; detail: string }

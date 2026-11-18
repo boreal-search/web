@@ -38,7 +38,7 @@ import { ndjson } from '#lib/ndjson.js';
 import { newStep, type EngineEvent, type StreamEvent } from '#lib/trail.js';
 import type { RequestHandler } from './$types';
 
-// A summary can take up to STREAM_DEADLINE_MS.answer (180 s) while the workstation ingests.
+// A summary can take up to STREAM_DEADLINE_MS.answer (180 s) while the engine is ingesting.
 export const config: Config = { maxDuration: 300 };
 
 export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) => {

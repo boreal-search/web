@@ -32,7 +32,7 @@ export const canSign = () => FILE_SIGNING_KEY !== undefined;
 /**
  * Signed engine URL for `key`, or null without `FILE_SIGNING_KEY`. Expiry is rounded up to a
  * `ttl` boundary (valid ttl..2·ttl from now), so repeat requests in one window get the same URL
- * and the browser and Cloudflare caches hit. The engine origin is `ENGINE_URL`
+ * and the browser and CDN caches hit. The engine origin is `ENGINE_URL`
  * (its `PUBLIC_BASE_URL`).
  */
 export function signFileUrl(key: string, ttl = 900, now = Date.now() / 1000): string | null {
