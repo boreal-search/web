@@ -49,19 +49,11 @@
 		</select>
 	</label>
 	<label>
-		<span>User's rating</span>
+		<span>Rating</span>
 		<select name="rating" value={q.rating ?? ''}>
 			<option value="">Any</option>
 			{#each RATINGS as r (r)}<option value={r}>{RATING_LABELS[r]}</option>{/each}
 			<option value="none">Not rated</option>
-		</select>
-	</label>
-	<label>
-		<span>Review</span>
-		<select name="verdict" value={q.verdict ?? ''}>
-			<option value="">Any</option>
-			{#each RATINGS as r (r)}<option value={r}>{RATING_LABELS[r]}</option>{/each}
-			<option value="none">Not reviewed</option>
 		</select>
 	</label>
 	<label>
@@ -103,7 +95,6 @@
 			</thead>
 			<tbody>
 				{#each data.searches as s (s.id)}
-					{@const ms = s.total_ms ?? s.retrieval_ms}
 					<tr>
 						<td data-label="Time" class="mono"
 							><time datetime={s.created_at}>{stamp(s.created_at)}</time></td
@@ -122,12 +113,12 @@
 									class="muted">{` · ${count(s.result_count)}`}</span
 								>{/if}
 						</td>
-						<td data-label="Time taken" class="num mono">{ms === null ? '' : `${seconds(ms)} s`}</td
+						<td data-label="Time taken" class="num mono"
+							>{s.total_ms === null ? '' : `${seconds(s.total_ms)} s`}</td
 						>
 						<td data-label="Rating" class="ratings">
-							<RatingMark who="User" rating={s.user_rating} note={s.user_note} />
+							<RatingMark who="Response" rating={s.rating} note={s.note} />
 							<RatingMark who="Trail" rating={s.trail_rating} />
-							<RatingMark who="Review" rating={s.review_rating} />
 						</td>
 					</tr>
 				{/each}

@@ -240,7 +240,7 @@
 					email={data.user?.email ?? ''}
 					context={stored ? orgName(stored.org_id) : contextName}
 					notice={actionNotice}
-					rating={stored?.ratings?.trail ?? null}
+					ratings={stored?.ratings ?? null}
 				/>
 				{#if !data.history && canRefine}
 					<p class="note">

@@ -1,10 +1,5 @@
 import { requirePlatformAdmin } from '#lib/server/auth.js';
-import {
-	OUTCOMES,
-	parseReviewQuery,
-	reviewSearch,
-	type RatingFilter
-} from '#lib/server/search-review.js';
+import { OUTCOMES, parseReviewQuery, reviewSearch } from '#lib/server/search-review.js';
 import { containsFilter, PAGE_SIZE, pageRange, pageWindow } from '#lib/server/users.js';
 import type { PageServerLoad } from './$types';
 
@@ -12,7 +7,7 @@ import type { PageServerLoad } from './$types';
 const RANGE_NOT_SATISFIABLE = 'PGRST103';
 
 const COLUMNS =
-	'id, created_at, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, user_rating, user_note, trail_rating, review_rating';
+	'id, created_at, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, rating, note, rated_by, trail_rating';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	await requirePlatformAdmin();
@@ -26,12 +21,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		if (query.status) q = q.eq('status', query.status);
 		if (query.org)
 			q = query.org.kind === 'public' ? q.is('org_id', null) : q.eq('org_id', query.org.id);
-		const rated = (column: 'user_rating' | 'review_rating', f: RatingFilter | null) => {
-			if (f === 'none') q = q.is(column, null);
-			else if (f) q = q.eq(column, f);
-		};
-		rated('user_rating', query.rating);
-		rated('review_rating', query.verdict);
+		if (query.rating === 'none') q = q.is('rating', null);
+		else if (query.rating) q = q.eq('rating', query.rating);
 		return q;
 	};
 

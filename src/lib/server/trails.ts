@@ -68,7 +68,13 @@ const storedReadout = (step: TrailStep): Json =>
 	asJson({ ...step.readout, wants_answer: step.wants_answer } satisfies StoredReadout);
 
 /** A trail with its steps (in order) and people, or null if it doesn't exist or isn't readable. */
-export async function loadTrail(db: Db, id: string, userId: string): Promise<LoadedTrail | null> {
+export async function loadTrail(
+	db: Db,
+	id: string,
+	userId: string,
+	/** Fill each step's `search_id` (the viewer may rate; their own trail only). */
+	withSearchIds = false
+): Promise<LoadedTrail | null> {
 	if (!isUuid(id)) return null;
 	const { data: trail, error } = await db.from('trails').select('*').eq('id', id).maybeSingle();
 	if (error) throw error;
@@ -78,7 +84,7 @@ export async function loadTrail(db: Db, id: string, userId: string): Promise<Loa
 		db.from('trail_steps').select('*').eq('trail_id', id).order('n'),
 		db.rpc('trail_people', { p_trail_id: id }),
 		// The owner's own search records, for rating each step.
-		isOwner
+		isOwner && withSearchIds
 			? db.from('search_events').select('id, step_n').eq('trail_id', id).eq('user_id', userId)
 			: null
 	]);

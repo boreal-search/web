@@ -21,6 +21,7 @@ import {
 	streamOutcome,
 	type StepStore
 } from '#lib/server/search-stream.js';
+import { canRate } from '#lib/server/ratings.js';
 import { completeStep, insertStep } from '#lib/server/trails.js';
 import { ndjson } from '#lib/ndjson.js';
 import { newStep, type EngineEvent, type StreamEvent } from '#lib/trail.js';
@@ -117,6 +118,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 			return [];
 		});
 
+	// Whether the browser gets the search's id, the handle Good / Bad needs.
+	const rates = canRate(locals.supabase).catch(() => false);
+
 	const deadline = AbortSignal.timeout(
 		req.answer ? STREAM_DEADLINE_MS.answer : STREAM_DEADLINE_MS.search
 	);
@@ -186,14 +190,14 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 				store,
 				timedOut: () => deadline.aborted
 			});
-			// The row's id goes to the browser last, so the step can be rated.
+			// The row's id goes last, to someone who may rate the step.
 			const id = crypto.randomUUID();
 			await record({
 				...streamOutcome(result.step, result.results),
 				id,
 				seen: { step: result.step, at: result.at }
 			});
-			send({ type: 'recorded', search_id: id });
+			if (await rates) send({ type: 'recorded', search_id: id });
 			try {
 				controller.close();
 			} catch {

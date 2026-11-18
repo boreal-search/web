@@ -1,5 +1,7 @@
 import { error } from '@sveltejs/kit';
+import type { RatingValue } from '#lib/rating.js';
 import { requirePlatformAdmin } from '#lib/server/auth.js';
+import { canRate } from '#lib/server/ratings.js';
 import { reviewStep } from '#lib/server/search-review.js';
 import { isUuid } from '#lib/server/trails.js';
 import type { PageServerLoad } from './$types';
@@ -7,7 +9,7 @@ import type { PageServerLoad } from './$types';
 /**
  * One search for review: what the user saw, the other searches in the same trail (from
  * search_events, kept while the org's log_queries is on; the trail tables are owner-only), and
- * this admin's own verdict.
+ * this admin's own rating when they may rate (`canRate`).
  */
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const admin = await requirePlatformAdmin();
@@ -24,27 +26,30 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		row.trail_id
 			? locals.supabase
 					.from('search_review')
-					.select('id, step_n, query, query_length, status, user_rating, review_rating')
+					.select('id, step_n, query, query_length, status, rating')
 					.eq('trail_id', row.trail_id)
 					.order('step_n')
 			: null,
-		locals.supabase
-			.from('search_ratings')
-			.select('rating, note')
-			.eq('search_event_id', row.id)
-			.eq('user_id', admin.id)
-			.maybeSingle()
+		canRate(locals.supabase).then(async (rates) => {
+			if (!rates) return null;
+			const { data, error: e } = await locals.supabase
+				.from('search_ratings')
+				.select('rating, note')
+				.eq('search_event_id', row.id)
+				.eq('user_id', admin.id)
+				.maybeSingle();
+			if (e) throw e;
+			return { value: data satisfies RatingValue | null };
+		})
 	]);
 	if (conversation?.error) throw conversation.error;
-	if (mine.error) throw mine.error;
 
 	return {
 		// The summary and results go once, inside `step`.
 		search: { ...row, answer: null, results: null },
 		step: reviewStep(row),
 		conversation: conversation?.data ?? [],
-		/** The searcher is reviewing their own search: their rating is the user's, not a verdict. */
-		ownSearch: row.user_id === admin.id,
-		verdict: mine.data
+		/** This admin's rating of the search; null when they may not rate. */
+		mine
 	};
 };

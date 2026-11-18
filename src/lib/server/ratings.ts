@@ -1,12 +1,24 @@
-// search_ratings writes, as the user's session: RLS decides who may rate what (the searcher their
-// own searches and trails, platform admins any search as reviewers). One row per (target, user),
-// so rating again replaces; a null rating clears it.
+// search_ratings, as the user's session. Rating is a platform-admin tool for now: `canRate` is
+// the one gate in the app (loads, the stream's search id, POST /search/rating), and RLS on
+// search_ratings enforces the same. One row per (target, user): rating again replaces; a null
+// rating clears it.
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { cleanNote, isRating, type RatingTarget, type RatingValue } from '#lib/rating.js';
+import {
+	cleanNote,
+	isRating,
+	type RatingTarget,
+	type RatingValue,
+	type TrailRatings
+} from '#lib/rating.js';
 import type { Database } from '#lib/supabase/types.js';
+import { isPlatformAdmin } from './auth.js';
 import { isUuid } from './trails.js';
 
 type Db = SupabaseClient<Database>;
+
+/** Who may see and use Good / Bad. To open it to every user: return true here, and widen the
+ * search_ratings policies. */
+export const canRate = (db: Db): Promise<boolean> => isPlatformAdmin(db);
 
 export interface RatingRequest {
 	target: RatingTarget;
@@ -54,17 +66,10 @@ export async function setRating(
 			{ onConflict: 'search_event_id,trail_id,user_id' }
 		);
 	if (!error) return null;
-	if (error.code === '42501') return 'You can rate only your own searches.';
+	if (error.code === '42501') return 'Only platform admins can rate searches.';
 	// The search's analytics row may still be on its way (it's written as the stream ends).
 	if (error.code === '23503') return 'That search is not recorded yet. Try again in a moment.';
 	return error.message;
-}
-
-export interface TrailRatings {
-	/** The whole trail. */
-	trail: RatingValue | null;
-	/** By search id (TrailStep.search_id). */
-	searches: Record<string, RatingValue>;
 }
 
 /** The caller's own ratings of a trail and of the searches behind its steps. */

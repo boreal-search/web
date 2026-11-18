@@ -64,8 +64,9 @@ export interface TrailStep {
 	wants_answer: boolean;
 	readout: StepReadout;
 	created_at: string;
-	/** The search's analytics record (search_events.id), what ratings attach to; null until it is
-	 * recorded, and for steps with none (shown to someone else, branched, or older). Not stored. */
+	/** The search's analytics record (search_events.id), what ratings attach to. Only for a viewer
+	 * who may rate (`canRate`): null otherwise, until recorded, and for steps with none (shown to
+	 * someone else, branched, or older). Not stored. */
 	search_id: string | null;
 }
 

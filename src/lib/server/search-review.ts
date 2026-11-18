@@ -27,10 +27,8 @@ export interface ReviewQuery {
 	/** Part of the query text (as typed or as searched); '' for none. */
 	q: string;
 	status: SearchStatus | null;
-	/** The searcher's own rating. */
+	/** The search's latest rating. */
 	rating: RatingFilter | null;
-	/** A reviewer's verdict. */
-	verdict: RatingFilter | null;
 	org: OrgFilter | null;
 	page: number;
 }
@@ -46,7 +44,6 @@ export function parseReviewQuery(params: URLSearchParams): ReviewQuery {
 		...parseUsersQuery(params),
 		status: OUTCOMES.find((o) => o === status) ?? null,
 		rating: ratingFilter(params.get('rating')),
-		verdict: ratingFilter(params.get('verdict')),
 		org: org === 'public' ? { kind: 'public' } : isUuid(org) ? { kind: 'org', id: org } : null
 	};
 }
@@ -57,7 +54,6 @@ export function reviewSearch(query: ReviewQuery, page = query.page): string {
 	if (query.q) entries.push(['q', query.q]);
 	if (query.status) entries.push(['status', query.status]);
 	if (query.rating) entries.push(['rating', query.rating]);
-	if (query.verdict) entries.push(['verdict', query.verdict]);
 	if (query.org) entries.push(['org', query.org.kind === 'public' ? 'public' : query.org.id]);
 	if (page > 1) entries.push(['page', String(page)]);
 	return entries.length ? `?${new URLSearchParams(entries)}` : '';

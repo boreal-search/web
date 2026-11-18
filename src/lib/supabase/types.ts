@@ -246,7 +246,7 @@ export interface Database {
 				Update: Record<string, never>;
 				Relationships: [];
 			};
-			/** One per (target, user): a search (one response) or a whole trail, never both. */
+			/** Platform admins only. One per (target, admin): a search or a whole trail, never both. */
 			search_ratings: {
 				Row: {
 					search_event_id: string | null;
@@ -353,7 +353,7 @@ export interface Database {
 			};
 		};
 		Views: {
-			/** /admin/searches: a search with the searcher's ratings and the latest reviewer verdict. */
+			/** /admin/searches: a search with the latest rating of it and of its trail. */
 			search_review: {
 				Row: {
 					id: string;
@@ -375,15 +375,13 @@ export interface Database {
 					step_n: number | null;
 					answer: Json | null;
 					results: Json | null;
-					user_rating: Rating | null;
-					user_note: string | null;
-					/** The searcher's rating of the whole trail. */
+					/** The latest rating of this search (platform admins rate). */
+					rating: Rating | null;
+					note: string | null;
+					rated_by: string | null;
+					/** The latest rating of its whole trail. */
 					trail_rating: Rating | null;
 					trail_note: string | null;
-					/** The latest rating by someone other than the searcher (a platform admin). */
-					review_rating: Rating | null;
-					review_note: string | null;
-					reviewer_email: string | null;
 				};
 				Relationships: [];
 			};
@@ -410,7 +408,6 @@ export interface Database {
 			owns_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			can_read_trail: { Args: { p_trail_id: string }; Returns: boolean };
 			can_write_trail: { Args: { p_trail_id: string }; Returns: boolean };
-			owns_search_event: { Args: { p_id: string }; Returns: boolean };
 			/** Platform admins and the org's admins. */
 			set_org_log_queries: { Args: { p_org_id: string; p_on: boolean }; Returns: undefined };
 			keeps_trails: { Args: { p_org_id: string | null }; Returns: boolean };

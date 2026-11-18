@@ -1,6 +1,6 @@
 <!--
 	Good / Bad on a search or a whole trail, with an optional short note. Saves through
-	POST /search/rating as the user (RLS decides what they may rate). Choosing the pressed one
+	POST /search/rating as the user; shown only to those who may rate (`canRate`). Choosing the pressed one
 	again clears it; choosing the other replaces it. Not an answer state: those stay AnswerCheck's.
 -->
 <script lang="ts">

@@ -1,7 +1,7 @@
 <!--
 	One search for review: what was asked, what came back (the summary as the user saw it, with
-	its checks, and the result locators), the rest of its trail, the user's ratings and this
-	admin's verdict. Signed page links aren't kept, so results show locators only.
+	its checks, and the result locators), the rest of its trail, its ratings and this admin's own
+	Good / Bad. Signed page links aren't kept, so results show locators only.
 -->
 <script lang="ts">
 	import { resolve } from '$app/paths';
@@ -18,7 +18,7 @@
 
 	let s = $derived(data.search);
 	let step = $derived(data.step);
-	let ms = $derived(s.total_ms ?? s.retrieval_ms);
+	let ms = $derived(s.total_ms);
 	const show = (ref: number) =>
 		document.getElementById(resultAnchorId(ref))?.scrollIntoView({ block: 'center' });
 </script>
@@ -56,24 +56,17 @@
 	</dd>
 	<dt>Ratings</dt>
 	<dd>
-		{#if !s.user_rating && !s.trail_rating && !s.review_rating}<span class="muted">None</span>{/if}
-		<RatingMark who="User" rating={s.user_rating} />
-		{#if s.user_note}<p class="note">“{s.user_note}”</p>{/if}
+		{#if !s.rating && !s.trail_rating}<span class="muted">None</span>{/if}
+		<RatingMark who="Response{s.rated_by ? ` (${s.rated_by})` : ''}" rating={s.rating} />
+		{#if s.note}<p class="note">“{s.note}”</p>{/if}
 		<RatingMark who="Whole trail" rating={s.trail_rating} />
 		{#if s.trail_note}<p class="note">“{s.trail_note}”</p>{/if}
-		<RatingMark
-			who="Review{s.reviewer_email ? ` (${s.reviewer_email})` : ''}"
-			rating={s.review_rating}
-		/>
-		{#if s.review_note}<p class="note">“{s.review_note}”</p>{/if}
 	</dd>
 </dl>
 
-<Rate
-	target={{ kind: 'search', id: s.id }}
-	initial={data.verdict}
-	label={data.ownSearch ? 'Your rating (your own search)' : 'Your verdict'}
-/>
+{#if data.mine}
+	<Rate target={{ kind: 'search', id: s.id }} initial={data.mine.value} label="Your rating" />
+{/if}
 
 {#if data.conversation.length > 1}
 	<section class="band" aria-labelledby="trail-h">
@@ -89,8 +82,7 @@
 							>{c.query ?? 'Query not kept'}</a
 						>
 					{/if}
-					<RatingMark who="User" rating={c.user_rating} />
-					<RatingMark who="Review" rating={c.review_rating} />
+					<RatingMark who="Rating" rating={c.rating} />
 				</li>
 			{/each}
 		</ol>

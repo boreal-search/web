@@ -1,17 +1,20 @@
--- pgTAP: search_ratings RLS (own ratings, reviewer verdicts, trail ratings), idempotent re-rating,
--- and the search_review view. Everything rolls back.
+-- pgTAP: search_ratings is platform-admin only (rate any search or trail, read all, one row per
+-- target and admin, re-rating replaces); users and org admins neither rate nor read ratings; the
+-- search_review view. Everything rolls back.
 begin;
-select plan(17);
+select plan(18);
 
 insert into auth.users (id, email, email_confirmed_at) values
-    ('00000000-0000-0000-0000-00000000000a', 'admin@boreal.test', now()),
-    ('00000000-0000-0000-0000-00000000000c', 'owner@acme.test',   now()),
-    ('00000000-0000-0000-0000-00000000000d', 'peer@acme.test',    now());
-insert into public.platform_admins (user_id) values ('00000000-0000-0000-0000-00000000000a');
+    ('00000000-0000-0000-0000-00000000000a', 'admin@boreal.test',    now()),
+    ('00000000-0000-0000-0000-00000000000b', 'orgadmin@acme.test',   now()),
+    ('00000000-0000-0000-0000-00000000000c', 'owner@acme.test',      now()),
+    ('00000000-0000-0000-0000-00000000000e', 'admin2@boreal.test',   now());
+insert into public.platform_admins (user_id) values
+    ('00000000-0000-0000-0000-00000000000a'), ('00000000-0000-0000-0000-00000000000e');
 insert into public.orgs (id, slug, name) values ('10000000-0000-0000-0000-000000000001', 'acme', 'Acme');
 insert into public.org_members (org_id, user_id, role) values
-    ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'member'),
-    ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000d', 'member');
+    ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', 'admin'),
+    ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'member');
 insert into public.trails (id, org_id, user_id, title) values
     ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
      '00000000-0000-0000-0000-00000000000c', 'Chinook habitat');
@@ -36,54 +39,70 @@ returns void language sql as $$
     do update set rating = excluded.rating, note = excluded.note, updated_at = now();
 $$;
 
--- ---------------------------------------------------------------- the searcher
+-- Counts as postgres (no RLS), scoped to this test's rows.
+create function pg_temp.ratings() returns int language sql security definer as $$
+    select count(*)::int from public.search_ratings
+    where search_event_id = '30000000-0000-0000-0000-000000000001'
+       or trail_id = '20000000-0000-0000-0000-000000000001';
+$$;
+
+-- ---------------------------------------------------------------- the searcher (a member)
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select throws_ok($$ select pg_temp.rate('30000000-0000-0000-0000-000000000001', null, 'bad') $$,
+    '42501', null, 'a user cannot rate their own search');
+select throws_ok($$ select pg_temp.rate(null, '20000000-0000-0000-0000-000000000001', 'good') $$,
+    '42501', null, 'a user cannot rate their own trail');
+
+-- ---------------------------------------------------------------- an org admin
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+select throws_ok($$ select pg_temp.rate('30000000-0000-0000-0000-000000000001', null, 'bad') $$,
+    '42501', null, 'an org admin cannot rate their org''s searches');
+
+-- ---------------------------------------------------------------- platform admin
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
 select lives_ok($$ select pg_temp.rate('30000000-0000-0000-0000-000000000001', null, 'bad', 'wrong page') $$,
-    'the searcher rates their search');
+    'a platform admin rates any search');
 select lives_ok($$ select pg_temp.rate('30000000-0000-0000-0000-000000000001', null, 'good') $$,
-    're-rating the same search');
-select is((select count(*)::int from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001' or trail_id = '20000000-0000-0000-0000-000000000001'), 1, 're-rating replaces: one row');
-select is((select rating::text || coalesce(note, '-') from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001'), 'good-',
+    'and rates it again');
+select is(pg_temp.ratings(), 1, 're-rating replaces: one row');
+select is((select rating::text || coalesce(note, '-') from public.search_ratings
+           where search_event_id = '30000000-0000-0000-0000-000000000001'), 'good-',
     're-rating replaces the rating and the note');
-select lives_ok($$ select pg_temp.rate(null, '20000000-0000-0000-0000-000000000001', 'good') $$,
-    'the owner rates the whole trail');
+select lives_ok($$ select pg_temp.rate(null, '20000000-0000-0000-0000-000000000001', 'bad', 'drifts') $$,
+    'a platform admin rates a whole trail');
 select throws_ok($$ insert into public.search_ratings (search_event_id, trail_id, rating)
                     values ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'good') $$,
     '23514', null, 'a rating has exactly one target');
 select throws_ok($$ insert into public.search_ratings (search_event_id, user_id, rating) values
-                    ('30000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000d', 'bad') $$,
-    '42501', null, 'no rating on behalf of someone else');
-
--- ---------------------------------------------------------------- a peer in the same org
-select pg_temp.act_as('00000000-0000-0000-0000-00000000000d');
-select throws_ok($$ select pg_temp.rate('30000000-0000-0000-0000-000000000001', null, 'bad') $$,
-    '42501', null, 'a peer cannot rate someone else''s search');
-select throws_ok($$ select pg_temp.rate(null, '20000000-0000-0000-0000-000000000001', 'bad') $$,
-    '42501', null, 'a peer cannot rate someone else''s trail');
-select is((select count(*)::int from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001' or trail_id = '20000000-0000-0000-0000-000000000001'), 0, 'a peer reads no one else''s ratings');
-select is((select user_rating::text from public.search_review where id = '30000000-0000-0000-0000-000000000001'),
-    null, 'the review view hides the searcher''s rating from a peer');
-
--- ---------------------------------------------------------------- platform admin (reviewer)
-select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
-select is((select count(*)::int from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001' or trail_id = '20000000-0000-0000-0000-000000000001'), 2, 'a platform admin reads every rating');
-select lives_ok($$ select pg_temp.rate('30000000-0000-0000-0000-000000000001', null, 'bad', 'cites the wrong volume') $$,
-    'a platform admin records a reviewer verdict');
-select throws_ok($$ select pg_temp.rate(null, '20000000-0000-0000-0000-000000000001', 'bad') $$,
-    '42501', null, 'trails are rated by their owner only');
+                    ('30000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000e', 'bad') $$,
+    '42501', null, 'no rating on behalf of another admin');
 select results_eq(
-    $$ select user_email, org_name, user_rating::text, trail_rating::text, review_rating::text, review_note, reviewer_email
+    $$ select user_email, org_name, rating::text, rated_by, trail_rating::text, trail_note
        from public.search_review where id = '30000000-0000-0000-0000-000000000001' $$,
-    $$ values ('owner@acme.test', 'Acme', 'good', 'good', 'bad', 'cites the wrong volume', 'admin@boreal.test') $$,
-    'the review row has the searcher''s ratings and the reviewer''s verdict apart');
+    $$ values ('owner@acme.test', 'Acme', 'good', 'admin@boreal.test', 'bad', 'drifts') $$,
+    'the review row has the latest rating of the search and of its trail');
+
+-- ---------------------------------------------------------------- another platform admin
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000e');
+select is((select count(*)::int from public.search_ratings
+           where search_event_id = '30000000-0000-0000-0000-000000000001'), 1,
+    'platform admins read each other''s ratings');
+select lives_ok($$ delete from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001' $$,
+    'deleting another admin''s rating runs');
+select is(pg_temp.ratings(), 2, 'but removes nothing: admins clear only their own');
+
+-- ---------------------------------------------------------------- reading as non-admins
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select is((select count(*)::int from public.search_ratings), 0, 'a user reads no ratings');
+select is((select rating::text from public.search_review where id = '30000000-0000-0000-0000-000000000001'),
+    null, 'the review view shows a member no rating');
 
 -- ---------------------------------------------------------------- clearing
-select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
 select lives_ok($$ delete from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001' $$,
-    'the searcher clears their rating');
+    'a platform admin clears their rating');
 reset role;
-select is((select count(*)::int from public.search_ratings where search_event_id = '30000000-0000-0000-0000-000000000001'), 1,
-    'clearing removes only the searcher''s own rating, not the verdict');
+select is(pg_temp.ratings(), 1, 'only the search rating is gone; the trail rating stays');
 
 select * from finish();
 rollback;

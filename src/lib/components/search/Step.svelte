@@ -1,7 +1,7 @@
 <!--
 	One trail step: its number and query (a control that selects it), scope chips, the
 	query as searched, the waiting bar, the checked summary, the readout, the widen action, Good /
-	Bad once the user's own search is recorded and, on earlier steps of a stored trail, "Branch
+	Bad once the search is recorded, for those who may rate (it then has a search_id) and, on earlier steps of a stored trail, "Branch
 	from here" (a new trail seeded with 01..this one).
 -->
 <script lang="ts">

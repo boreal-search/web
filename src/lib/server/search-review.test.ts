@@ -10,17 +10,15 @@ describe('parseReviewQuery', () => {
 			q: '',
 			status: null,
 			rating: null,
-			verdict: null,
 			org: null,
 			page: 1
 		});
 	});
 	it('reads every filter', () => {
-		expect(parse(`q=chinook&status=timeout&rating=bad&verdict=none&org=${ORG}&page=2`)).toEqual({
+		expect(parse(`q=chinook&status=timeout&rating=none&org=${ORG}&page=2`)).toEqual({
 			q: 'chinook',
 			status: 'timeout',
-			rating: 'bad',
-			verdict: 'none',
+			rating: 'none',
 			org: { kind: 'org', id: ORG },
 			page: 2
 		});
