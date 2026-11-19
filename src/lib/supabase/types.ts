@@ -266,7 +266,15 @@ export interface Database {
 					updated_at?: string;
 				};
 				Update: { rating?: Rating; note?: string | null; updated_at?: string };
-				Relationships: [];
+				Relationships: [
+					{
+						foreignKeyName: 'search_ratings_search_event_id_fkey';
+						columns: ['search_event_id'];
+						isOneToOne: false;
+						referencedRelation: 'search_events';
+						referencedColumns: ['id'];
+					}
+				];
 			};
 			trails: {
 				Row: {

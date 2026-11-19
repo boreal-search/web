@@ -18,7 +18,7 @@ type Db = SupabaseClient<Database>;
 
 /** Who may see and use Good / Bad. To open it to every user: return true here, and widen the
  * search_ratings policies. */
-export const canRate = (db: Db): Promise<boolean> => isPlatformAdmin(db);
+export const canRate = isPlatformAdmin;
 
 export interface RatingRequest {
 	target: RatingTarget;
@@ -72,26 +72,37 @@ export async function setRating(
 	return error.message;
 }
 
-/** The caller's own ratings of a trail and of the searches behind its steps. */
+/**
+ * The caller's own ratings of a trail and of their searches behind its steps, plus each step's
+ * search id (by step n), the handle a rating needs.
+ */
 export async function trailRatings(
 	db: Db,
 	userId: string,
-	trailId: string,
-	searchIds: readonly string[]
-): Promise<TrailRatings> {
-	const targets = [`trail_id.eq.${trailId}`];
-	if (searchIds.length > 0) targets.push(`search_event_id.in.(${searchIds.join(',')})`);
-	const { data, error } = await db
-		.from('search_ratings')
-		.select('search_event_id, trail_id, rating, note')
-		.eq('user_id', userId)
-		.or(targets.join(','));
-	if (error) throw error;
-	const out: TrailRatings = { trail: null, searches: {} };
-	for (const r of data) {
-		const value = { rating: r.rating, note: r.note };
-		if (r.search_event_id) out.searches[r.search_event_id] = value;
-		else out.trail = value;
+	trailId: string
+): Promise<{ searchIds: Map<number, string>; ratings: TrailRatings }> {
+	const [events, trail] = await Promise.all([
+		db
+			.from('search_events')
+			.select('id, step_n, search_ratings(rating, note)')
+			.eq('trail_id', trailId)
+			.eq('user_id', userId)
+			.eq('search_ratings.user_id', userId),
+		db
+			.from('search_ratings')
+			.select('rating, note')
+			.eq('trail_id', trailId)
+			.eq('user_id', userId)
+			.maybeSingle()
+	]);
+	if (events.error) throw events.error;
+	if (trail.error) throw trail.error;
+	const searchIds = new Map<number, string>();
+	const ratings: TrailRatings = { trail: trail.data, searches: {} };
+	for (const e of events.data) {
+		if (e.step_n !== null) searchIds.set(e.step_n, e.id);
+		const [r] = e.search_ratings;
+		if (r) ratings.searches[e.id] = r;
 	}
-	return out;
+	return { searchIds, ratings };
 }

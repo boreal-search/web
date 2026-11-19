@@ -5,7 +5,6 @@
 import { json } from '@sveltejs/kit';
 import type { Config } from '@sveltejs/adapter-vercel';
 import {
-	CONTEXT_COOKIE,
 	findForbiddenDataSources,
 	getAccess,
 	keepsHistory,
@@ -18,8 +17,8 @@ import {
 	type SearchEventInput
 } from '#lib/server/analytics.js';
 import {
+	allDataSources,
 	classifyEngineError,
-	engine,
 	FAILURE_HTTP_STATUS,
 	searchStream,
 	STREAM_DEADLINE_MS
@@ -41,7 +40,7 @@ import type { RequestHandler } from './$types';
 // A summary can take up to STREAM_DEADLINE_MS.answer (180 s) while the engine is ingesting.
 export const config: Config = { maxDuration: 300 };
 
-export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) => {
+export const POST: RequestHandler = async ({ request, locals, fetch }) => {
 	const user = locals.user;
 	if (!user) return json({ error: 'Sign in again to search.' }, { status: 401 });
 
@@ -56,11 +55,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 	const req = parsed.value;
 
 	// Re-check access on every search, including the context's scopes: never trust the ids sent.
-	const { context, dataSourceIds } = await getAccess(
-		locals.supabase,
-		user.id,
-		cookies.get(CONTEXT_COOKIE)
-	);
+	const { context, dataSourceIds } = await getAccess();
 	const orgId = context.kind === 'org' ? context.org.id : null;
 	// Attributed to the current org (null in Public). See analytics.ts.
 	const input = {
@@ -108,15 +103,13 @@ export const POST: RequestHandler = async ({ request, locals, cookies, fetch }) 
 	}
 
 	// Names and index dates for the step's scope chip and readout; ids stand in if this fails.
-	const listing = engine(fetch)
-		.listDataSources()
-		.catch((e: unknown): DataSource[] => {
-			console.error('data source listing failed', e);
-			return [];
-		});
+	const listing = allDataSources().catch((e: unknown): DataSource[] => {
+		console.error('data source listing failed', e);
+		return [];
+	});
 
 	// Whether the browser gets the search's id, the handle Good / Bad needs.
-	const rates = canRate(locals.supabase).catch(() => false);
+	const rates = canRate().catch(() => false);
 
 	const deadline = AbortSignal.timeout(
 		req.answer ? STREAM_DEADLINE_MS.answer : STREAM_DEADLINE_MS.search

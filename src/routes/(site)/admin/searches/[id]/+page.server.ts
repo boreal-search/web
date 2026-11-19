@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 					.eq('trail_id', row.trail_id)
 					.order('step_n')
 			: null,
-		canRate(locals.supabase).then(async (rates) => {
+		canRate().then(async (rates) => {
 			if (!rates) return null;
 			const { data, error: e } = await locals.supabase
 				.from('search_ratings')

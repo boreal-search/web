@@ -3,25 +3,20 @@
 // trail actions.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import {
-	CONTEXT_COOKIE,
-	getAccess,
-	keepsHistory,
-	withDataSources,
-	type Access
-} from '#lib/server/access.js';
+import { getAccess, keepsHistory, withDataSources, type Access } from '#lib/server/access.js';
 import { loadAccessRequest, type OpenAccessRequest } from '#lib/server/access-requests.js';
 import { requireUser } from '#lib/server/auth.js';
 import { parseSplit, SPLIT_COOKIE } from '#lib/components/search/layout-prefs.js';
 import type { Loaded } from '#lib/failure.js';
 import type { PickerGroup } from '#lib/picker.js';
-import { engine, settle } from '#lib/server/engine.js';
+import { allDataSources, settle } from '#lib/server/engine.js';
 import { canSign } from '#lib/server/files.js';
 import type { TrailRatings } from '#lib/rating.js';
 import { canRate, trailRatings } from '#lib/server/ratings.js';
 import {
 	branchTrail,
 	deleteTrail,
+	isUuid,
 	loadTrail,
 	renameTrail,
 	shareTrail,
@@ -53,12 +48,9 @@ export interface PageTrail {
  * `accessRequest`: a user in no org is offered "request access", or sees their open request.
  */
 export const load: PageServerLoad = async ({
-	parent,
-	fetch,
 	url,
 	locals,
-	cookies,
-	untrack
+	cookies
 }): Promise<{
 	picker: Promise<Loaded<PickerGroup[]>>;
 	permanentLinks: boolean;
@@ -69,47 +61,39 @@ export const load: PageServerLoad = async ({
 	accessRequest: OpenAccessRequest | null;
 }> => {
 	const user = requireUser();
-	// Untracked: the app layout re-runs on its own (the trail list after each stored step)
-	// without re-running this. A context switch invalidates everything anyway.
-	const { access } = await untrack(() => parent());
-	const orgId = access.context.kind === 'org' ? access.context.org.id : null;
+	const db = locals.supabase;
 	const trailId = url.searchParams.get('trail');
+	if (trailId !== null && !isUuid(trailId)) trailNotFound();
 
-	// Good / Bad is for platform admins only for now (`canRate`): others get no ids or ratings.
-	const rates = trailId ? canRate(locals.supabase) : Promise.resolve(false);
-	const picker = settle(pickerGroups(access, fetch));
-	const [loaded, accessRequest] = await Promise.all([
-		trailId ? rates.then((r) => loadTrail(locals.supabase, trailId, user.id, r)) : null,
-		access.memberships.length === 0 ? loadAccessRequest(locals.supabase, user.id) : null
+	// Access comes from the request memo, not `parent()`, so switching trails re-runs only this
+	// load. Everything starts at once: RLS gates each read without waiting on access.
+	const access = getAccess();
+	const picker = settle(access.then(pickerGroups));
+	const [{ context }, loaded, rated, accessRequest] = await Promise.all([
+		access,
+		trailId ? loadTrail(db, trailId, user.id) : null,
+		// Good / Bad is for platform admins only for now (`canRate`): others get no ids or ratings.
+		trailId ? canRate().then((r) => (r ? trailRatings(db, user.id, trailId) : null)) : null,
+		access.then((a) => (a.memberships.length === 0 ? loadAccessRequest(db, user.id) : null))
 	]);
-
-	if (trailId && !loaded) {
-		error(404, 'Trail not found', { failure: { kind: 'not_found', what: 'trail' } });
-	}
-	const ratings =
-		loaded?.isOwner === true && (await rates)
-			? await trailRatings(
-					locals.supabase,
-					user.id,
-					loaded.trail.id,
-					loaded.steps.flatMap((s) => (s.search_id ? [s.search_id] : []))
-				)
-			: null;
+	if (trailId && !loaded) trailNotFound();
+	const orgId = context.kind === 'org' ? context.org.id : null;
+	const own = loaded?.isOwner ? rated : null;
 	const trail = loaded && {
 		id: loaded.trail.id,
 		title: loaded.trail.title,
 		org_id: loaded.trail.org_id,
 		isOwner: loaded.isOwner,
 		canRefine: loaded.isOwner && loaded.trail.org_id === orgId,
-		steps: loaded.steps,
+		steps: loaded.steps.map((s) => ({ ...s, search_id: own?.searchIds.get(s.n) ?? null })),
 		people: loaded.people,
-		ratings
+		ratings: own?.ratings ?? null
 	};
 
 	return {
 		picker,
 		permanentLinks: canSign(),
-		history: keepsHistory(access.context),
+		history: keepsHistory(context),
 		query: url.searchParams.get('q') ?? '',
 		trail,
 		split: parseSplit(cookies.get(SPLIT_COOKIE)),
@@ -117,11 +101,11 @@ export const load: PageServerLoad = async ({
 	};
 };
 
-async function pickerGroups(
-	access: Access,
-	fetch: typeof globalThis.fetch
-): Promise<PickerGroup[]> {
-	const list = access.dataSourceIds.length > 0 ? await engine(fetch).listDataSources() : [];
+const trailNotFound = (): never =>
+	error(404, 'Trail not found', { failure: { kind: 'not_found', what: 'trail' } });
+
+async function pickerGroups(access: Access): Promise<PickerGroup[]> {
+	const list = access.dataSourceIds.length > 0 ? await allDataSources() : [];
 	return withDataSources(access.groups, list).map((g) => ({
 		label: g.label,
 		dataSources: g.dataSources.map((ds) => ({
@@ -182,10 +166,10 @@ export const actions: Actions = {
 	},
 
 	/** A new trail of the user's own, seeded with steps 01..n of one they can read (RLS). */
-	branch: async ({ request, locals, cookies }) => {
+	branch: async ({ request, locals }) => {
 		const user = requireUser();
 		const form = await request.formData();
-		const { context } = await getAccess(locals.supabase, user.id, cookies.get(CONTEXT_COOKIE));
+		const { context } = await getAccess();
 		const made = await branchTrail(
 			locals.supabase,
 			user.id,

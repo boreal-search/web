@@ -6,8 +6,7 @@
 import { createHmac } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { ENGINE_URL, FILE_SIGNING_KEY } from '$app/env/private';
-import { getRequestEvent } from '$app/server';
-import { CONTEXT_COOKIE, getAccess } from './access.js';
+import { getAccess } from './access.js';
 import { requireUser } from './auth.js';
 
 const DS = '[A-Za-z0-9][A-Za-z0-9._-]{0,63}';
@@ -44,9 +43,8 @@ export function signFileUrl(key: string, ttl = 900, now = Date.now() / 1000): st
 
 /** Signed in, and `ds` is in the current context's set; else login, or 404 like data source pages. */
 export async function requireFileAccess(ds: string) {
-	const user = requireUser();
-	const { locals, cookies } = getRequestEvent();
-	const { dataSourceIds } = await getAccess(locals.supabase, user.id, cookies.get(CONTEXT_COOKIE));
+	requireUser();
+	const { dataSourceIds } = await getAccess();
 	if (!dataSourceIds.includes(ds)) notFound();
 }
 

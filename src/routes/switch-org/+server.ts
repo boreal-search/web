@@ -10,11 +10,11 @@ const ONE_YEAR = 60 * 60 * 24 * 365;
  * `public`) in a per-device cookie and go back. `getAccess` re-validates the cookie against
  * the user's memberships on every request; checking here too gives a forged value a 400.
  */
-export const POST: RequestHandler = async ({ request, locals, cookies }) => {
-	const user = requireUser();
+export const POST: RequestHandler = async ({ request, cookies }) => {
+	requireUser();
 	const form = await request.formData();
 	const wanted = String(form.get('org') ?? '');
-	const { contexts } = await getAccess(locals.supabase, user.id, undefined);
+	const { contexts } = await getAccess();
 	if (!contexts.some((c) => contextValue(c) === wanted)) error(400, 'You are not in that org.');
 
 	cookies.set(CONTEXT_COOKIE, wanted, {

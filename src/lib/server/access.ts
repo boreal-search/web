@@ -1,5 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, OrgRole } from '#lib/supabase/types.js';
+import type { OrgRole } from '#lib/supabase/types.js';
+import { requireUser } from './auth.js';
+import { perRequest } from './memo.js';
 
 /** Cookie holding the current context: an org slug, or `public`. Per device; never trusted. */
 export const CONTEXT_COOKIE = 'boreal_org';
@@ -85,42 +86,42 @@ export function searchableGroups(
 }
 
 /**
- * Load the user's access for this request. `cookie` is the raw CONTEXT_COOKIE value; it only
- * selects among the user's own memberships. RLS scopes every query as well.
+ * The user's access for this request, loaded once per request. The CONTEXT_COOKIE only selects
+ * among the user's own memberships. One round trip: every membership comes with its org's
+ * grants (RLS scopes them to the user's orgs) and the context picks its own.
  */
-export async function getAccess(
-	supabase: SupabaseClient<Database>,
-	userId: string,
-	cookie: string | undefined
-): Promise<Access> {
+export const getAccess = perRequest(async ({ locals, cookies }): Promise<Access> => {
+	const user = requireUser();
 	const [members, pub] = await Promise.all([
-		supabase
+		locals.supabase
 			.from('org_members')
-			.select('role, orgs(id, slug, name, log_queries, conversation_history)')
-			.eq('user_id', userId),
-		supabase.from('public_data_sources').select('data_source_id')
+			.select(
+				'role, orgs(id, slug, name, log_queries, conversation_history, org_data_sources(data_source_id))'
+			)
+			.eq('user_id', user.id),
+		locals.supabase.from('public_data_sources').select('data_source_id')
 	]);
 	if (members.error) throw members.error;
 	if (pub.error) throw pub.error;
 
-	const memberships = members.data.flatMap((m) => (m.orgs ? [{ ...m.orgs, role: m.role }] : []));
+	const grants = new Map<string, string[]>();
+	const memberships = members.data.flatMap((m) => {
+		if (!m.orgs) return [];
+		const { org_data_sources, ...org } = m.orgs;
+		grants.set(
+			org.id,
+			org_data_sources.map((g) => g.data_source_id)
+		);
+		return [{ ...org, role: m.role }];
+	});
 	const publicIds = pub.data.map((p) => p.data_source_id);
 	const contexts = availableContexts(memberships, publicIds.length > 0);
-	const context = resolveContext(cookie, contexts);
-
-	let orgGrantIds: string[] = [];
-	if (context.kind === 'org') {
-		const { data, error } = await supabase
-			.from('org_data_sources')
-			.select('data_source_id')
-			.eq('org_id', context.org.id);
-		if (error) throw error;
-		orgGrantIds = data.map((g) => g.data_source_id);
-	}
+	const context = resolveContext(cookies.get(CONTEXT_COOKIE), contexts);
+	const orgGrantIds = context.kind === 'org' ? (grants.get(context.org.id) ?? []) : [];
 
 	const groups = searchableGroups(context, orgGrantIds, publicIds);
 	return { memberships, contexts, context, groups, dataSourceIds: groups.flatMap((g) => g.ids) };
-}
+});
 
 /** Attach engine records to each group's ids, in engine order; ids the engine lacks are dropped. */
 export function withDataSources<T extends { id: string }>(

@@ -2,6 +2,7 @@
 // this module lives under lib/server so SvelteKit refuses to bundle it for the browser.
 import { ENGINE_SERVICE_TOKEN, ENGINE_URL } from '$app/env/private';
 import type { EngineFailure, Loaded } from '#lib/failure.js';
+import { cached } from './memo.js';
 import type {
 	DataSource,
 	Document,
@@ -140,3 +141,9 @@ export function engine(fetchFn: typeof fetch = fetch) {
 			request<Job[]>(`/jobs${query(opts)}`, fetchFn)
 	};
 }
+
+/**
+ * Every engine data source, shared by all requests for a minute (the list changes only when
+ * the engine ingests). Not user-specific: callers filter it by the request's access.
+ */
+export const allDataSources = cached(60_000, () => engine().listDataSources());

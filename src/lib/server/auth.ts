@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolve } from '$app/paths';
 import { getRequestEvent } from '$app/server';
 import type { Database, OrgRole } from '#lib/supabase/types.js';
+import { perRequest } from './memo.js';
 
 /** Only same-origin relative paths are allowed as a redirect target; anything else is `/`. */
 export function safeRedirect(value: FormDataEntryValue | string | null): string {
@@ -20,11 +21,12 @@ export function requireUser() {
 	return locals.user;
 }
 
-export async function isPlatformAdmin(supabase: SupabaseClient<Database>): Promise<boolean> {
-	const { data, error: e } = await supabase.rpc('is_platform_admin');
+/** Whether the current user is a platform admin; asked once per request. */
+export const isPlatformAdmin = perRequest(async ({ locals }) => {
+	const { data, error: e } = await locals.supabase.rpc('is_platform_admin');
 	if (e) throw e;
 	return data;
-}
+});
 
 /** The user's role in an org, or null if they aren't a member. */
 async function getOrgRole(
@@ -45,8 +47,7 @@ async function getOrgRole(
 /** Guard for /admin: platform admins only (403 otherwise). */
 export async function requirePlatformAdmin() {
 	const user = requireUser();
-	const { locals } = getRequestEvent();
-	if (!(await isPlatformAdmin(locals.supabase))) {
+	if (!(await isPlatformAdmin())) {
 		error(403, 'Platform admins only', { failure: { kind: 'forbidden', gate: 'platform_admin' } });
 	}
 	return user;
@@ -59,6 +60,7 @@ export async function requirePlatformAdmin() {
 export async function requireOrgAdmin(slug: string) {
 	const user = requireUser();
 	const { locals } = getRequestEvent();
+	const platformAdmin = isPlatformAdmin();
 	const { data: org, error: e } = await locals.supabase
 		.from('orgs')
 		.select('id, slug, name, log_queries, conversation_history, default_role')
@@ -67,14 +69,14 @@ export async function requireOrgAdmin(slug: string) {
 	if (e) throw e;
 	if (!org) error(404, 'Org not found', { failure: { kind: 'not_found', what: 'org' } });
 
-	const [platformAdmin, role] = await Promise.all([
-		isPlatformAdmin(locals.supabase),
+	const [admin, role] = await Promise.all([
+		platformAdmin,
 		getOrgRole(locals.supabase, org.id, user.id)
 	]);
-	if (!platformAdmin && role !== 'admin') {
+	if (!admin && role !== 'admin') {
 		error(403, 'Only org admins can manage this org', {
 			failure: { kind: 'forbidden', gate: 'org_admin', org: org.name }
 		});
 	}
-	return { user, org, isPlatformAdmin: platformAdmin };
+	return { user, org, isPlatformAdmin: admin };
 }

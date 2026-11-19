@@ -1,4 +1,6 @@
 import type { Loaded } from '#lib/failure.js';
+import { getAccess } from '#lib/server/access.js';
+import { isPlatformAdmin, requireUser } from '#lib/server/auth.js';
 import { engine, settle } from '#lib/server/engine.js';
 import { notFound } from '#lib/server/files.js';
 import type { PageServerLoad } from './$types';
@@ -6,15 +8,15 @@ import type { PageServerLoad } from './$types';
 const PAGE_SIZE = 50;
 
 /** The head renders from access (id, granting group); the engine's detail streams in. */
-export const load: PageServerLoad = async ({ params, url, parent, fetch }) => {
-	const { access, nav } = await parent();
+export const load: PageServerLoad = async ({ params, url, fetch }) => {
+	requireUser();
+	// Ingestion jobs are platform admins' business; nobody else's load asks the engine for them.
+	const [access, showJobs] = await Promise.all([getAccess(), isPlatformAdmin()]);
 	if (!access.dataSourceIds.includes(params.id)) notFound();
 	const group = access.groups.find((g) => g.ids.includes(params.id))?.label ?? null;
 
 	const offset = Math.max(Number(url.searchParams.get('offset') ?? 0) || 0, 0);
 	const api = engine(fetch);
-	// Ingestion jobs are platform admins' business; nobody else's load asks the engine for them.
-	const showJobs = nav?.isPlatformAdmin ?? false;
 	const read = Promise.all([
 		api.getDataSource(params.id),
 		api.listDocuments(params.id, { limit: PAGE_SIZE, offset }),

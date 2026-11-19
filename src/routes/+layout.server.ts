@@ -1,4 +1,4 @@
-import { CONTEXT_COOKIE, contextLabel, contextValue, getAccess } from '#lib/server/access.js';
+import { contextLabel, contextValue, getAccess } from '#lib/server/access.js';
 import { isPlatformAdmin } from '#lib/server/auth.js';
 import type { Database } from '#lib/supabase/types.js';
 import { THEME_COOKIE, THEME_COOKIE_OPTIONS, type Theme } from '#lib/theme.js';
@@ -21,9 +21,10 @@ async function savedTheme(
 /**
  * Everyone: the theme (cookie; signed in, the saved choice wins and is mirrored into the cookie
  * so the next SSR is right on this device too).
- * Signed in: the user's access for this request (current context and searchable set; (app)
- * pages read it via `parent()`) plus nav (user menu, context switcher). Every admin/manage route
- * re-checks its own access.
+ * Signed in: the user's access for this request (current context and searchable set) plus nav
+ * (user menu, context switcher). Server loads read access through `getAccess()`, not `parent()`,
+ * so a client navigation re-runs only the page's own load. Every admin/manage route re-checks
+ * its own access.
  */
 export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 	const { supabase } = locals;
@@ -32,8 +33,8 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
 	if (!user) return { user, theme: locals.theme, access: null, nav: null };
 
 	const [platformAdmin, access, saved] = await Promise.all([
-		isPlatformAdmin(supabase),
-		getAccess(supabase, user.id, cookies.get(CONTEXT_COOKIE)),
+		isPlatformAdmin(),
+		getAccess(),
 		savedTheme(supabase, user.id)
 	]);
 	if (saved && saved !== locals.theme) {

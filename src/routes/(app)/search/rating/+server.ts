@@ -8,7 +8,7 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = locals.user;
 	if (!user) return json({ error: 'Sign in again to rate.' }, { status: 401 });
-	if (!(await canRate(locals.supabase)))
+	if (!(await canRate()))
 		return json({ error: 'Only platform admins can rate searches.' }, { status: 403 });
 	const req = parseRatingRequest(await request.json().catch(() => null));
 	if (!req) return json({ error: 'That rating is not valid.' }, { status: 400 });
