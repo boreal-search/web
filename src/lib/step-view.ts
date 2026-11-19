@@ -102,9 +102,10 @@ export interface Reading {
 
 /**
  * What the bar becomes: "summary from 5 pages · 6,214 searched · 3.4 s" with a summary, else
- * "5 pages · 3 PDFs · 6,214 searched · 0.6 s". Empty before results.
+ * "5 pages · 3 PDFs · 6,214 searched · 0.6 s". Empty before results. The seconds only with
+ * `timing` (platform admins).
  */
-export function stepReadout(step: TrailStep): Reading[] {
+export function stepReadout(step: TrailStep, timing: boolean): Reading[] {
 	const s = step.readout.search;
 	if (!s) return [];
 	const used = step.answer && !step.answer.abstained ? step.readout.answer?.pages_used : undefined;
@@ -118,7 +119,7 @@ export function stepReadout(step: TrailStep): Reading[] {
 	return [
 		...head,
 		{ value: count(s.pages_searched), after: 'searched' },
-		{ value: seconds(s.total_ms), after: 's' }
+		...(timing ? [{ value: seconds(s.total_ms), after: 's' }] : [])
 	];
 }
 

@@ -1,24 +1,28 @@
 <!--
 	The signed-in user's menu: a popover (Escape and outside clicks close it) beside its button,
 	opening up or down, left or right, to stay on screen. Items follow the user's roles.
+	`compact`: an icon button (the collapsed sidebar rail).
 -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { afterNavigate, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { beside } from '#lib/popover.js';
 	import { THEMES, type Theme } from '#lib/theme.js';
 
 	let {
 		email,
 		isPlatformAdmin,
 		adminOrgs,
-		theme
+		theme,
+		compact = false
 	}: {
 		email: string | undefined;
 		isPlatformAdmin: boolean;
 		adminOrgs: readonly { slug: string; name: string }[];
 		theme: Theme;
+		compact?: boolean;
 	} = $props();
 
 	const THEME_LABELS: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' };
@@ -31,15 +35,7 @@
 
 	function place(e: ToggleEvent) {
 		if (e.newState !== 'open' || !button) return;
-		const r = button.getBoundingClientRect();
-		const up = r.top > innerHeight / 2;
-		const fromRight = r.left > innerWidth / 2;
-		at = {
-			top: up ? 'auto' : `${r.bottom + 4}px`,
-			bottom: up ? `${innerHeight - r.top + 4}px` : 'auto',
-			left: fromRight ? 'auto' : `${r.left}px`,
-			right: fromRight ? `${innerWidth - r.right}px` : 'auto'
-		};
+		at = beside(button.getBoundingClientRect(), { width: innerWidth, height: innerHeight });
 	}
 
 	const current = (href: string) => (page.url.pathname === href ? 'page' : undefined);
@@ -56,16 +52,24 @@
 
 <button
 	type="button"
-	class="quiet trigger"
+	class={['quiet trigger', compact && 'compact']}
 	bind:this={button}
 	popovertarget="{id}-menu"
 	title={email}
 >
 	<span class="sr-only">Account menu for</span>
-	<span class="email">{email}</span>
-	<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
-		<path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" />
-	</svg>
+	{#if compact}
+		<span class="sr-only">{email}</span>
+		<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+			<circle cx="10" cy="7" r="3.5" fill="none" stroke="currentColor" />
+			<path d="M3.5 17c.8-3.3 3.4-5 6.5-5s5.7 1.7 6.5 5" fill="none" stroke="currentColor" />
+		</svg>
+	{:else}
+		<span class="email">{email}</span>
+		<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+			<path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" />
+		</svg>
+	{/if}
 </button>
 
 <div
@@ -134,6 +138,14 @@
 	.trigger svg {
 		flex: none;
 		color: var(--color-muted);
+	}
+	.trigger.compact {
+		justify-content: center;
+		width: 2.75rem;
+		padding: 0;
+	}
+	.trigger.compact:hover svg {
+		color: var(--color-ink);
 	}
 	.email {
 		overflow: hidden;

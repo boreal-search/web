@@ -29,7 +29,8 @@
 		onwiden,
 		onview,
 		branchFrom,
-		rating = null
+		rating = null,
+		timing
 	}: {
 		step: TrailStep;
 		selected: boolean;
@@ -53,11 +54,13 @@
 		branchFrom: string | null;
 		/** The user's own rating of this step's search, as loaded. */
 		rating?: RatingValue | null;
+		/** Show seconds (waiting counter, readout): platform admins only. */
+		timing: boolean;
 	} = $props();
 
 	let branching = $state(false);
 
-	let readout = $derived(stepReadout(s));
+	let readout = $derived(stepReadout(s, timing));
 	let showReadout = $derived(s.readout.search !== null && (s.readout.finished || !s.wants_answer));
 	let indexed = $derived(indexedDay(s));
 	let narrowed = $derived(isNarrowed(s, allIds));
@@ -105,7 +108,7 @@
 
 	<div class="body">
 		{#if waiting && (s.readout.search === null || (s.wants_answer && !s.answer))}
-			<WaitingBar clock={waiting} {now} />
+			<WaitingBar clock={waiting} {now} {timing} />
 		{/if}
 		{#if s.answer}
 			<StepSummary

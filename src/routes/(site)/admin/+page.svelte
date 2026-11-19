@@ -5,6 +5,8 @@
 	import { day } from '#lib/format.js';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import OrgAdminLinks from '#lib/components/OrgAdminLinks.svelte';
+	import Skeleton from '#lib/components/Skeleton.svelte';
+	import { Resolved } from '#lib/resolved.svelte.js';
 	import AdminNav from './AdminNav.svelte';
 	import type { PageProps } from './$types';
 
@@ -14,8 +16,14 @@
 		() =>
 		({ update }) =>
 			update({ reset: false });
-	let isPublic = $derived(new Set(data.publicCorpora.publicIds));
-	let names = $derived(new Map(data.publicCorpora.dataSources.map((ds) => [ds.id, ds.name])));
+	let isPublic = $derived(new Set(data.publicIds));
+	// Ids stand in for names in the orgs table until the engine's list streams in. The public
+	// picker renders from it too, not `{#await}`: every action re-runs the load, and a new promise
+	// would swap the form for a skeleton (losing focus) until it resolves.
+	const sources = new Resolved(() => data.dataSources);
+	let names = $derived(
+		new Map(sources.current?.ok ? sources.current.data.map((ds) => [ds.id, ds.name]) : [])
+	);
 
 	// createOrg errors are one string: an empty name is the name's fault, anything else the slug's.
 	let nameError = $derived(form?.error && !form.name ? form.error : null);
@@ -35,7 +43,7 @@
 	<h1>Platform admin</h1>
 	<p class="readout">
 		<span><b>{data.orgs.length}</b> {data.orgs.length === 1 ? 'org' : 'orgs'}</span>
-		<span><b>{data.publicCorpora.publicIds.length}</b> public data sources</span>
+		<span><b>{data.publicIds.length}</b> public data sources</span>
 		{#if requestCount > 0}
 			<span
 				><b>{requestCount}</b> open {requestCount === 1
@@ -191,46 +199,51 @@
 
 <section class="band" aria-labelledby="public-heading">
 	<h2 id="public-heading">Public data sources</h2>
-	{#if data.publicCorpora.engineFailure}
-		<FailureNotice
-			failure={data.publicCorpora.engineFailure}
-			effect="The data source list can't be loaded, so public access can't be changed."
-		/>
-		<p class="readout">
-			<span>public <b>{data.publicCorpora.publicIds.join(', ') || 'none'}</b></span>
-		</p>
-	{:else if data.publicCorpora.dataSources.length === 0}
-		<p class="empty">The search engine has no data sources.</p>
+	{#if !sources.current}
+		<Skeleton label="Loading data sources" rows={3} />
 	{:else}
-		<form method="POST" action="?/savePublic" class="stack" use:enhance={keep}>
-			<fieldset aria-describedby="public-help">
-				<legend>Data sources anyone can search</legend>
-				{#each data.publicCorpora.dataSources as ds (ds.id)}
-					<label class="check">
-						<input
-							type="checkbox"
-							name="data_source_id"
-							value={ds.id}
-							checked={isPublic.has(ds.id)}
-						/>
-						{ds.name}
-					</label>
-				{/each}
-				<span id="public-help" class="help">
-					Every signed-in user can search these, with or without an org.
-				</span>
-			</fieldset>
-			{#if form?.publicFailure}
-				<FailureNotice failure={form.publicFailure} effect="Public data sources not saved." />
-			{:else if form?.publicError}
-				<p class="notice" data-tone="error" role="alert">{form.publicError}</p>
-			{:else if form?.publicNotice}
-				<p class="notice" role="status">{form.publicNotice}</p>
-			{/if}
-			<div class="actions">
-				<button type="submit" class="primary">Save public data sources</button>
-			</div>
-		</form>
+		{@const result = sources.current}
+		{#if !result.ok}
+			<FailureNotice
+				failure={result.failure}
+				effect="The data source list can't be loaded, so public access can't be changed."
+			/>
+			<p class="readout">
+				<span>public <b>{data.publicIds.join(', ') || 'none'}</b></span>
+			</p>
+		{:else if result.data.length === 0}
+			<p class="empty">The search engine has no data sources.</p>
+		{:else}
+			<form method="POST" action="?/savePublic" class="stack" use:enhance={keep}>
+				<fieldset aria-describedby="public-help">
+					<legend>Data sources anyone can search</legend>
+					{#each result.data as ds (ds.id)}
+						<label class="check">
+							<input
+								type="checkbox"
+								name="data_source_id"
+								value={ds.id}
+								checked={isPublic.has(ds.id)}
+							/>
+							{ds.name}
+						</label>
+					{/each}
+					<span id="public-help" class="help">
+						Every signed-in user can search these, with or without an org.
+					</span>
+				</fieldset>
+				{#if form?.publicFailure}
+					<FailureNotice failure={form.publicFailure} effect="Public data sources not saved." />
+				{:else if form?.publicError}
+					<p class="notice" data-tone="error" role="alert">{form.publicError}</p>
+				{:else if form?.publicNotice}
+					<p class="notice" role="status">{form.publicNotice}</p>
+				{/if}
+				<div class="actions">
+					<button type="submit" class="primary">Save public data sources</button>
+				</div>
+			</form>
+		{/if}
 	{/if}
 </section>
 

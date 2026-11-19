@@ -13,6 +13,9 @@ export type EngineFailure =
 	/** Any other engine error (status null when it wasn't an HTTP error). */
 	| { kind: 'error'; status: number | null; detail: string };
 
+/** An engine read streamed to the page: its data, or why it failed. Never rejects. */
+export type Loaded<T> = { ok: true; data: T } | { ok: false; failure: Failure };
+
 /** What a 404 was about. "Doesn't exist" and "not in your current context" read the same. */
 type Missing = 'page' | 'data_source' | 'org' | 'trail';
 

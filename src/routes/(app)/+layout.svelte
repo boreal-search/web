@@ -8,6 +8,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Modal from '#lib/components/Modal.svelte';
+	import UserMenu from '#lib/components/UserMenu.svelte';
 	import { rememberSidebar } from '#lib/components/search/layout-prefs.js';
 	import Sidebar from './Sidebar.svelte';
 	import type { LayoutProps } from './$types';
@@ -27,6 +28,10 @@
 	// The search screen sets its own measures across the whole content area.
 	let wide = $derived(page.route.id === '/(app)/search');
 	const searchHref = resolve('/(app)/search');
+	/** The rail names the org only when there is a choice (the expanded sidebar switches it). */
+	let railOrg = $derived(
+		data.nav && data.nav.contexts.length > 1 ? data.nav.contexts.find((c) => c.current) : null
+	);
 </script>
 
 {#snippet newSearch()}
@@ -56,6 +61,28 @@
 		</div>
 		{#if collapsed}
 			{@render newSearch()}
+			{#if data.user && data.nav}
+				<div class="rail-foot">
+					{#if railOrg}
+						<button
+							type="button"
+							class="quiet icon org"
+							title="Org: {railOrg.label}. Show sidebar to switch"
+							onclick={toggle}
+						>
+							<span aria-hidden="true">{railOrg.label.charAt(0).toUpperCase()}</span>
+							<span class="sr-only">Org: {railOrg.label}. Show sidebar to switch</span>
+						</button>
+					{/if}
+					<UserMenu
+						compact
+						email={data.user.email}
+						isPlatformAdmin={data.nav.isPlatformAdmin}
+						adminOrgs={data.nav.adminOrgs}
+						theme={data.theme}
+					/>
+				</div>
+			{/if}
 		{:else}
 			<Sidebar {data} />
 		{/if}
@@ -141,6 +168,25 @@
 		text-decoration: none;
 	}
 	.icon:hover {
+		color: var(--color-ink);
+	}
+	.rail-foot {
+		display: grid;
+		justify-items: center;
+		align-self: stretch;
+		gap: 0.25rem;
+		margin-top: auto;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--color-rule);
+	}
+	.org span[aria-hidden] {
+		display: grid;
+		place-items: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border: 1px solid var(--color-edge);
+		border-radius: 3px;
+		font: 600 0.875rem/1 var(--font-sans);
 		color: var(--color-ink);
 	}
 	.content {

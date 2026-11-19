@@ -2,16 +2,24 @@
 	import { resolve } from '$app/paths';
 	import ContextSwitch from '#lib/components/ContextSwitch.svelte';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
+	import Skeleton from '#lib/components/Skeleton.svelte';
 	import { count, humanise, plural } from '#lib/format.js';
-	import type { PageProps } from './$types';
+	import { Resolved } from '#lib/resolved.svelte.js';
+	import type { PageData, PageProps } from './$types';
+
+	type Group = Extract<Awaited<PageData['groups']>, { ok: true }>['data'][number];
 
 	let { data }: PageProps = $props();
 
 	let noOrg = $derived(data.access.memberships.length === 0);
 	let orgName = $derived(data.access.context.kind === 'org' ? data.access.context.org.name : null);
 	let granted = $derived(data.access.dataSourceIds.length);
-	let shown = $derived(data.groups.filter((g) => g.dataSources.length > 0));
-	let all = $derived(shown.flatMap((g) => g.dataSources));
+	const nonEmpty = (groups: Group[]) => groups.filter((g) => g.dataSources.length > 0);
+	// The head's totals; the list below awaits the same promise.
+	const loaded = new Resolved(() => data.groups);
+	let all = $derived(
+		loaded.current?.ok ? nonEmpty(loaded.current.data).flatMap((g) => g.dataSources) : []
+	);
 	let totals = $derived({
 		sources: all.length,
 		documents: all.reduce((n, ds) => n + ds.document_count, 0),
@@ -70,52 +78,59 @@
 			No data sources are available to {orgName ?? 'your org'} yet. Ask a platform admin to grant access.
 		</p>
 	{/if}
-{:else if data.engineFailure}
-	<FailureNotice
-		failure={data.engineFailure}
-		effect="Names, statuses and counts for your data sources can't be loaded."
-	/>
-	{#each data.access.groups as group, i (group.label)}
-		<section class="band" aria-labelledby="group-{i}">
-			<h2 id="group-{i}">{group.label}</h2>
-			<ul class="ids">
-				{#each group.ids as id (id)}
-					<li><a href={resolve('/(app)/data-sources/[id]', { id })}>{id}</a></li>
-				{/each}
-			</ul>
-		</section>
-	{/each}
-{:else if shown.length === 0}
-	<p class="empty">These data sources aren't available on the search engine right now.</p>
 {:else}
-	{#each shown as group, i (group.label)}
-		<section class="band" aria-labelledby="group-{i}">
-			<h2 id="group-{i}">{group.label}</h2>
-			<table class="stacked sources">
-				<thead>
-					<tr>
-						<th scope="col">Name</th>
-						<th scope="col">Status</th>
-						<th scope="col" class="num">Documents</th>
-						<th scope="col" class="num">Pages</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each group.dataSources as ds (ds.id)}
-						<tr>
-							<td class="name">
-								<a href={resolve('/(app)/data-sources/[id]', { id: ds.id })}>{ds.name}</a>
-								{#if ds.description}<span class="muted">{ds.description}</span>{/if}
-							</td>
-							<td class="state" data-label="Status">{humanise(ds.status)}</td>
-							<td class="num" data-label="Documents">{count(ds.document_count)}</td>
-							<td class="num" data-label="Pages">{count(ds.page_count)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
-	{/each}
+	{#await data.groups}
+		<Skeleton label="Loading data sources" rows={Math.min(granted, 8)} columns={4} />
+	{:then result}
+		{@const shown = result.ok ? nonEmpty(result.data) : []}
+		{#if !result.ok}
+			<FailureNotice
+				failure={result.failure}
+				effect="Names, statuses and counts for your data sources can't be loaded."
+			/>
+			{#each data.access.groups as group, i (group.label)}
+				<section class="band" aria-labelledby="group-{i}">
+					<h2 id="group-{i}">{group.label}</h2>
+					<ul class="ids">
+						{#each group.ids as id (id)}
+							<li><a href={resolve('/(app)/data-sources/[id]', { id })}>{id}</a></li>
+						{/each}
+					</ul>
+				</section>
+			{/each}
+		{:else if shown.length === 0}
+			<p class="empty">These data sources aren't available on the search engine right now.</p>
+		{:else}
+			{#each shown as group, i (group.label)}
+				<section class="band" aria-labelledby="group-{i}">
+					<h2 id="group-{i}">{group.label}</h2>
+					<table class="stacked sources">
+						<thead>
+							<tr>
+								<th scope="col">Name</th>
+								<th scope="col">Status</th>
+								<th scope="col" class="num">Documents</th>
+								<th scope="col" class="num">Pages</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each group.dataSources as ds (ds.id)}
+								<tr>
+									<td class="name">
+										<a href={resolve('/(app)/data-sources/[id]', { id: ds.id })}>{ds.name}</a>
+										{#if ds.description}<span class="muted">{ds.description}</span>{/if}
+									</td>
+									<td class="state" data-label="Status">{humanise(ds.status)}</td>
+									<td class="num" data-label="Documents">{count(ds.document_count)}</td>
+									<td class="num" data-label="Pages">{count(ds.page_count)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</section>
+			{/each}
+		{/if}
+	{/await}
 {/if}
 
 <style>

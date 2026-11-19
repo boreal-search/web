@@ -55,11 +55,15 @@ describe('waiting bar', () => {
 
 describe('readout', () => {
 	it('reads summary pages, pages searched and time', () => {
-		expect(text(stepReadout(step(1)))).toBe('summary from 2 pages · 6,214 searched · 3.4 s');
+		expect(text(stepReadout(step(1), true))).toBe('summary from 2 pages · 6,214 searched · 3.4 s');
+	});
+
+	it('leaves out the seconds without timing', () => {
+		expect(text(stepReadout(step(1), false))).toBe('summary from 2 pages · 6,214 searched');
 	});
 
 	it('reads pages and PDFs without a summary', () => {
-		expect(text(stepReadout(step(1, { answer: null })))).toBe(
+		expect(text(stepReadout(step(1, { answer: null }), true))).toBe(
 			'2 pages · 1 PDF · 6,214 searched · 3.4 s'
 		);
 	});

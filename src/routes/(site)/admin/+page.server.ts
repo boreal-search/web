@@ -1,22 +1,24 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { requirePlatformAdmin } from '#lib/server/auth.js';
-import { classifyEngineError, engine, FAILURE_HTTP_STATUS } from '#lib/server/engine.js';
+import { classifyEngineError, engine, FAILURE_HTTP_STATUS, settle } from '#lib/server/engine.js';
 import { parseSlug, syncGrants } from '#lib/server/orgs.js';
 import type { Actions, PageServerLoad } from './$types';
 
+/** Orgs and requests from Supabase; the engine's data source list (names, public picker) streams in. */
 export const load: PageServerLoad = async ({ locals, fetch }) => {
 	await requirePlatformAdmin();
-	const [{ data, error }, pub, sources, requests] = await Promise.all([
+	const dataSources = settle(
+		engine(fetch)
+			.listDataSources()
+			.then((list) => list.map((ds) => ({ id: ds.id, name: ds.name })))
+	);
+	const [{ data, error }, pub, requests] = await Promise.all([
 		locals.supabase
 			.from('orgs')
 			.select('id, slug, name, org_members(count), org_data_sources(data_source_id)')
 			.order('name'),
 		locals.supabase.from('public_data_sources').select('data_source_id'),
-		engine(fetch)
-			.listDataSources()
-			.then((list) => ({ list, failure: null }))
-			.catch((e: unknown) => ({ list: [], failure: classifyEngineError(e) })),
 		locals.supabase
 			.from('access_requests')
 			.select('id, email, organization, role, use_case, created_at')
@@ -28,11 +30,8 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 	if (requests.error) throw requests.error;
 	return {
 		accessRequests: requests.data,
-		publicCorpora: {
-			publicIds: pub.data.map((p) => p.data_source_id),
-			dataSources: sources.list.map((ds) => ({ id: ds.id, name: ds.name })),
-			engineFailure: sources.failure
-		},
+		publicIds: pub.data.map((p) => p.data_source_id),
+		dataSources,
 		orgs: data.map((o) => ({
 			id: o.id,
 			slug: o.slug,

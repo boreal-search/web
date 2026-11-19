@@ -26,7 +26,9 @@
 
 <header class="site">
 	<div class="masthead">
-		<a class="wordmark" href={resolve('/')}>boreal</a>
+		<a class="wordmark" href={user ? resolve('/(app)/search') : resolve('/(site)/welcome')}
+			>boreal</a
+		>
 		<div class="end">
 			{#if user && nav}
 				<a href={resolve('/(app)/search')}>Back to search</a>

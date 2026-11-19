@@ -87,7 +87,7 @@ pane swaps to that step's pages, a closed one stays closed. The keys work only w
 
 ## Waiting
 
-No skeleton screens, spinners, shimmer or typing dots. Show nothing for the first ~300 ms,
+Search: no skeleton screens, spinners, shimmer or typing dots. Show nothing for the first ~300 ms,
 then a 4 px bar of three segments (search, reading, checking; 0.6 : 1.2 : 1.2, 3 px gaps,
 Rule track, Basalt fill, never green) and a seconds counter. Each segment fills linearly over
 its typical time (~0.6 s, ~1.5 s, ~2 s) and sits full if the stage runs long: no percentages,
@@ -96,6 +96,11 @@ once the engine reports it ("Searching 6,214 pages", "Reading 5 pages", "Checkin
 sentences"). Results render as soon as they arrive; the bar moves to the summary slot. On
 completion the bar becomes the readout ("summary from 5 pages · 6,214 searched · 3.4 s"), with
 the index date beside it in muted.
+
+Elsewhere, engine reads stream in (a load returns them un-awaited through `settle`, the page
+`{#await}`s a `Loaded`, or reads a `Resolved` where a form must survive an action's reload): the frame renders from Supabase at once, and the engine's part stands
+in as `Skeleton` rows shaped like the table (blank for ~300 ms, a quiet pulse, static with reduced
+motion), then the content or its `FailureNotice`. No spinners.
 
 ## Components
 

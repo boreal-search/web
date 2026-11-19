@@ -5,7 +5,7 @@ vi.mock('$app/env/private', () => ({
 	ENGINE_SERVICE_TOKEN: 'test-token'
 }));
 
-const { EngineError, classifyEngineError, searchStream } = await import('./engine');
+const { EngineError, classifyEngineError, searchStream, settle } = await import('./engine');
 
 const json = (status: number, body: unknown) =>
 	new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -32,6 +32,19 @@ describe('classifyEngineError', () => {
 		]
 	])('%o → %o', (e, kind) => {
 		expect(classifyEngineError(e)).toEqual(kind);
+	});
+});
+
+describe('settle', () => {
+	it('wraps the data', async () => {
+		expect(await settle(Promise.resolve([1]))).toEqual({ ok: true, data: [1] });
+	});
+
+	it('turns a rejection into its failure', async () => {
+		expect(await settle(Promise.reject(new EngineError(502, 'Bad Gateway')))).toEqual({
+			ok: false,
+			failure: { kind: 'unreachable' }
+		});
 	});
 });
 

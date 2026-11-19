@@ -19,6 +19,8 @@
 	import SearchProblem from '#lib/components/search/SearchProblem.svelte';
 	import Step from '#lib/components/search/Step.svelte';
 	import TrailHeader from '#lib/components/search/TrailHeader.svelte';
+	import { idPicker } from '#lib/picker.js';
+	import { Resolved } from '#lib/resolved.svelte.js';
 	import { DEFAULT_TOP_K } from '#lib/search-options.js';
 	import { documentsIn, topKValue } from '#lib/search-view.js';
 	import {
@@ -33,9 +35,14 @@
 
 	let { data, form }: PageProps = $props();
 
-	let all = $derived(data.groups.flatMap((g) => g.dataSources));
+	// Ids stand in for names until the engine's listing streams in (or if it failed).
+	const picker = new Resolved(() => data.picker);
+	let pickerGroups = $derived(
+		picker.current?.ok ? picker.current.data : idPicker(data.access.groups)
+	);
+	let all = $derived(pickerGroups.flatMap((g) => g.dataSources));
 	let allIds = $derived(all.map((ds) => ds.id));
-	let groups = $derived(data.groups.filter((g) => g.dataSources.length > 0));
+	let groups = $derived(pickerGroups.filter((g) => g.dataSources.length > 0));
 	let noOrg = $derived(data.access.memberships.length === 0);
 	let sourceNames = $derived(new Map(all.map((ds) => [ds.id, ds.name])));
 	let contextName = $derived(
@@ -174,9 +181,9 @@
 	{#if data.access.dataSourceIds.length === 0}
 		<AccessNote searchable={false} {noOrg} request={data.accessRequest} />
 	{:else}
-		{#if data.engineFailure}
+		{#if picker.current && !picker.current.ok}
 			<FailureNotice
-				failure={data.engineFailure}
+				failure={picker.current.failure}
 				effect="Data source names and page counts can't be loaded."
 			/>
 		{/if}
@@ -266,6 +273,7 @@
 									}}
 							branchFrom={branchFrom(s)}
 							rating={s.search_id ? (stored?.ratings?.searches[s.search_id] ?? null) : null}
+							timing={data.nav?.isPlatformAdmin ?? false}
 						/>
 					{/each}
 				</ol>

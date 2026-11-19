@@ -3,7 +3,7 @@ import { resolve } from '$app/paths';
 import { requireOrgAdmin } from '#lib/server/auth.js';
 import { parseEmail } from '#lib/server/credentials.js';
 import { EmailError, sendEmail } from '#lib/server/email.js';
-import { classifyEngineError, engine, FAILURE_HTTP_STATUS } from '#lib/server/engine.js';
+import { classifyEngineError, engine, FAILURE_HTTP_STATUS, settle } from '#lib/server/engine.js';
 import {
 	inviteEmail,
 	isPublicEmailDomain,
@@ -35,21 +35,22 @@ export const load: PageServerLoad = async ({ params, locals, fetch }) => {
 
 	let platform = null;
 	if (isPlatformAdmin) {
-		const [grants, domains, sources] = await Promise.all([
-			db.from('org_data_sources').select('data_source_id').eq('org_id', org.id),
-			db.from('org_domains').select('domain').eq('org_id', org.id).order('domain'),
+		// Streamed: the grants picker waits for the engine's list, nothing else does.
+		const dataSources = settle(
 			engine(fetch)
 				.listDataSources()
-				.then((list) => ({ list, failure: null }))
-				.catch((e: unknown) => ({ list: [], failure: classifyEngineError(e) }))
+				.then((list) => list.map((ds) => ({ id: ds.id, name: ds.name })))
+		);
+		const [grants, domains] = await Promise.all([
+			db.from('org_data_sources').select('data_source_id').eq('org_id', org.id),
+			db.from('org_domains').select('domain').eq('org_id', org.id).order('domain')
 		]);
 		if (grants.error) throw grants.error;
 		if (domains.error) throw domains.error;
 		platform = {
 			grantedIds: grants.data.map((g) => g.data_source_id),
 			domains: domains.data.map((d) => d.domain),
-			dataSources: sources.list.map((ds) => ({ id: ds.id, name: ds.name })),
-			engineFailure: sources.failure
+			dataSources
 		};
 	}
 

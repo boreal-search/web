@@ -1,7 +1,7 @@
 // Server-only client for the boreal engine API. The bearer token never leaves the server:
 // this module lives under lib/server so SvelteKit refuses to bundle it for the browser.
 import { ENGINE_SERVICE_TOKEN, ENGINE_URL } from '$app/env/private';
-import type { EngineFailure } from '#lib/failure.js';
+import type { EngineFailure, Loaded } from '#lib/failure.js';
 import type {
 	DataSource,
 	Document,
@@ -91,6 +91,16 @@ export function classifyEngineError(e: unknown): EngineFailure {
 	if (e instanceof TypeError) return { kind: 'unreachable' };
 	return { kind: 'error', status: null, detail: e instanceof Error ? e.message : String(e) };
 }
+
+/**
+ * An engine read for a load to return un-awaited (SvelteKit streams it): a rejection becomes a
+ * failure the page renders, never an unhandled rejection.
+ */
+export const settle = <T>(read: Promise<T>): Promise<Loaded<T>> =>
+	read.then(
+		(data) => ({ ok: true, data }),
+		(e: unknown) => ({ ok: false, failure: classifyEngineError(e) })
+	);
 
 /** HTTP status a route should answer with for each failure kind. */
 export const FAILURE_HTTP_STATUS: Record<EngineFailure['kind'], number> = {

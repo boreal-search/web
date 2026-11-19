@@ -1,46 +1,37 @@
-import { classifyEngineError, engine, EngineError } from '#lib/server/engine.js';
+import type { Loaded } from '#lib/failure.js';
+import { engine, settle } from '#lib/server/engine.js';
 import { notFound } from '#lib/server/files.js';
 import type { PageServerLoad } from './$types';
 
 const PAGE_SIZE = 50;
 
+/** The head renders from access (id, granting group); the engine's detail streams in. */
 export const load: PageServerLoad = async ({ params, url, parent, fetch }) => {
 	const { access, nav } = await parent();
 	if (!access.dataSourceIds.includes(params.id)) notFound();
-	// Known without the engine: the id and which group grants it.
 	const group = access.groups.find((g) => g.ids.includes(params.id))?.label ?? null;
 
 	const offset = Math.max(Number(url.searchParams.get('offset') ?? 0) || 0, 0);
 	const api = engine(fetch);
 	// Ingestion jobs are platform admins' business; nobody else's load asks the engine for them.
 	const showJobs = nav?.isPlatformAdmin ?? false;
+	const read = Promise.all([
+		api.getDataSource(params.id),
+		api.listDocuments(params.id, { limit: PAGE_SIZE, offset }),
+		showJobs ? api.listJobs({ data_source_id: params.id, limit: 20 }) : null
+	]).then(([dataSource, documents, jobs]) => ({ dataSource, documents, jobs }));
 
-	try {
-		const [dataSource, documents, jobs] = await Promise.all([
-			api.getDataSource(params.id),
-			api.listDocuments(params.id, { limit: PAGE_SIZE, offset }),
-			showJobs ? api.listJobs({ data_source_id: params.id, limit: 20 }) : null
-		]);
-		return {
-			id: params.id,
-			group,
-			showJobs,
-			detail: { dataSource, documents, jobs },
-			engineFailure: null,
-			offset,
-			pageSize: PAGE_SIZE
-		};
-	} catch (e) {
-		if (e instanceof EngineError && e.status === 404) notFound();
-		// Engine down: render the head from what we know, with a notice instead of the tables.
-		return {
-			id: params.id,
-			group,
-			showJobs,
-			detail: null,
-			engineFailure: classifyEngineError(e),
-			offset,
-			pageSize: PAGE_SIZE
-		};
-	}
+	return {
+		id: params.id,
+		group,
+		showJobs,
+		// Streamed, so the 404 status is gone by then: an engine 404 renders as a notice.
+		detail: settle(read).then((r): Loaded<Awaited<typeof read>> =>
+			!r.ok && r.failure.kind === 'error' && r.failure.status === 404
+				? { ok: false, failure: { kind: 'not_found', what: 'data_source' } }
+				: r
+		),
+		offset,
+		pageSize: PAGE_SIZE
+	};
 };
