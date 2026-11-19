@@ -6,7 +6,7 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import Modal from '#lib/components/Modal.svelte';
 	import UserMenu from '#lib/components/UserMenu.svelte';
 	import { rememberSidebar } from '#lib/components/search/layout-prefs.js';
@@ -19,7 +19,10 @@
 	let collapsed = $state(initial());
 	let drawerOpen = $state(false);
 	let opener = $state<HTMLButtonElement>();
-	afterNavigate(() => (drawerOpen = false));
+	afterNavigate(() => {
+		drawerOpen = false;
+		blank = false;
+	});
 
 	function toggle() {
 		collapsed = !collapsed;
@@ -27,6 +30,22 @@
 	}
 	// The search screen sets its own measures across the whole content area.
 	let wide = $derived(page.route.id === '/(app)/search');
+
+	// One trail giving way to another (or to a new search): if the next takes more than a moment,
+	// the one shown goes blank so it never sits under the new selection, then the next fades in
+	// (docs/ui.md, Waiting). A quick one just swaps.
+	let blank = $state(false);
+	let shown = $derived((page.shallow ?? page).url.searchParams.get('trail'));
+	let leaving = $derived(
+		wide &&
+			navigating.to?.route.id === page.route.id &&
+			navigating.to.url.searchParams.get('trail') !== shown
+	);
+	$effect(() => {
+		if (!leaving) return;
+		const wait = setTimeout(() => (blank = true), 100);
+		return () => clearTimeout(wait);
+	});
 	const searchHref = resolve('/(app)/search');
 	/** The rail names the org only when there is a choice (the expanded sidebar switches it). */
 	let railOrg = $derived(
@@ -106,7 +125,7 @@
 			<a class="wordmark" href={searchHref}>boreal</a>
 			{@render newSearch()}
 		</header>
-		<main id="main" tabindex="-1" class={{ wide }}>
+		<main id="main" tabindex="-1" class={{ wide, blank }}>
 			{@render children()}
 		</main>
 	</div>
@@ -194,6 +213,19 @@
 	}
 	main:focus {
 		outline: none;
+	}
+	main {
+		transition: opacity 140ms ease-out;
+	}
+	main.blank {
+		opacity: 0;
+		visibility: hidden;
+		transition: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		main {
+			transition: none;
+		}
 	}
 	main.wide {
 		max-width: none;

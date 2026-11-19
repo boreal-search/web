@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { stamp } from '#lib/format.js';
 	import type { LayoutData } from './$types';
 
@@ -23,8 +23,10 @@
 
 	const id = $props.id();
 	const searchHref = resolve('/(app)/search');
+	/** Marked as soon as it's chosen, not once it has loaded. */
+	let at = $derived(navigating.to ?? page);
 	let currentId = $derived(
-		page.route.id === '/(app)/search' ? page.url.searchParams.get('trail') : null
+		at.route.id === '/(app)/search' ? at.url.searchParams.get('trail') : null
 	);
 	const trailHref = (trail: string) =>
 		`${searchHref}?${new URLSearchParams({ trail, ...(view.all ? { all: '1' } : {}) })}`;

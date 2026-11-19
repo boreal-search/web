@@ -52,12 +52,6 @@
 				<dt>{ROLE_LABELS.admin}</dt>
 				<dd>Everything a member can, plus this page: members, roles and invites.</dd>
 			</div>
-			<div>
-				<dt>Platform admin</dt>
-				<dd>
-					Boreal staff. Manages every org, including data source access, email domains and settings.
-				</dd>
-			</div>
 		</dl>
 	</div>
 </section>

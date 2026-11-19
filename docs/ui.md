@@ -96,6 +96,8 @@ once the engine reports it ("Searching 6,214 pages", "Reading 5 pages", "Checkin
 sentences"). Results render as soon as they arrive; the bar moves to the summary slot. On
 completion the bar becomes the readout ("summary from 5 pages · 6,214 searched · 3.4 s"), with
 the index date beside it in muted.
+Switching trails (or to a new search): the sidebar marks the choice at once; a trail loaded within
+~100 ms just swaps in, a slower one blanks the content, then fades in (opacity, ~140 ms) at the top; reduced motion: no fade.
 
 Elsewhere, engine reads stream in (a load returns them un-awaited through `settle`, the page
 `{#await}`s a `Loaded`, or reads a `Resolved` where a form must survive an action's reload): the frame renders from Supabase at once, and the engine's part stands

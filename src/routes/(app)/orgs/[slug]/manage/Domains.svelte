@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
-	import PlatformOnly from '#lib/components/PlatformOnly.svelte';
 	import { ROLE_LABELS } from '#lib/roles.js';
 	import RemoveCell from './RemoveCell.svelte';
 	import type { PageData } from './$types';
@@ -20,8 +19,7 @@
 </script>
 
 <section class="band" aria-labelledby="domains-heading">
-	<h2 id="domains-heading">Email domains</h2>
-	<PlatformOnly note="Org admins don't see this section." />
+	<h3 id="domains-heading">Email domains</h3>
 	<p id="domains-help" class="muted">
 		Anyone who confirms an address at one of these domains (a new account or an email change) joins
 		{org.name} as <strong>{ROLE_LABELS[org.default_role]}</strong>, the role set in Settings.

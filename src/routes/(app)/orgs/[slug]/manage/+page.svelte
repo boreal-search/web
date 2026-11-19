@@ -2,6 +2,7 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import OrgAdminLinks from '#lib/components/OrgAdminLinks.svelte';
+	import PlatformOnly from '#lib/components/PlatformOnly.svelte';
 	import { plural } from '#lib/format.js';
 	import { ROLE_LABELS } from '#lib/roles.js';
 	import AddMember from './AddMember.svelte';
@@ -102,7 +103,17 @@
 </section>
 
 {#if data.platform}
-	<Grants platform={data.platform} {submit} {feedback} />
-	<Domains domains={data.platform.domains} org={data.org} {submit} {feedback} />
-	<Settings org={data.org} {submit} {feedback} />
+	<section class="band platform" aria-labelledby="platform-heading">
+		<h2 id="platform-heading">Platform admin</h2>
+		<PlatformOnly note="Org admins don't see this section." />
+		<Grants platform={data.platform} {submit} {feedback} />
+		<Domains domains={data.platform.domains} org={data.org} {submit} {feedback} />
+		<Settings org={data.org} {submit} {feedback} />
+	</section>
 {/if}
+
+<style>
+	.platform > :global(.band:last-child) {
+		padding-bottom: 0;
+	}
+</style>

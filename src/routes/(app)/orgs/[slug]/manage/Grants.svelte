@@ -2,7 +2,6 @@
 	import type { Snippet } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
-	import PlatformOnly from '#lib/components/PlatformOnly.svelte';
 	import Skeleton from '#lib/components/Skeleton.svelte';
 	import { Resolved } from '#lib/resolved.svelte.js';
 	import type { PageData } from './$types';
@@ -24,8 +23,7 @@
 </script>
 
 <section class="band" aria-labelledby="grants-heading">
-	<h2 id="grants-heading">Data source access</h2>
-	<PlatformOnly note="Org admins don't see this section." />
+	<h3 id="grants-heading">Data source access</h3>
 	{#if !list.current}
 		<Skeleton label="Loading data sources" rows={3} />
 	{:else}

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { enhance, type SubmitFunction } from '$app/forms';
-	import PlatformOnly from '#lib/components/PlatformOnly.svelte';
 	import { ORG_ROLES, ROLE_LABELS } from '#lib/roles.js';
 	import type { PageData } from './$types';
 
@@ -17,8 +16,7 @@
 </script>
 
 <section class="band" aria-labelledby="settings-heading">
-	<h2 id="settings-heading">Settings</h2>
-	<PlatformOnly note="Org admins don't see this section." />
+	<h3 id="settings-heading">Settings</h3>
 	<form method="POST" action="?/saveSettings" class="stack" use:enhance={submit('settings', false)}>
 		<label class="field">
 			Role for domain sign-ups
