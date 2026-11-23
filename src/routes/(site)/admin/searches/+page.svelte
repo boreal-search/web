@@ -129,7 +129,7 @@
 								>
 								{#if s.step_n && s.step_n > 1}<span class="muted mono">step {s.step_n}</span>{/if}
 							</td>
-							<td data-label="Data sources" class="mono">{s.data_source_ids.join(', ')}</td>
+							<td data-label="Data sources" class="mono sources">{s.data_source_ids.join(', ')}</td>
 							<td data-label="Outcome" class="mono">
 								{s.status
 									? humanise(s.status)
@@ -172,7 +172,8 @@
 		font-family: var(--font-mono);
 		font-size: 0.8125rem;
 	}
-	.user {
+	.user,
+	.sources {
 		overflow-wrap: anywhere;
 	}
 	.query {
@@ -191,6 +192,10 @@
 	@media (min-width: 48rem) {
 		.ratings {
 			white-space: nowrap;
+		}
+		/* Long emails break between words, not letters. */
+		.user {
+			min-width: 12rem;
 		}
 	}
 	.pages {
