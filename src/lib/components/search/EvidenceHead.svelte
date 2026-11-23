@@ -31,7 +31,7 @@
 		<h2 id="evidence-heading">
 			<span class="sr-only">Pages for step </span><span class="num">{stepNumber(step.n)}</span>
 			<span class="dot" aria-hidden="true">·</span>
-			<span class="q">{step.query}</span>
+			<span class="q" title={step.query}>{step.query}</span>
 		</h2>
 		{#if !close.back}
 			<button type="button" class="quiet close" aria-label="Close pages" onclick={close.onclose}
@@ -99,10 +99,15 @@
 	.dot {
 		color: var(--color-muted);
 	}
+	/* A flex item: without min-width 0 a long question won't shrink and pushes Close off-screen. */
 	.q {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		min-width: 0;
 		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
 	}
 	.keys {
 		display: none;
