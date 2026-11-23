@@ -215,9 +215,13 @@ export interface Database {
 					resolved_query: string | null;
 					/** The summary (Answer), or null; null when orgs.log_queries is false. */
 					answer: Json | null;
-					/** StepResult[] without signed URLs; null when orgs.log_queries is false. */
+					/** SearchResult[] without signed URLs (older rows: StepResult[]); null when orgs.log_queries is false. */
 					results: Json | null;
 					total_ms: number | null;
+					/** The engine's version label ("2.0"); null on failure or from an older engine. */
+					engine_version: string | null;
+					/** The engine's plan (multi-part questions); null without one or with log_queries off. */
+					plan: Json | null;
 					created_at: string;
 				};
 				Insert: {
@@ -241,6 +245,8 @@ export interface Database {
 					answer?: Json | null;
 					results?: Json | null;
 					total_ms?: number | null;
+					engine_version?: string | null;
+					plan?: Json | null;
 					created_at?: string;
 				};
 				Update: Record<string, never>;
@@ -398,6 +404,8 @@ export interface Database {
 					/** The latest rating of its whole trail. */
 					trail_rating: Rating | null;
 					trail_note: string | null;
+					engine_version: string | null;
+					plan: Json | null;
 				};
 				Relationships: [];
 			};

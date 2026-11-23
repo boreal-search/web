@@ -4,8 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { waitUntil } from '@vercel/functions';
 import type { EngineFailure } from '#lib/failure.js';
 import type { Database, Json, SearchStatus } from '#lib/supabase/types.js';
-import { storedStep, type TrailStep } from '#lib/trail.js';
-import type { SearchResponse } from './engine.types';
+import type { TrailStep } from '#lib/trail.js';
+import type { SearchResponse, SearchResult } from './engine.types';
 import type { StoredAt } from './trails.js';
 
 export interface SearchEventInput {
@@ -22,7 +22,10 @@ export interface SearchEventInput {
 	logQueries: boolean;
 	status: SearchStatus;
 	/** The results (the stream's `results` event, or a whole SearchResponse); absent on failure. */
-	response?: Pick<SearchResponse, 'results' | 'retrieval_ms' | 'reranked'>;
+	response?: Pick<
+		SearchResponse,
+		'results' | 'retrieval_ms' | 'reranked' | 'engine_version' | 'plan'
+	>;
 	error?: string;
 	/** What the user saw (a streamed step), and where it was stored in their trail, if it was. */
 	seen?: { step: TrailStep; at: StoredAt | null };
@@ -36,9 +39,18 @@ export const FAILURE_STATUS: Record<EngineFailure['kind'], SearchStatus> = {
 	error: 'engine_error'
 };
 
+/** A result without its signed URLs, which expire. */
+function keptResult(r: SearchResult) {
+	const copy: Partial<SearchResult> = { ...r };
+	delete copy.page_image_url;
+	delete copy.pdf_url;
+	return copy;
+}
+
 /**
- * Build the row; `logQueries: false` keeps the length, counts, timings and outcome but drops the
- * text, the summary, the results and where the search sits in a trail.
+ * Build the row; `logQueries: false` keeps the length, counts, timings, outcome and engine version
+ * but drops the text, the summary, the plan, the results and where the search sits in a trail.
+ * Results keep their scores and facets.
  */
 export function buildSearchEvent(
 	input: SearchEventInput
@@ -64,8 +76,10 @@ export function buildSearchEvent(
 		step_n: logQueries ? (seen?.at?.n ?? null) : null,
 		resolved_query: text?.resolved_query ?? null,
 		answer: (text?.answer ?? null) as Json,
-		results: text ? (storedStep(text).results as unknown as Json) : null,
-		total_ms: seen?.step.readout.search?.total_ms ?? null
+		results: logQueries && response ? (response.results.map(keptResult) as Json) : null,
+		total_ms: seen?.step.readout.search?.total_ms ?? null,
+		engine_version: response?.engine_version ?? null,
+		plan: logQueries ? ((response?.plan ?? null) as Json) : null
 	};
 }
 

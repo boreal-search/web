@@ -99,8 +99,40 @@ describe('buildSearchEvent', () => {
 			answer: { abstained: false },
 			total_ms: 3400
 		});
-		expect(row.results).toHaveLength(seen.step.results.length);
-		expect(JSON.stringify(row.results)).not.toMatch(/page_image_url/);
+		expect(row.results).toEqual([
+			{
+				document_id: 'd1',
+				document_title: 'Reg 12/2018',
+				data_source_id: 'bc-regs',
+				page_number: 4,
+				section: null,
+				score: 0.83,
+				snippet: null
+			}
+		]);
+	});
+
+	const plan = { intent: 'compare', facets: [{ q: 'limitation period under the IAA', scope: [] }] };
+
+	it('records the engine version and plan', () => {
+		const row = buildSearchEvent({
+			...input,
+			response: { ...response, engine_version: '2.0', plan }
+		});
+		expect(row).toMatchObject({ engine_version: '2.0', plan });
+	});
+
+	it('keeps the engine version but drops the plan when the org opts out', () => {
+		const row = buildSearchEvent({
+			...input,
+			logQueries: false,
+			response: { ...response, engine_version: '2.0', plan }
+		});
+		expect(row).toMatchObject({ engine_version: '2.0', plan: null });
+	});
+
+	it('leaves the engine version null when an older engine sends none', () => {
+		expect(buildSearchEvent(input).engine_version).toBeNull();
 	});
 
 	it('drops the summary and results with the query text when the org opts out', () => {

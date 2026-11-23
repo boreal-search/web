@@ -1,5 +1,5 @@
 // /admin/searches: the view in the URL (filters and sort, shareable), the one query the page and
-// its CSV export both run on search_review, and a row as the TrailStep the search screen's
+// its JSON export both run on search_review, and a row as the TrailStep the search screen's
 // summary component reads. Builds queries but runs none; RLS decides who reads what.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { RATINGS, type Rating } from '#lib/rating.js';
@@ -56,8 +56,10 @@ const SORT_COLUMNS: Record<SortKey, readonly (keyof ReviewRow)[]> = {
 };
 /** A column's first click: newest, slowest; everything else A to Z. */
 const firstDir = (key: SortKey): SortDir => (key === 'time' || key === 'taken' ? 'desc' : 'asc');
-/** Most rows one CSV export holds. */
+/** Most searches one export of a view holds. */
 export const EXPORT_MAX = 10_000;
+/** Most searches one export of picked rows holds. */
+export const SELECTED_MAX = 1000;
 
 export const DEFAULT_SORT: Sort = { key: 'time', dir: 'desc' };
 

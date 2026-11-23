@@ -26,6 +26,7 @@
 </script>
 
 <tr class="conversation">
+	<td data-label="Select"></td>
 	<td data-label="Time" class="mono"
 		><time datetime={row.created_at}>{stamp(row.created_at)}</time>
 		<span class="muted">rated</span></td

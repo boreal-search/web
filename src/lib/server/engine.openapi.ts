@@ -14,7 +14,7 @@ export interface paths {
 		/**
 		 * Health
 		 * @description Liveness: names the configured models without loading them, so a probe can never
-		 *     load a model (b9a5a66) and doesn't fail while Qdrant or Ollama are down.
+		 *     start a GPU load (b9a5a66) and doesn't fail while Qdrant or Ollama are down.
 		 */
 		get: operations['health_health_get'];
 		put?: never;
@@ -195,6 +195,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/ingest/data-sources': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Ingest Overview */
+		get: operations['ingest_overview_ingest_data_sources_get'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/ingest/data-sources/{data_source_id}/status': {
 		parameters: {
 			query?: never;
@@ -269,7 +286,9 @@ export interface components {
 		};
 		/**
 		 * AnswerSource
-		 * @description What `[ref]` in the answer text points to; also `results[ref - 1]`.
+		 * @description What `[ref]` in the answer text points to; also `results[ref - 1]`, except a page the
+		 *     cross-reference expansion added (`via_xref`, MULTI_CONTEXT only): those come after the
+		 *     voted pages and aren't in `results`.
 		 */
 		AnswerSource: {
 			/** Ref */
@@ -281,6 +300,8 @@ export interface components {
 			document_id: string;
 			/** Page Number */
 			page_number: number;
+			/** Via Xref */
+			via_xref?: boolean | null;
 		};
 		/**
 		 * CitationOut
@@ -339,6 +360,7 @@ export interface components {
 			/** Resolved Query */
 			resolved_query?: string | null;
 			scope?: components['schemas']['ContextScope'] | null;
+			plan?: components['schemas']['JsonValue'];
 		};
 		/** DataSourceOut */
 		DataSourceOut: {
@@ -483,6 +505,26 @@ export interface components {
 			/** Boilerplate Headings */
 			boilerplate_headings?: string[];
 		};
+		/**
+		 * IngestDataSourceSummary
+		 * @description One row of GET /ingest/data-sources: the counts of its /status, without failed_jobs.
+		 */
+		IngestDataSourceSummary: {
+			/** Data Source Id */
+			data_source_id: string;
+			/** Name */
+			name: string;
+			/** Documents */
+			documents: {
+				[key: string]: number;
+			};
+			/** Jobs */
+			jobs: {
+				[key: string]: number;
+			};
+			/** Done */
+			done: boolean;
+		};
 		/** IngestDocumentOut */
 		IngestDocumentOut: {
 			/**
@@ -507,6 +549,29 @@ export interface components {
 			error: string | null;
 			/** Finished At */
 			finished_at: string | null;
+		};
+		/** IngestOverviewOut */
+		IngestOverviewOut: {
+			/** Data Sources */
+			data_sources: components['schemas']['IngestDataSourceSummary'][];
+			/** Running Jobs */
+			running_jobs: components['schemas']['IngestRunningJob'][];
+		};
+		/** IngestRunningJob */
+		IngestRunningJob: {
+			/**
+			 * Job Id
+			 * Format: uuid
+			 */
+			job_id: string;
+			/** Type */
+			type: string;
+			/** Data Source Id */
+			data_source_id: string | null;
+			/** Document Id */
+			document_id: string | null;
+			/** Started At */
+			started_at: string | null;
 		};
 		/** IngestStatusOut */
 		IngestStatusOut: {
@@ -554,6 +619,33 @@ export interface components {
 			/** Total */
 			total: number;
 		};
+		JsonValue: unknown;
+		/** PlanFacetOut */
+		PlanFacetOut: {
+			/** Q */
+			q: string;
+			/** Scope */
+			scope: string[];
+			/**
+			 * Gated
+			 * @default false
+			 */
+			gated?: boolean;
+			/** Gate Score */
+			gate_score?: number | null;
+			/**
+			 * Retried
+			 * @default false
+			 */
+			retried?: boolean;
+		};
+		/** PlanOut */
+		PlanOut: {
+			/** Intent */
+			intent: string;
+			/** Facets */
+			facets: components['schemas']['PlanFacetOut'][];
+		};
 		/** Scope */
 		Scope: {
 			/** Data Source Ids */
@@ -568,6 +660,11 @@ export interface components {
 		 * @description SearchResponse plus `answer`; returned only when the request sets `answer: true`.
 		 */
 		SearchAnswerResponse: {
+			/**
+			 * Engine Version
+			 * @default 2.2
+			 */
+			engine_version?: string;
 			/** Query */
 			query: string;
 			/** Resolved Query */
@@ -580,6 +677,7 @@ export interface components {
 			/** Reranked */
 			reranked: boolean;
 			readout: components['schemas']['SearchReadout'];
+			plan?: components['schemas']['PlanOut'] | null;
 			answer: components['schemas']['AnswerOut'];
 		};
 		/** SearchReadout */
@@ -594,6 +692,7 @@ export interface components {
 			retrieval_ms: number;
 			/** Total Ms */
 			total_ms: number;
+			steps?: components['schemas']['SearchSteps'] | null;
 		};
 		/** SearchRequest */
 		SearchRequest: {
@@ -633,6 +732,11 @@ export interface components {
 		};
 		/** SearchResponse */
 		SearchResponse: {
+			/**
+			 * Engine Version
+			 * @default 2.2
+			 */
+			engine_version?: string;
 			/** Query */
 			query: string;
 			/** Resolved Query */
@@ -645,6 +749,7 @@ export interface components {
 			/** Reranked */
 			reranked: boolean;
 			readout: components['schemas']['SearchReadout'];
+			plan?: components['schemas']['PlanOut'] | null;
 		};
 		/** SearchResult */
 		SearchResult: {
@@ -669,6 +774,54 @@ export interface components {
 			pdf_url: string;
 			/** Snippet */
 			snippet: string | null;
+			/** Facets */
+			facets?: number[] | null;
+		};
+		/**
+		 * SearchSteps
+		 * @description MULTI_CONTEXT=true: time per retrieval step (results), + xref_ms (done); 0 = didn't run.
+		 */
+		SearchSteps: {
+			/**
+			 * Plan Ms
+			 * @default 0
+			 */
+			plan_ms?: number;
+			/**
+			 * Embed Ms
+			 * @default 0
+			 */
+			embed_ms?: number;
+			/**
+			 * Gate Ms
+			 * @default 0
+			 */
+			gate_ms?: number;
+			/**
+			 * Lanes Ms
+			 * @default 0
+			 */
+			lanes_ms?: number;
+			/**
+			 * Judge Ms
+			 * @default 0
+			 */
+			judge_ms?: number;
+			/**
+			 * Retry Ms
+			 * @default 0
+			 */
+			retry_ms?: number;
+			/**
+			 * Vote Ms
+			 * @default 0
+			 */
+			vote_ms?: number;
+			/**
+			 * Xref Ms
+			 * @default 0
+			 */
+			xref_ms?: number;
 		};
 		/** SentenceOut */
 		SentenceOut: {
@@ -1078,6 +1231,37 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['IngestDocumentOut'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	ingest_overview_ingest_data_sources_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string | null;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['IngestOverviewOut'];
 				};
 			};
 			/** @description Validation Error */

@@ -2,6 +2,7 @@ import { requirePlatformAdmin } from '#lib/server/auth.js';
 import {
 	DEFAULT_SORT,
 	EXPORT_MAX,
+	SELECTED_MAX,
 	OUTCOMES,
 	parseReviewQuery,
 	reviewRows,
@@ -17,7 +18,7 @@ import type { PageServerLoad } from './$types';
 const RANGE_NOT_SATISFIABLE = 'PGRST103';
 
 const COLUMNS =
-	'kind, id, created_at, user_id, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, rating, note, rated_by, trail_rating, trail_note';
+	'kind, id, created_at, user_id, org_id, org_name, user_email, query, query_length, data_source_ids, status, result_count, retrieval_ms, total_ms, step_n, engine_version, rating, note, rated_by, trail_rating, trail_note';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	await requirePlatformAdmin();
@@ -57,8 +58,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		sorts: Object.fromEntries(
 			SORT_KEYS.map((k) => [k, reviewSearch(query, 1, sortBy(query.sort, k))])
 		) as Record<SortKey, string>,
-		/** Most rows the CSV export (`export` + `pages.first`) holds. */
+		/** Most searches the JSON export of this view (`export` + `pages.first`) holds. */
 		exportMax: EXPORT_MAX,
+		/** Most picked searches one export holds. */
+		selectedMax: SELECTED_MAX,
 		filtered: reviewSearch({ ...query, sort: DEFAULT_SORT }, 1) !== '',
 		sorted: query.sort.key !== DEFAULT_SORT.key || query.sort.dir !== DEFAULT_SORT.dir,
 		total,

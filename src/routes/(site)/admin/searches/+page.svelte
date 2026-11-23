@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
 	import { count, humanise, plural, stamp } from '#lib/format.js';
 	import type { SortKey } from '#lib/server/search-review.js';
 	import { seconds } from '#lib/search-view.js';
 	import AdminNav from '../AdminNav.svelte';
 	import ConversationRow from './ConversationRow.svelte';
+	import ExportBar from './ExportBar.svelte';
 	import RatingMark from './RatingMark.svelte';
 	import ReviewFilters from './ReviewFilters.svelte';
 	import SortHeader from './SortHeader.svelte';
@@ -15,7 +17,10 @@
 	const here = resolve('/(site)/admin/searches');
 	let w = $derived(data.window);
 	let q = $derived(data.query);
-	const exportHref = resolve('/(site)/admin/searches/export');
+	/** Searches picked for export, by id; kept across pages and filters. */
+	const selected = new SvelteSet<string>();
+	let pageIds = $derived(data.searches.filter((s) => s.kind === 'search').map((s) => s.id));
+	const toggle = (id: string, on: boolean) => (on ? selected.add(id) : selected.delete(id));
 
 	const COLUMNS: [SortKey, string][] = [
 		['time', 'Time'],
@@ -63,15 +68,15 @@
 	sorted={data.sorted}
 />
 
-{#if data.total > 0}
-	<p class="export">
-		<a class="button" href="{exportHref}{data.pages.first}" download>Download CSV</a>
-		<span class="muted"
-			>{data.total > data.exportMax
-				? `The first ${count(data.exportMax)} of ${count(data.total)} matching searches, in this order.`
-				: `All ${count(data.total)} matching ${plural(data.total, 'search', 'searches')}, in this order.`}</span
-		>
-	</p>
+{#if data.total > 0 || selected.size > 0}
+	<ExportBar
+		{selected}
+		{pageIds}
+		view={data.pages.first}
+		total={data.total}
+		exportMax={data.exportMax}
+		selectedMax={data.selectedMax}
+	/>
 {/if}
 
 {#if data.searches.length === 0}
@@ -87,6 +92,7 @@
 		<table class="stacked searches">
 			<thead>
 				<tr>
+					<th scope="col"><span class="sr-only">Selected</span></th>
 					{#each COLUMNS as [key, label] (key)}
 						<SortHeader
 							{key}
@@ -104,6 +110,14 @@
 						<ConversationRow row={s} />
 					{:else}
 						<tr>
+							<td data-label="Select" class="pick"
+								><input
+									type="checkbox"
+									aria-label="Select this search"
+									checked={selected.has(s.id)}
+									onchange={(e) => toggle(s.id, e.currentTarget.checked)}
+								/></td
+							>
 							<td data-label="Time" class="mono"
 								><time datetime={s.created_at}>{stamp(s.created_at)}</time></td
 							>
@@ -121,6 +135,8 @@
 									? humanise(s.status)
 									: ''}{#if s.status === 'ok' && s.result_count !== null}<span class="muted"
 										>{` · ${count(s.result_count)}`}</span
+									>{/if}{#if s.engine_version}<span class="muted"
+										>{` · engine ${s.engine_version}`}</span
 									>{/if}
 							</td>
 							<td data-label="Time taken" class="num mono"
@@ -149,14 +165,6 @@
 {/if}
 
 <style>
-	.export {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.5rem 1rem;
-		margin-bottom: 1rem;
-		font-size: 0.875rem;
-	}
 	.searches td {
 		vertical-align: top;
 	}
@@ -172,6 +180,9 @@
 	}
 	.query .muted {
 		margin-left: 0.375rem;
+	}
+	.pick {
+		width: 1%;
 	}
 	.num {
 		text-align: right;

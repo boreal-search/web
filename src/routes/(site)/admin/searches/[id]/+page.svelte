@@ -54,6 +54,8 @@
 		].join(' · ')}
 		{#if s.error}<span class="error">{s.error}</span>{/if}
 	</dd>
+	<dt>Engine</dt>
+	<dd class="mono">{s.engine_version ?? 'Not reported'}</dd>
 	<dt>Ratings</dt>
 	<dd>
 		{#if !s.rating && !s.trail_rating}<span class="muted">None</span>{/if}

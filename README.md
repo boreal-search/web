@@ -17,7 +17,7 @@ what, and the UI.
 - **Organisations** — members, invites, roles and per-org data source access. People without
   an org search the public collections and can request access for their organisation.
 - **Admin** — platform administrators manage orgs and public collections, review searches
-  (filters, ratings, CSV export) and users.
+  (filters, ratings, JSON export) and users.
 - Light and dark themes, keyboard-friendly, responsive down to phone width.
 
 ## Stack
