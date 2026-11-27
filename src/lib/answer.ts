@@ -2,7 +2,7 @@
 // `answerBlocks` parses it into a small tree of our own types that callers render as elements
 // and text, never as HTML (`{@html}`).
 import { fromMarkdown } from 'mdast-util-from-markdown';
-import type { Nodes } from 'mdast';
+import type { ListItem, Nodes, Paragraph, PhrasingContent } from 'mdast';
 import type {
 	Answer,
 	Citation,
@@ -163,9 +163,11 @@ export type AnswerInline =
 	| { kind: 'break' }
 	| { kind: 'strong' | 'emphasis' | 'code'; children: AnswerInline[] };
 
-/** The summary's markdown, reduced to what the summary shows: paragraphs, lists and code. */
+/** The summary's markdown, reduced to what the summary shows: paragraphs, lists, code and parts. */
 export type AnswerBlock =
 	| { kind: 'paragraph'; children: AnswerInline[] }
+	/** One part of a multi-part answer: `N. <heading>` on its own line, then the part's sentences. */
+	| { kind: 'part'; number: number; heading: AnswerInline[]; body: AnswerBlock[] }
 	/** Preformatted code: whitespace kept, markers in it left as text. `lang`: the fence's tag. */
 	| { kind: 'code'; lang: string | null; children: AnswerRun[] }
 	| { kind: 'list'; ordered: boolean; start: number | null; items: AnswerBlock[][] };
@@ -257,7 +259,9 @@ const fenceLang = (lang: string | null | undefined) =>
  * headings read as bold paragraphs, quotes as their contents, links as their text (no hrefs),
  * and images, HTML, rules and definitions as their source text. A marker split across nodes, or
  * inside code, stays text. A code span alone on its line with a fence's backticks
- * (```` ``` make x ``` ````, which CommonMark reads as inline) is a code block.
+ * (```` ``` make x ``` ````, which CommonMark reads as inline) is a code block. An ordered item
+ * whose first line has no marker and no cited sentence, with more lines below it, is a part:
+ * the engine's multi-part answers are `1. <heading>\n<sentences>`.
  */
 export function answerBlocks(
 	answer: Pick<Answer, 'text' | 'citations'>,
@@ -350,22 +354,72 @@ export function answerBlocks(
 		xs.every(
 			(x) => x.kind === 'run' && x.segments.every((s) => s.kind === 'text' && !s.text.trim())
 		);
-	/** A paragraph, split around its own-line ```-spans. */
-	const paragraph = (n: Nodes & { type: 'paragraph' }): AnswerBlock[] => {
+	/** A paragraph, split around its own-line ```-spans. `nodes` (after `first`): the ones to show. */
+	const paragraph = (
+		n: Paragraph,
+		nodes: readonly PhrasingContent[] = n.children,
+		first: AnswerInline[] = []
+	): AnswerBlock[] => {
 		const at = offsets(n);
 		const out: AnswerBlock[] = [];
-		let children: AnswerInline[] = [];
+		let children = first;
 		const flush = () => {
 			if (!blank(children)) out.push({ kind: 'paragraph', children });
 			children = [];
 		};
-		for (const c of n.children) {
+		for (const c of nodes) {
 			if (at && c.type === 'inlineCode' && ownLine(c, at)) {
 				flush();
 				out.push({ kind: 'code', lang: null, children: value(c, false) });
 			} else children.push(...inline(c));
 		}
 		flush();
+		return out;
+	};
+	/** Item `number` as a part, if its first line is a heading (checked before any piece is made). */
+	const part = (item: ListItem, number: number): AnswerBlock | null => {
+		const [p, ...rest] = item.children;
+		const at = p?.type === 'paragraph' ? offsets(p) : null;
+		if (p?.type !== 'paragraph' || !at) return null;
+		const i = p.children.findIndex((c) => c.type === 'text' && c.value.includes('\n'));
+		const t = p.children[i];
+		const tAt = t && offsets(t);
+		if (t?.type !== 'text' || !tAt) return null;
+		const k = t.value.indexOf('\n');
+		const nl = sourceOffsets(text, ...tAt, t.value)?.[k];
+		if (
+			nl === undefined ||
+			text.indexOf('\n', at[0]) !== nl ||
+			all.some((m) => m.start < nl && m.end > at[0]) ||
+			cuts.some((s) => s.sentence !== null && s.from < nl && s.to > at[0])
+		)
+			return null;
+		const heading = [
+			...p.children.slice(0, i).flatMap(inline),
+			...leaf(t.value.slice(0, k), tAt[0], nl, true)
+		];
+		const below = leaf(t.value.slice(k + 1), nl + 1, tAt[1], true);
+		const body = [...paragraph(p, p.children.slice(i + 1), below), ...rest.flatMap(block)];
+		return { kind: 'part', number, heading, body };
+	};
+	const list = (n: Nodes & { type: 'list' }): AnswerBlock[] => {
+		const start = n.ordered ? (n.start ?? 1) : null;
+		const out: AnswerBlock[] = [];
+		let items: AnswerBlock[][] | null = null;
+		for (const [i, item] of n.children.entries()) {
+			const at = start === null ? null : start + i;
+			const asPart = at === null ? null : part(item, at);
+			if (asPart) {
+				out.push(asPart);
+				items = null;
+				continue;
+			}
+			if (!items) {
+				items = [];
+				out.push({ kind: 'list', ordered: at !== null, start: at, items });
+			}
+			items.push(item.children.flatMap(block));
+		}
 		return out;
 	};
 	const block = (n: Nodes): AnswerBlock[] => {
@@ -393,14 +447,7 @@ export function answerBlocks(
 			case 'blockquote':
 				return n.children.flatMap(block);
 			case 'list':
-				return [
-					{
-						kind: 'list',
-						ordered: n.ordered === true,
-						start: n.ordered ? (n.start ?? 1) : null,
-						items: n.children.map((item) => item.children.flatMap(block))
-					}
-				];
+				return list(n);
 			default: {
 				const children = raw(n);
 				return children.length > 0 ? [{ kind: 'paragraph', children }] : [];

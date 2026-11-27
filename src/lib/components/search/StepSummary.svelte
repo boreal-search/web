@@ -1,8 +1,8 @@
 <!--
 	A step's generated summary (docs/ui.md "Answer states"): the label, one flag, then each
 	sentence by its check state, every marker coloured by its own citation's status. The text is
-	minimal markdown (`answerBlocks`: paragraphs, lists, bold, italic, code spans and blocks), rendered as elements
-	from our own tree, never as HTML. A Not found
+	minimal markdown (`answerBlocks`: paragraphs, lists, parts, bold, italic, code spans and
+	blocks), rendered as elements from our own tree, never as HTML. A Not found
 	is a normal result, read against the pages searched. `children`: what follows a Not found
 	(the widen action). Choosing a marker is the page's business (`onchoose`).
 -->
@@ -82,6 +82,13 @@
 		<p>
 			{#each b.children as n, i (i)}{@render inline(n)}{/each}
 		</p>
+	{:else if b.kind === 'part'}
+		<section class="part">
+			<h4>
+				{b.number}. {#each b.heading as n, i (i)}{@render inline(n)}{/each}
+			</h4>
+			{#each b.body as c, i (i)}{@render block(c)}{/each}
+		</section>
 	{:else if b.kind === 'code'}
 		<!-- Focusable so a keyboard can scroll a long line (axe: scrollable-region-focusable); the
 		     language tag shows via CSS, so a copy is just the code. -->
@@ -172,6 +179,16 @@
 	.text {
 		font-size: 1.0625rem;
 		line-height: 1.6;
+	}
+	/* A part of a multi-part answer: its heading reads as the summary's own text, set apart. */
+	.text h4 {
+		margin: 0 0 0.125rem;
+		font-size: inherit;
+		line-height: inherit;
+		color: inherit;
+	}
+	.part + .part {
+		margin-top: 0.75rem;
 	}
 	.text ul,
 	.text ol {

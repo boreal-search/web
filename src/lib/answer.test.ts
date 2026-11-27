@@ -304,7 +304,9 @@ describe('answerBlocks', () => {
 			? `p(${b.children.map(showInline).join('')})`
 			: b.kind === 'code'
 				? `pre${b.lang ? `:${b.lang}` : ''}(${b.children.map(showInline).join('')})`
-				: `${b.ordered ? `ol${b.start}` : 'ul'}(${b.items.map((i) => `li(${i.map(showBlock).join('')})`).join('')})`;
+				: b.kind === 'part'
+					? `part${b.number}[${b.heading.map(showInline).join('')}](${b.body.map(showBlock).join('')})`
+					: `${b.ordered ? `ol${b.start}` : 'ul'}(${b.items.map((i) => `li(${i.map(showBlock).join('')})`).join('')})`;
 	const showInline = (n: AnswerInline): string => {
 		if (n.kind === 'break') return '\\n';
 		if (n.kind === 'run') {
@@ -448,6 +450,67 @@ describe('answerBlocks', () => {
 
 	it('keeps an ordered list start', () => {
 		expect(blocks('3. three\n4. four', [])).toEqual(['ol3(li(p(three))li(p(four)))']);
+	});
+
+	describe('parts', () => {
+		// The engine's multi-part shape: each part's heading is outside every cited sentence.
+		const text =
+			'1. Species at Risk Act\nThe fine is up to $1,000,000 [1]. It doubles [2].\n\n' +
+			'2. **Fisheries** Act\nThe fine is up to $12,000,000 [1, 2].';
+		const citations = [
+			cited(text, 'The fine is up to $1,000,000 [1].', '[1]', 1, 'verified'),
+			cited(text, 'It doubles [2].', '[2]', 2, 'unsupported'),
+			cited(text, 'The fine is up to $12,000,000 [1, 2].', '[1, 2]', 1, 'verified'),
+			cited(text, 'The fine is up to $12,000,000 [1, 2].', '[1, 2]', 2, 'verified')
+		];
+
+		it('puts each numbered heading on its own, its sentences below', () => {
+			expect(blocks(text, citations)).toEqual([
+				'part1[Species at Risk Act](p({verified|The fine is up to $1,000,000 [1:verified].|end}' +
+					' {unsupported|It doubles [2:unsupported].|end}))',
+				'part2[**Fisheries** Act](p({verified|The fine is up to $12,000,000 [1:verified 2:verified].|end}))'
+			]);
+		});
+
+		it('keeps the number an ordered list would show', () => {
+			const t = '3. Heading\nBody [1].';
+			expect(blocks(t, [cited(t, 'Body [1].', '[1]', 1, 'verified')])).toEqual([
+				'part3[Heading](p({verified|Body [1:verified].|end}))'
+			]);
+		});
+
+		it('reads a numbered line with a marker as a sentence, not a heading', () => {
+			const t = '1. Fines apply [1].\nNotice is due [2].';
+			const out = blocks(t, [
+				cited(t, 'Fines apply [1].', '[1]', 1, 'verified'),
+				cited(t, 'Notice is due [2].', '[2]', 2, 'verified')
+			]);
+			expect(out).toEqual([
+				'ol1(li(p({verified|Fines apply [1:verified].|end}\n{verified|Notice is due [2:verified].|end})))'
+			]);
+		});
+
+		it('reads a first line inside a cited sentence as that sentence', () => {
+			const t = '1. Notice is due\n   in writing [1].';
+			const s = 'Notice is due\n   in writing [1].';
+			expect(blocks(t, [cited(t, s, '[1]', 1, 'verified')])).toEqual([
+				'ol1(li(p({verified|Notice is due\nin writing [1:verified].|end})))'
+			]);
+		});
+
+		it('keeps the other items of a list as a list, numbered where they were', () => {
+			const t = '1. one\n2. Heading\nBody [1].\n3. three';
+			expect(blocks(t, [cited(t, 'Body [1].', '[1]', 1, 'verified')])).toEqual([
+				'ol1(li(p(one)))',
+				'part2[Heading](p({verified|Body [1:verified].|end}))',
+				'ol3(li(p(three)))'
+			]);
+		});
+
+		it('leaves single-line items and bullet lists alone', () => {
+			expect(blocks('1. one\n2. two', [])).toEqual(['ol1(li(p(one))li(p(two)))']);
+			expect(blocks('- Heading\n  Body.', [])).toEqual(['ul(li(p(Heading\nBody.)))']);
+		});
 	});
 
 	it('keeps markers after an escaped character', () => {
