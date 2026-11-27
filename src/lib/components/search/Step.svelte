@@ -9,9 +9,11 @@
 	import type { Mark } from '#lib/answer.js';
 	import Rate from '#lib/components/Rate.svelte';
 	import { count, plural } from '#lib/format.js';
+	import { citedDataSources, distinctNotices } from '#lib/notice.js';
 	import type { RatingValue } from '#lib/rating.js';
 	import { indexedDay, stepReadout, summaryProblem, type WaitClock } from '#lib/step-view.js';
 	import { isNarrowed, scopeLabel, stepNumber, type TrailStep } from '#lib/trail.js';
+	import SourceNotices from './SourceNotices.svelte';
 	import StepSummary from './StepSummary.svelte';
 	import WaitingBar from './WaitingBar.svelte';
 
@@ -30,7 +32,8 @@
 		onview,
 		branchFrom,
 		rating = null,
-		timing
+		timing,
+		notices
 	}: {
 		step: TrailStep;
 		selected: boolean;
@@ -56,6 +59,8 @@
 		rating?: RatingValue | null;
 		/** Show seconds (waiting counter, readout): platform admins only. */
 		timing: boolean;
+		/** Data source id → its notice: the cited sources' show under the summary. */
+		notices: ReadonlyMap<string, string>;
 	} = $props();
 
 	let branching = $state(false);
@@ -119,6 +124,10 @@
 			>
 				{#if canWiden}{@render widenAction()}{/if}
 			</StepSummary>
+			<SourceNotices
+				notices={distinctNotices(citedDataSources(s.answer.citations, s.results), notices)}
+				label="Notices for the sources cited"
+			/>
 		{/if}
 		{#if problem}
 			<p class="problem">{problem}</p>

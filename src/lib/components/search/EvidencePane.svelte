@@ -6,18 +6,22 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import SourceNotice from '#lib/components/SourceNotice.svelte';
+	import { distinctNotices } from '#lib/notice.js';
 	import type { TrailStep } from '#lib/trail.js';
 	import { pdfHref, type Evidence } from './evidence.svelte.js';
 	import EvidenceHead from './EvidenceHead.svelte';
 	import type { EvidenceClose } from './EvidencePanes.svelte';
 	import PageRender from './PageRender.svelte';
 	import ResultRow from './ResultRow.svelte';
+	import SourceNotices from './SourceNotices.svelte';
 
 	let {
 		step,
 		ev,
 		sourceNames,
 		permanentLinks,
+		notices,
 		close
 	}: {
 		/** The selected step, or null when there is none. */
@@ -26,6 +30,8 @@
 		/** Data source names the user can search now, by id. */
 		sourceNames: ReadonlyMap<string, string>;
 		permanentLinks: boolean;
+		/** Data source id → its notice: shown with the page viewed and under the list. */
+		notices: ReadonlyMap<string, string>;
 		close: EvidenceClose;
 	} = $props();
 
@@ -36,6 +42,8 @@
 	onMount(() => {
 		interactive = true;
 	});
+
+	let shownNotice = $derived(ev.shown && notices.get(ev.shown.data_source_id));
 
 	let section = $state<HTMLElement>();
 	/** The results keys work only while these pages are what's shown: not under an open modal
@@ -84,6 +92,7 @@
 							scopeName={step.scope.data_source_names[r.data_source_id] ?? r.data_source_id}
 							{permanentLinks}
 							{interactive}
+							notice={notices.get(r.data_source_id)}
 						/>
 					{/each}
 				</ol>
@@ -122,10 +131,18 @@
 							<a class="loc" href={pdfHref(shown)} target="_blank" rel="external noopener"
 								>PDF p.{shown.page_number} ↗</a
 							>
+							{#if shownNotice}<div class="notice"><SourceNotice text={shownNotice} /></div>{/if}
 						</figcaption>
 					</figure>
 				{/if}
 			</div>
+			<SourceNotices
+				notices={distinctNotices(
+					results.map((r) => r.data_source_id),
+					notices
+				)}
+				label="Notices for these pages"
+			/>
 		{/if}
 	</section>
 {/if}
@@ -202,6 +219,10 @@
 			flex-wrap: wrap;
 			align-items: baseline;
 			gap: 0 1rem;
+		}
+		.notice {
+			flex-basis: 100%;
+			margin-top: 0.25rem;
 		}
 		/* A control shaped like the locators beside it. */
 		.zoom {
