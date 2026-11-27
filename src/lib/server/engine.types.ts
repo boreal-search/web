@@ -15,6 +15,8 @@ export type SearchRequest = Schemas['SearchRequest'];
 export type ContextStep = Schemas['ContextStep'];
 export type Scope = Schemas['Scope'];
 export type SearchReadout = Schemas['SearchReadout'];
+/** The engine's reading of a question (2.0+): its intent and the parts searched on their own. */
+export type Plan = Schemas['PlanOut'];
 export type AnswerReadout = Schemas['AnswerReadout'];
 export type SearchResult = Schemas['SearchResult'];
 export type Answer = Schemas['AnswerOut'];

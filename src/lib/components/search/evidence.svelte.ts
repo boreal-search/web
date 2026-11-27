@@ -20,7 +20,7 @@ const NONE: StepResult[] = [];
 const WIDE_PANE = 576;
 
 /** Permanent link to the PDF at the result's page; it leaves the app (`rel="external"`). */
-export const pdfHref = (r: StepResult) =>
+export const pdfHref = (r: Pick<StepResult, 'data_source_id' | 'document_id' | 'page_number'>) =>
 	`${resolve('/pdf/[ds]/[doc]', { ds: r.data_source_id, doc: r.document_id })}?page=${r.page_number}`;
 
 /** The page render: the permanent link when the server can sign, else the live step's engine URL. */
@@ -52,7 +52,7 @@ export class Evidence {
 		return answerMarks(answer ? answerSegments(answer, this.results) : []);
 	});
 	/** The result shown large beside the list: the first result the summary cites, else the top. */
-	current = $derived(this.marks.length > 0 ? this.marks[0].ref - 1 : 0);
+	current = $derived(this.marks.find((m) => m.result !== null)?.result ?? 0);
 	shown = $derived(this.results[this.current] ?? null);
 	/** The evidence pane's width in px (bound by `EvidencePane`): the pane, not the viewport, decides. */
 	paneWidth = $state(0);
@@ -81,8 +81,8 @@ export class Evidence {
 	copyStatus = $state('');
 	#copyTimer: ReturnType<typeof setTimeout> | undefined;
 
-	boxesOn = (ref: number) =>
-		this.active?.ref === ref ? markOutlines(this.active) : pageOutlines(this.marks, ref);
+	boxesOn = (i: number) =>
+		this.active?.result === i ? markOutlines(this.active) : pageOutlines(this.marks, i);
 
 	expand = async (i: number, from: HTMLElement | null, toggle = true) => {
 		if (toggle && this.expanded === i) return this.collapse();
@@ -101,7 +101,7 @@ export class Evidence {
 
 	select = (i: number, focus = false) => {
 		this.current = i;
-		if (this.active && this.active.ref !== i + 1) this.active = null;
+		if (this.active && this.active.result !== i) this.active = null;
 		if (!focus) return;
 		const el = document.getElementById(resultAnchorId(i + 1));
 		el?.focus({ preventScroll: true });
@@ -114,15 +114,18 @@ export class Evidence {
 	 * large under the row. Focus alone only acts within the selected step.
 	 */
 	choose = async (s: TrailStep, m: Mark, from: HTMLElement | null) => {
+		// A page outside the results has no row to show; its marker links to the PDF itself.
+		const i = m.result;
+		if (i === null) return;
 		if (s !== this.#selected()) {
 			if (!from) return;
 			this.#select(s.n);
 			await tick();
 		}
-		this.select(m.ref - 1, from !== null);
+		this.select(i, from !== null);
 		this.active = m;
 		if (!from) return;
-		if (!this.wide) return this.expand(m.ref - 1, from, false);
+		if (!this.wide) return this.expand(i, from, false);
 		await tick();
 		document.querySelector('.viewer .mark')?.scrollIntoView({ block: 'nearest' });
 	};

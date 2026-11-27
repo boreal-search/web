@@ -19,6 +19,8 @@ type ResultsEvent = Extract<EngineEvent, { type: 'results' }>;
 
 const MAX_TOP_K = 50;
 const MAX_QUERY = 2_000;
+/** A context step's plan, as JSON text. The engine's largest (3 parts of 2,000 characters, 32 data sources each) is about 21 kB. */
+const MAX_PLAN = 32_000;
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -79,7 +81,8 @@ export function parseStepRequest(body: unknown): Parsed<StepRequest> {
 	const parsedContext: ContextStep[] = [];
 	for (const c of steps) {
 		const step = parseContextStep(c);
-		if (!step) return bad('context', 'each step needs a query and, optionally, its scope.');
+		if (!step)
+			return bad('context', 'each step needs a query and, optionally, its scope and plan.');
 		parsedContext.push(step);
 	}
 
@@ -119,14 +122,25 @@ function parseContextStep(c: unknown): ContextStep | null {
 			...(s.inferred_document_ids ? { inferred_document_ids: s.inferred_document_ids } : {})
 		};
 	}
+	if (c.plan != null) {
+		// The engine's own plan, echoed back: passed on as is, never read here beyond its ids.
+		if (!isRecord(c.plan) || JSON.stringify(c.plan).length > MAX_PLAN) return null;
+		step.plan = c.plan;
+	}
 	return step;
+}
+
+/** The data source ids in a context step's plan (`facets[].scope`), however it's shaped. */
+function planDataSources(plan: unknown): string[] {
+	if (!isRecord(plan) || !Array.isArray(plan.facets)) return [];
+	return plan.facets.flatMap((f) => (isRecord(f) && isStrings(f.scope) ? f.scope : []));
 }
 
 /** Every data source id a request names, in its scope or its context: all must be allowed. */
 export const requestedDataSources = (req: StepRequest) => [
 	...new Set([
 		...req.data_source_ids,
-		...req.context.flatMap((c) => c.scope?.data_source_ids ?? [])
+		...req.context.flatMap((c) => [...(c.scope?.data_source_ids ?? []), ...planDataSources(c.plan)])
 	])
 ];
 

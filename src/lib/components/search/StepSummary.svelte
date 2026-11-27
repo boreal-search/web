@@ -12,6 +12,7 @@
 		answerCheck,
 		answerBlocks,
 		answerCheckLabel,
+		outsidePage,
 		resultAnchorId,
 		type AnswerBlock,
 		type AnswerInline,
@@ -21,6 +22,7 @@
 	import { checkFlag } from '#lib/search-view.js';
 	import { searchedLine } from '#lib/step-view.js';
 	import type { TrailStep } from '#lib/trail.js';
+	import { pdfHref } from './evidence.svelte.js';
 
 	let {
 		step,
@@ -51,9 +53,18 @@
 		not_checked: 'not checked'
 	};
 
-	const markLabel = (m: Mark) =>
-		`Result ${m.ref}, page ${step.results[m.ref - 1]?.page_number}, ${STATUS_WORD[m.status]}` +
-		(m.boxes.length > 0 ? ', cited text outlined' : '');
+	const markLabel = (m: Mark) => {
+		const status = STATUS_WORD[m.status];
+		if (m.result !== null)
+			return (
+				`Result ${m.result + 1}, page ${m.page_number}, ${status}` +
+				(m.boxes.length > 0 ? ', cited text outlined' : '')
+			);
+		const doc = outsidePage(step.results, m);
+		return doc
+			? `Page ${m.page_number} of ${doc.document_title}, not in the results, ${status}, opens the PDF`
+			: `Page ${m.page_number} of a document not in the results, ${status}`;
+	};
 </script>
 
 <div class={['summary', dim && 'dim']}>
@@ -120,33 +131,48 @@
 		>{/if}
 {/snippet}
 
+<!-- eslint-disable svelte/no-navigation-without-resolve -- pdfHref is resolved; a result is a hash -->
 {#snippet run(r: AnswerRun)}<span
 		class={['sentence', r.status]}
 		title={r.status === 'unsupported' ? UNSUPPORTED : undefined}
 		>{#each r.segments as seg, j (j)}{#if seg.kind === 'cite'}{@const one =
 					seg.marks.length === 1}<span class="cite"
 					>{#if !one}[{/if}{#each seg.marks as m, k (m.ref)}{#if k > 0},
-						{/if}<a
-							href="#{resultAnchorId(m.ref)}"
-							data-status={m.status}
-							class={{ on: active === m }}
-							aria-label={markLabel(m)}
-							onfocus={() => {
-								focused = r.sentence;
-								onchoose(m, null);
-							}}
-							onblur={() => (focused = null)}
-							onclick={(e) => {
-								// The page shows the result (and may open an overlay); no hash entry in history.
-								e.preventDefault();
-								onchoose(m, e.currentTarget);
-							}}>{one ? `[${m.ref}]` : m.ref}</a
-						>{/each}{#if !one}]{/if}</span
+						{/if}{@const out =
+							m.result === null
+								? outsidePage(step.results, m)
+								: null}{#if m.result === null && !out}<span
+								data-status={m.status}
+								title={markLabel(m)}
+								>{one ? `[${m.ref}]` : m.ref}<span class="sr-only">, {markLabel(m)}</span></span
+							>{:else}<a
+								href={out ? pdfHref(out) : `#${resultAnchorId((m.result ?? 0) + 1)}`}
+								target={out ? '_blank' : undefined}
+								rel={out ? 'external noopener' : undefined}
+								title={out ? markLabel(m) : undefined}
+								data-status={m.status}
+								class={{ on: active === m }}
+								aria-label={markLabel(m)}
+								onfocus={() => {
+									focused = r.sentence;
+									onchoose(m, null);
+								}}
+								onblur={() => (focused = null)}
+								onclick={(e) => {
+									// A page outside the results opens its PDF; a result shows in the page.
+									if (out) return;
+									// No hash entry in history (and the page may open an overlay).
+									e.preventDefault();
+									onchoose(m, e.currentTarget);
+								}}>{one ? `[${m.ref}]` : m.ref}</a
+							>{/if}{/each}{#if !one}]{/if}</span
 				>{:else}{seg.text}{/if}{/each}{#if r.last && r.status === 'unsupported'}<span
 				class={['why', r.sentence !== null && focused === r.sentence && 'shown']}
 				>({UNSUPPORTED})</span
 			>{/if}</span
 	>{/snippet}
+
+<!-- eslint-enable svelte/no-navigation-without-resolve -->
 
 <style>
 	.summary {
@@ -266,10 +292,10 @@
 	.cite a {
 		color: var(--color-muted);
 	}
-	.cite a[data-status='verified'] {
+	.cite [data-status='verified'] {
 		color: var(--color-verified);
 	}
-	.cite a[data-status='unsupported'] {
+	.cite [data-status='unsupported'] {
 		color: var(--color-unsupported);
 	}
 	.cite a.on {

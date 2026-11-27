@@ -17,11 +17,19 @@ export type Box = readonly [number, number, number, number];
 export type { CitationStatus };
 
 /**
- * One `[n]` reference: result `ref` (1-based) and where on that result's page the cited text
- * is. No boxes means the text wasn't placed: open the page without a highlight.
+ * One `[n]` reference: the page it cites and where on that page the cited text is. No boxes
+ * means the text wasn't placed: open the page without a highlight.
  */
 export interface Mark {
+	/** The `n` of `[n]`, as written. Not a position in the results: see `result`. */
 	ref: number;
+	document_id: string;
+	page_number: number;
+	/**
+	 * The cited page's index in the results, found by document and page; null for a page outside
+	 * them (the engine's `via_xref` sources: pages pulled in by a cross-reference).
+	 */
+	result: number | null;
 	kind: Highlight['kind'];
 	boxes: Box[];
 	/** The engine's `blocks`: paragraphs around `boxes`, which are then highlighted. Text kind only; older answers have none. */
@@ -65,14 +73,40 @@ export function cleanBoxes(boxes: readonly (readonly number[])[]): Box[] {
 
 type Located = Pick<SearchResult, 'document_id' | 'page_number'>;
 
+/** Where `page` is in `results`, by document and page; -1 when it isn't there. */
+export const resultIndex = (results: readonly Located[], page: Located) =>
+	results.findIndex(
+		(r) => r.document_id === page.document_id && r.page_number === page.page_number
+	);
+
+type Titled = Located & Pick<SearchResult, 'data_source_id' | 'document_title'>;
+
+/**
+ * A cited page outside the results, located through a result in the same document (its data
+ * source and title); null when no result shares its document, so it can't be opened.
+ */
+export function outsidePage(results: readonly Titled[], page: Located): Titled | null {
+	const same = results.find((r) => r.document_id === page.document_id);
+	return same
+		? {
+				document_id: page.document_id,
+				page_number: page.page_number,
+				data_source_id: same.data_source_id,
+				document_title: same.document_title
+			}
+		: null;
+}
+
 function toMark(c: Citation, results: readonly Located[]): Mark | null {
-	const r = results[c.ref - 1];
-	if (!Number.isInteger(c.ref) || !r) return null;
-	// `[n]` is results[n-1]. Boxes for any other page don't fit the page we show: open it unmarked.
-	const samePage = r.document_id === c.document_id && r.page_number === c.page_number;
-	const boxes = samePage && c.highlight.kind !== 'page' ? cleanBoxes(c.highlight.boxes) : [];
+	if (!Number.isInteger(c.ref)) return null;
+	// Keyed by the cited page, never `results[ref - 1]`: a cross-referenced page isn't in results.
+	const i = resultIndex(results, c);
+	const boxes = c.highlight.kind !== 'page' ? cleanBoxes(c.highlight.boxes) : [];
 	return {
 		ref: c.ref,
+		document_id: c.document_id,
+		page_number: c.page_number,
+		result: i < 0 ? null : i,
 		kind: boxes.length > 0 ? c.highlight.kind : 'page',
 		boxes,
 		frames: boxes.length > 0 ? cleanBoxes(c.highlight.blocks ?? []) : [],
@@ -133,10 +167,7 @@ function segmentsOf(text: string, inside: readonly Marker[], from: number, to: n
 	return segments;
 }
 
-/**
- * Split answer text into text and markers. Markers whose refs are all outside the results stay
- * as plain text.
- */
+/** Split answer text into text and markers. */
 export function answerSegments(
 	answer: Pick<Answer, 'text' | 'citations'>,
 	results: readonly Located[]
@@ -434,10 +465,10 @@ export const markOutlines = ({ boxes, frames, status }: Mark): Outline[] =>
  */
 const STRENGTH: Record<CitationStatus, number> = { unsupported: 0, not_checked: 1, verified: 2 };
 
-/** Every outline the answer cites on result `ref`'s page, each box once in its weakest status. */
-export function pageOutlines(marks: readonly Mark[], ref: number): Outline[] {
+/** Every outline the answer cites on results[i]'s page, each box once in its weakest status. */
+export function pageOutlines(marks: readonly Mark[], i: number): Outline[] {
 	const once = new Map<string, Outline>();
-	for (const o of marks.filter((m) => m.ref === ref).flatMap(markOutlines)) {
+	for (const o of marks.filter((m) => m.result === i).flatMap(markOutlines)) {
 		const key = `${o.shape}:${o.box.join(',')}`;
 		const seen = once.get(key);
 		if (!seen || STRENGTH[o.status] < STRENGTH[seen.status]) once.set(key, o);

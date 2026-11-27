@@ -83,7 +83,7 @@ export function stageLabel(clock: WaitClock): string | null {
 		return null;
 	switch (s.stage) {
 		case 'rewriting':
-			return 'Rewriting query';
+			return 'Planning search';
 		case 'searching':
 			return `Searching ${count(s.pages)} ${plural(s.pages, 'page')}`;
 		case 'reading':

@@ -7,8 +7,10 @@ import {
 	answerSegments,
 	cleanBoxes,
 	markOutlines,
+	outsidePage,
 	pageOutlines,
 	resultAnchorId,
+	resultIndex,
 	type AnswerBlock,
 	type AnswerInline,
 	type Mark
@@ -62,6 +64,9 @@ describe('answerSegments', () => {
 		expect(answerMarks(segs)).toEqual([
 			{
 				ref: 1,
+				document_id: 'doc-a',
+				page_number: 13,
+				result: 0,
 				kind: 'text',
 				boxes: [line],
 				frames: [],
@@ -71,6 +76,9 @@ describe('answerSegments', () => {
 			},
 			{
 				ref: 2,
+				document_id: 'doc-b',
+				page_number: 23,
+				result: 1,
 				kind: 'table',
 				boxes: [line],
 				frames: [],
@@ -109,11 +117,54 @@ describe('answerSegments', () => {
 		expect(m).toMatchObject({ ref: 1, kind: 'page', boxes: [], quote: null });
 	});
 
-	it('never draws boxes on a page other than the one cited', () => {
-		const text = 'x [1]';
-		const c = cite(text, '[1]', 1, {}, { page_number: 14 });
-		const [m] = answerMarks(answerSegments({ text, citations: [c] }, results));
-		expect(m).toMatchObject({ ref: 1, kind: 'page', boxes: [] });
+	it('finds the cited page by document and page, never by results[ref - 1]', () => {
+		const text = 'x [1] y [2]';
+		// [1] cites the second result's page, [2] the first's: the order the engine gave is kept.
+		const citations = [
+			cite(text, '[1]', 1, {}, { document_id: 'doc-b', page_number: 23 }),
+			cite(text, '[2]', 2, {}, { document_id: 'doc-a', page_number: 13 })
+		];
+		const marks = answerMarks(answerSegments({ text, citations }, results));
+		expect(marks).toMatchObject([
+			{ ref: 1, result: 1, document_id: 'doc-b', page_number: 23, boxes: [line] },
+			{ ref: 2, result: 0, document_id: 'doc-a', page_number: 13, boxes: [line] }
+		]);
+		expect(pageOutlines(marks, 0)).toEqual([{ box: line, status: 'not_checked', shape: 'box' }]);
+	});
+
+	it('marks a cross-referenced page (absent from results) as outside them, at its locator', () => {
+		const text = 'Fines [1]; defined in s. 2 [3].';
+		const answer = {
+			text,
+			citations: [
+				cite(text, '[1]', 1),
+				// A `via_xref` source: ref after the result pages, its page in no result
+				cite(text, '[3]', 3, {}, { document_id: 'doc-a', page_number: 2 })
+			]
+		};
+		const marks = answerMarks(answerSegments(answer, results));
+		expect(marks).toMatchObject([
+			{ ref: 1, result: 0 },
+			{ ref: 3, result: null, document_id: 'doc-a', page_number: 2 }
+		]);
+		// Its boxes are never drawn on any result's page.
+		expect(pageOutlines(marks, 0)).toHaveLength(1);
+		expect(pageOutlines(marks, 2)).toEqual([]);
+	});
+
+	it('locates a page outside the results through a result in its document, else not at all', () => {
+		const titled = [
+			{ document_id: 'doc-a', page_number: 13, data_source_id: 'ds-1', document_title: 'Act A' }
+		];
+		expect(outsidePage(titled, { document_id: 'doc-a', page_number: 2 })).toEqual({
+			document_id: 'doc-a',
+			page_number: 2,
+			data_source_id: 'ds-1',
+			document_title: 'Act A'
+		});
+		expect(outsidePage(titled, { document_id: 'doc-z', page_number: 2 })).toBeNull();
+		expect(resultIndex(titled, { document_id: 'doc-a', page_number: 2 })).toBe(-1);
+		expect(resultIndex(titled, { document_id: 'doc-a', page_number: 13 })).toBe(0);
 	});
 
 	it('is a page mark when every box is unusable', () => {
@@ -122,13 +173,13 @@ describe('answerSegments', () => {
 		expect(answerMarks(answerSegments({ text, citations: [c] }, results))[0]?.kind).toBe('page');
 	});
 
-	it('keeps markers with refs outside the results, or bad offsets, as text', () => {
+	it('keeps markers with bad refs or offsets as text', () => {
 		const text = 'x [3] y [1] z';
 		const segs = answerSegments(
 			{
 				text,
 				citations: [
-					cite(text, '[3]', 3),
+					cite(text, '[3]', 1.5),
 					cite(text, '[1]', 1, {}, { start: 40, end: 43 }),
 					cite(text, '[1]', 1, {}, { start: 9, end: 8 })
 				]
@@ -170,8 +221,16 @@ describe('outlines', () => {
 	const para: Box = [0.1, 0.1, 0.9, 0.4];
 	const para2: Box = [0.1, 0.5, 0.9, 0.7];
 	const other: Box = [0.1, 0.5, 0.2, 0.6];
-	const mark = (ref: number, boxes: Box[], status: Mark['status'], frames: Box[] = []): Mark => ({
-		ref,
+	const mark = (
+		result: number,
+		boxes: Box[],
+		status: Mark['status'],
+		frames: Box[] = []
+	): Mark => ({
+		ref: result + 1,
+		document_id: 'doc-a',
+		page_number: result + 1,
+		result,
 		kind: 'text',
 		boxes,
 		frames,
@@ -181,14 +240,14 @@ describe('outlines', () => {
 	});
 
 	it('draws a citation with frames as frames and highlighted words', () => {
-		expect(markOutlines(mark(1, [line], 'unsupported', [para]))).toEqual([
+		expect(markOutlines(mark(0, [line], 'unsupported', [para]))).toEqual([
 			{ box: para, status: 'unsupported', shape: 'frame' },
 			{ box: line, status: 'unsupported', shape: 'words' }
 		]);
 	});
 
 	it('draws an older citation, or any other kind, with no frames as boxes', () => {
-		expect(markOutlines(mark(1, [line, other], 'verified'))).toEqual([
+		expect(markOutlines(mark(0, [line, other], 'verified'))).toEqual([
 			{ box: line, status: 'verified', shape: 'box' },
 			{ box: other, status: 'verified', shape: 'box' }
 		]);
@@ -222,9 +281,9 @@ describe('outlines', () => {
 	});
 
 	it('draws a paragraph once per page, in the weakest status of the citations in it', () => {
-		const framed = (status: Mark['status']) => mark(1, [line], status, [para]);
+		const framed = (status: Mark['status']) => mark(0, [line], status, [para]);
 		const frameOf = (...statuses: Mark['status'][]) =>
-			pageOutlines(statuses.map(framed), 1).filter((o) => o.shape === 'frame');
+			pageOutlines(statuses.map(framed), 0).filter((o) => o.shape === 'frame');
 
 		expect(frameOf('verified', 'verified')).toEqual([
 			{ box: para, status: 'verified', shape: 'frame' }
@@ -239,16 +298,16 @@ describe('outlines', () => {
 	});
 
 	it('keeps frames of different paragraphs apart, never one union of the page', () => {
-		const marks = [mark(1, [line], 'verified', [para]), mark(1, [other], 'verified', [para2])];
-		expect(pageOutlines(marks, 1).filter((o) => o.shape === 'frame')).toEqual([
+		const marks = [mark(0, [line], 'verified', [para]), mark(0, [other], 'verified', [para2])];
+		expect(pageOutlines(marks, 0).filter((o) => o.shape === 'frame')).toEqual([
 			{ box: para, status: 'verified', shape: 'frame' },
 			{ box: para2, status: 'verified', shape: 'frame' }
 		]);
 	});
 
 	it("keeps each highlight's own status in a shared paragraph", () => {
-		const marks = [mark(1, [line], 'verified', [para]), mark(1, [other], 'unsupported', [para])];
-		expect(pageOutlines(marks, 1)).toEqual([
+		const marks = [mark(0, [line], 'verified', [para]), mark(0, [other], 'unsupported', [para])];
+		expect(pageOutlines(marks, 0)).toEqual([
 			{ box: para, status: 'unsupported', shape: 'frame' },
 			{ box: line, status: 'verified', shape: 'words' },
 			{ box: other, status: 'unsupported', shape: 'words' }
@@ -256,28 +315,28 @@ describe('outlines', () => {
 	});
 
 	it('gives one line cited twice one highlight, in the weaker status', () => {
-		const marks = [mark(1, [line], 'verified', [para]), mark(1, [line], 'not_checked', [para])];
-		expect(pageOutlines(marks, 1).filter((o) => o.shape === 'words')).toEqual([
+		const marks = [mark(0, [line], 'verified', [para]), mark(0, [line], 'not_checked', [para])];
+		expect(pageOutlines(marks, 0).filter((o) => o.shape === 'words')).toEqual([
 			{ box: line, status: 'not_checked', shape: 'words' }
 		]);
 	});
 
 	it('draws identical boxes without frames once, in the weakest status, per page', () => {
 		const marks = [
-			mark(1, [line], 'verified'),
-			mark(2, [other], 'unsupported'),
-			mark(1, [line, other], 'not_checked')
+			mark(0, [line], 'verified'),
+			mark(1, [other], 'unsupported'),
+			mark(0, [line, other], 'not_checked')
 		];
-		expect(pageOutlines(marks, 1)).toEqual([
+		expect(pageOutlines(marks, 0)).toEqual([
 			{ box: line, status: 'not_checked', shape: 'box' },
 			{ box: other, status: 'not_checked', shape: 'box' }
 		]);
-		expect(pageOutlines(marks, 3)).toEqual([]);
+		expect(pageOutlines(marks, 2)).toEqual([]);
 	});
 
 	it('does not merge a frame and a highlight with the same box', () => {
-		const marks = [mark(1, [para], 'verified', [para])];
-		expect(pageOutlines(marks, 1).map((o) => o.shape)).toEqual(['frame', 'words']);
+		const marks = [mark(0, [para], 'verified', [para])];
+		expect(pageOutlines(marks, 0).map((o) => o.shape)).toEqual(['frame', 'words']);
 	});
 });
 

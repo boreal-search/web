@@ -61,6 +61,18 @@ describe('buildSearchEvent', () => {
 		});
 	});
 
+	it('takes the highest score as top_score, not the first (multi-part order)', () => {
+		const [r] = response.results;
+		const results = [
+			{ ...r, score: 0.4 },
+			{ ...r, page_number: 5, score: 0.9 }
+		];
+		expect(buildSearchEvent({ ...input, response: { ...response, results } })).toMatchObject({
+			top_score: 0.9,
+			results: [{ score: 0.4 }, { score: 0.9 }]
+		});
+	});
+
 	it('drops query text but keeps its length when the org opts out', () => {
 		expect(buildSearchEvent({ ...input, logQueries: false })).toMatchObject({
 			query: null,

@@ -6,6 +6,7 @@ import type {
 	Answer,
 	AnswerReadout,
 	ContextStep,
+	Plan,
 	Scope,
 	SearchReadout,
 	SearchResponse,
@@ -58,6 +59,9 @@ export interface TrailStep {
 	scope: StepScope;
 	/** The step this one refined, when the rewrite used the trail; null = fresh. */
 	builds_on: number | null;
+	/** The engine's plan (2.0+; null before, or from an engine without one), sent back as is in
+	 * `context` so a follow-up is planned from it. */
+	plan: Plan | null;
 	results: StepResult[];
 	answer: Answer | null;
 	/** Whether a summary was asked for. */
@@ -137,6 +141,7 @@ export function newStep(
 			document_titles: pick(req.document_titles, req.document_ids ?? [])
 		},
 		builds_on: null,
+		plan: null,
 		results: [],
 		answer: null,
 		wants_answer: req.answer,
@@ -164,6 +169,7 @@ export function applyEvent(step: TrailStep, event: StreamEvent, from: number | n
 				...step,
 				resolved_query: event.resolved_query,
 				builds_on: from !== null && event.resolved_query !== step.query ? from : null,
+				plan: event.plan ?? null,
 				scope: { ...step.scope, ...scope },
 				results: event.results.map(stepResult),
 				readout: { ...step.readout, search: event.readout }
@@ -254,7 +260,7 @@ export function stepDocuments(step: TrailStep): { ids: string[]; titles: Record<
 /**
  * Scope and context for refining step `k` (the search-trail handover, "Building context and
  * scope"): k's data sources and the documents the user chose, and the last MAX_CONTEXT steps up
- * to k, oldest first, as queries and scopes only, never summaries or results. Documents a step
+ * to k, oldest first, as queries, scopes and plans only, never summaries or results. Documents a step
  * was narrowed to by name go back as `inferred_document_ids`, never as `document_ids`: the
  * engine keeps them when the follow-up names no document, and switches or widens otherwise.
  * The caller adds the query, `rewrite` ("Search exactly as typed") and its settings.
@@ -279,7 +285,8 @@ export function refine(
 				data_source_ids: s.scope.data_source_ids,
 				...(s.scope.document_ids ? { document_ids: s.scope.document_ids } : {}),
 				inferred_document_ids: s.scope.inferred_documents.map((d) => d.document_id)
-			}
+			},
+			...(s.plan ? { plan: s.plan } : {})
 		}))
 	};
 }
