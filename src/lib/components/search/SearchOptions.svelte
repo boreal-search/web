@@ -10,11 +10,13 @@
 	import type { SvelteSet } from 'svelte/reactivity';
 	import { optionsSummary } from '#lib/search-options.js';
 	import { topKValue } from '#lib/search-view.js';
-	import DataSourcePicker, { type Group } from './DataSourcePicker.svelte';
+	import type { PickerGroup } from '#lib/picker.js';
+	import DataSourcePicker from './DataSourcePicker.svelte';
 
 	let {
 		groups,
 		unpicked,
+		notices,
 		summaryOn = $bindable(),
 		topK = $bindable(),
 		rerank = $bindable(),
@@ -23,9 +25,11 @@
 		open = $bindable(false)
 	}: {
 		/** Groups that have data sources. */
-		groups: readonly Group[];
+		groups: readonly PickerGroup[];
 		/** Unticked data source ids. */
 		unpicked: SvelteSet<string>;
+		/** Data source id → its notice. */
+		notices: ReadonlyMap<string, string>;
 		summaryOn: boolean;
 		topK: number;
 		rerank: boolean;
@@ -111,7 +115,7 @@
 			<button type="button" class="quiet" onclick={close}>Close</button>
 		</header>
 
-		<DataSourcePicker {groups} {unpicked} />
+		<DataSourcePicker {groups} {unpicked} {notices} />
 
 		<section aria-labelledby="opt-summary">
 			<h3 id="opt-summary">Generated summary</h3>

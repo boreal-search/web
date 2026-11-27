@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
 	import { resultAnchorId } from '#lib/answer.js';
+	import SourceNotice from '#lib/components/SourceNotice.svelte';
 	import { locator, snippetText } from '#lib/search-view.js';
 	import type { StepResult } from '#lib/trail.js';
 	import { pdfHref, type Evidence } from './evidence.svelte.js';
@@ -16,7 +17,8 @@
 		sourceName,
 		scopeName,
 		permanentLinks,
-		interactive
+		interactive,
+		notice
 	}: {
 		result: StepResult;
 		index: number;
@@ -28,6 +30,8 @@
 		permanentLinks: boolean;
 		/** Phone thumbnails become expand buttons only once JS runs; until then they stay PDF links. */
 		interactive: boolean;
+		/** The data source's notice, shown with the page opened large. */
+		notice: string | undefined;
 	} = $props();
 
 	let outlines = $derived(ev.boxesOn(i + 1));
@@ -108,6 +112,7 @@
 			<div class="sheet zoomed">
 				<PageRender result={r} {outlines} {permanentLinks} failed={ev.failed} variant="expanded" />
 			</div>
+			{#if notice}<SourceNotice text={notice} />{/if}
 			{#if ev.active?.ref === i + 1 && ev.active.quote}
 				<p class="sr-only">Outlined on the page: {ev.active.quote}</p>
 			{/if}

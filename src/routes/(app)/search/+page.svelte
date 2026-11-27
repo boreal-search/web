@@ -40,14 +40,13 @@
 	let pickerGroups = $derived(
 		picker.current?.ok ? picker.current.data : idPicker(data.access.groups)
 	);
+	const notes = new Resolved(() => data.notices);
+	let notices = $derived(notes.current?.ok ? notes.current.data : new Map<string, string>());
 	let all = $derived(pickerGroups.flatMap((g) => g.dataSources));
 	let allIds = $derived(all.map((ds) => ds.id));
 	let groups = $derived(pickerGroups.filter((g) => g.dataSources.length > 0));
 	let noOrg = $derived(data.access.memberships.length === 0);
 	let sourceNames = $derived(new Map(all.map((ds) => [ds.id, ds.name])));
-	let contextName = $derived(
-		data.access.context.kind === 'org' ? data.access.context.org.name : 'Public'
-	);
 	const orgName = (id: string | null) =>
 		id === null
 			? 'Public'
@@ -202,6 +201,7 @@
 			<SearchOptions
 				{groups}
 				{unpicked}
+				{notices}
 				bind:summaryOn
 				bind:topK
 				bind:rerank
@@ -220,6 +220,7 @@
 		step={trail.selected}
 		{ev}
 		{sourceNames}
+		{notices}
 		permanentLinks={data.permanentLinks}
 		{close}
 	/>
@@ -237,7 +238,7 @@
 					steps={trail.steps}
 					{stored}
 					email={data.user?.email ?? ''}
-					context={stored ? orgName(stored.org_id) : contextName}
+					context={orgName(stored ? stored.org_id : orgId)}
 					notice={actionNotice}
 					ratings={stored?.ratings ?? null}
 				/>
@@ -274,6 +275,7 @@
 							branchFrom={branchFrom(s)}
 							rating={s.search_id ? (stored?.ratings?.searches[s.search_id] ?? null) : null}
 							timing={data.nav?.isPlatformAdmin ?? false}
+							{notices}
 						/>
 					{/each}
 				</ol>

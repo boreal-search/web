@@ -1,29 +1,28 @@
 <!--
-	Search options' Data sources: grouped by org, then Public, one per line with page counts,
-	All / None per group. Ticks write straight into `unpicked`.
+	Search options' Data sources: grouped by org, then Public, with All / None per group. Within a
+	group, data sources sit under the engine's headings (PickerHeading, collapsible), or one per
+	line when none has a heading. Ticks write straight into `unpicked`.
 -->
-<script module lang="ts">
-	export interface Group {
-		label: string;
-		dataSources: { id: string; name: string; pages: number | null }[];
-	}
-</script>
-
 <script lang="ts">
 	import type { SvelteSet } from 'svelte/reactivity';
-	import { count } from '#lib/format.js';
+	import { pickerHeadings, type PickerGroup } from '#lib/picker.js';
+	import PickerHeading from './PickerHeading.svelte';
+	import PickerItem from './PickerItem.svelte';
 
 	let {
 		groups,
-		unpicked
+		unpicked,
+		notices
 	}: {
 		/** Groups that have data sources. */
-		groups: readonly Group[];
+		groups: readonly PickerGroup[];
 		/** Unticked data source ids. */
 		unpicked: SvelteSet<string>;
+		/** Data source id → its notice. */
+		notices: ReadonlyMap<string, string>;
 	} = $props();
 
-	function setGroup(group: Group, on: boolean) {
+	function setGroup(group: PickerGroup, on: boolean) {
 		for (const ds of group.dataSources) {
 			if (on) unpicked.delete(ds.id);
 			else unpicked.add(ds.id);
@@ -34,6 +33,7 @@
 <section aria-labelledby="opt-sources">
 	<h3 id="opt-sources">Data sources</h3>
 	{#each groups as group (group.label)}
+		{@const headings = pickerHeadings(group.dataSources)}
 		<fieldset>
 			<legend>{group.label}</legend>
 			<p class="all">
@@ -51,20 +51,15 @@
 				>
 			</p>
 			<ul>
-				{#each group.dataSources as ds (ds.id)}
-					<li>
-						<label class="check">
-							<input
-								type="checkbox"
-								checked={!unpicked.has(ds.id)}
-								onchange={(e) =>
-									e.currentTarget.checked ? unpicked.delete(ds.id) : unpicked.add(ds.id)}
-							/>
-							<span class="name">{ds.name}</span>
-							{#if ds.pages !== null}<span class="pages">{count(ds.pages)} p.</span>{/if}
-						</label>
-					</li>
-				{/each}
+				{#if headings}
+					{#each headings as heading (heading.label)}
+						<PickerHeading {heading} {unpicked} {notices} />
+					{/each}
+				{:else}
+					{#each group.dataSources as ds (ds.id)}
+						<PickerItem {ds} {unpicked} notice={notices.get(ds.id)} />
+					{/each}
+				{/if}
 			</ul>
 		</fieldset>
 	{:else}
@@ -107,21 +102,5 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
-	}
-	ul .check {
-		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
-	}
-	.name {
-		flex: 1;
-		min-width: 0;
-		overflow-wrap: anywhere;
-	}
-	.pages {
-		white-space: nowrap;
-		font: 400 0.8125rem/1 var(--font-mono);
-		color: var(--color-muted);
-		font-variant-numeric: tabular-nums;
 	}
 </style>

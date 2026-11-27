@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import FailureNotice from '#lib/components/FailureNotice.svelte';
 	import Skeleton from '#lib/components/Skeleton.svelte';
+	import SourceNotice from '#lib/components/SourceNotice.svelte';
 	import { count, humanise, plural } from '#lib/format.js';
 	import { Resolved } from '#lib/resolved.svelte.js';
 	import Jobs from './Jobs.svelte';
@@ -31,6 +32,7 @@
 <header class="page-head">
 	<h1>{ds?.name ?? data.id}</h1>
 	{#if ds?.description}<p class="muted">{ds.description}</p>{/if}
+	{#if ds?.notice}<SourceNotice text={ds.notice} />{/if}
 	<p class="readout">
 		{#if ds}
 			<span><b>{humanise(ds.status)}</b></span>

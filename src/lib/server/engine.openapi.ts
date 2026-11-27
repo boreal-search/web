@@ -385,6 +385,10 @@ export interface components {
 			rerank_instruction: string | null;
 			/** Target Language */
 			target_language: string | null;
+			/** Group */
+			group: string | null;
+			/** Notice */
+			notice: string | null;
 			/** Indexed At */
 			indexed_at: string | null;
 		};
@@ -414,6 +418,26 @@ export interface components {
 			 * Format: date-time
 			 */
 			created_at: string;
+			/** Country */
+			country: string | null;
+			/** Jurisdiction */
+			jurisdiction: string | null;
+			/** Domain */
+			domain: string | null;
+			/** Document Type */
+			document_type: string | null;
+			/** Source Url */
+			source_url: string | null;
+			/** Citation */
+			citation: string | null;
+			/** Issued On */
+			issued_on: string | null;
+			/** Current To */
+			current_to: string | null;
+			/** Last Amended */
+			last_amended: string | null;
+			/** Licence */
+			licence: string | null;
 		};
 		/** DocumentPage */
 		DocumentPage: {
@@ -504,6 +528,10 @@ export interface components {
 			target_language?: string | null;
 			/** Boilerplate Headings */
 			boilerplate_headings?: string[];
+			/** Group */
+			group?: string | null;
+			/** Notice */
+			notice?: string | null;
 		};
 		/**
 		 * IngestDataSourceSummary
@@ -662,7 +690,7 @@ export interface components {
 		SearchAnswerResponse: {
 			/**
 			 * Engine Version
-			 * @default 2.2
+			 * @default 2.3.5
 			 */
 			engine_version?: string;
 			/** Query */
@@ -734,7 +762,7 @@ export interface components {
 		SearchResponse: {
 			/**
 			 * Engine Version
-			 * @default 2.2
+			 * @default 2.3.5
 			 */
 			engine_version?: string;
 			/** Query */
@@ -1209,6 +1237,25 @@ export interface operations {
 				aliases?: string[] | null;
 				/** @description Re-render a PDF already ingested */
 				reprocess?: boolean;
+				/** @description ISO 3166-1 alpha-2, e.g. "CA" */
+				country?: string | null;
+				/** @description "CA-BC", or "CA" for federal */
+				jurisdiction?: string | null;
+				/** @description e.g. "environment" */
+				domain?: string | null;
+				/** @description e.g. "act", "regulation" */
+				document_type?: string | null;
+				source_url?: string | null;
+				/** @description e.g. "S.C. 1999, c. 33" */
+				citation?: string | null;
+				/** @description YYYY-MM-DD */
+				issued_on?: string | null;
+				/** @description YYYY-MM-DD, consolidations */
+				current_to?: string | null;
+				/** @description YYYY-MM-DD, consolidations */
+				last_amended?: string | null;
+				/** @description e.g. "SI/97-5" */
+				licence?: string | null;
 			};
 			header?: {
 				authorization?: string | null;

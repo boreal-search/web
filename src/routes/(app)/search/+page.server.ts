@@ -42,6 +42,7 @@ export interface PageTrail {
 
 /**
  * `picker`: the data source picker, streamed (the page shows ids until it arrives or if it fails).
+ * `notices`: data source id → its notice, for the searchable set and the trail's results.
  * `permanentLinks`: page images go through `/pages/…` (web signs); else the engine's URLs.
  * `history`: the current context keeps trails (Public always; an org when it keeps search
  * history). `query`: `?q=` prefills the search box. `split`: the viewer's divider position.
@@ -53,6 +54,7 @@ export const load: PageServerLoad = async ({
 	cookies
 }): Promise<{
 	picker: Promise<Loaded<PickerGroup[]>>;
+	notices: Promise<Loaded<Map<string, string>>>;
 	permanentLinks: boolean;
 	history: boolean;
 	query: string;
@@ -69,7 +71,7 @@ export const load: PageServerLoad = async ({
 	// load. Everything starts at once: RLS gates each read without waiting on access.
 	const access = getAccess();
 	const picker = settle(access.then(pickerGroups));
-	const [{ context }, loaded, rated, accessRequest] = await Promise.all([
+	const [{ context, dataSourceIds }, loaded, rated, accessRequest] = await Promise.all([
 		access,
 		trailId ? loadTrail(db, trailId, user.id) : null,
 		// Good / Bad is for platform admins only for now (`canRate`): others get no ids or ratings.
@@ -90,8 +92,11 @@ export const load: PageServerLoad = async ({
 		ratings: own?.ratings ?? null
 	};
 
+	// A trail from another context or person can cite sources outside the searchable set.
+	const trailSources = loaded?.steps.flatMap((s) => s.results.map((r) => r.data_source_id)) ?? [];
 	return {
 		picker,
+		notices: settle(sourceNotices([...dataSourceIds, ...trailSources])),
 		permanentLinks: canSign(),
 		history: keepsHistory(context),
 		query: url.searchParams.get('q') ?? '',
@@ -111,11 +116,20 @@ async function pickerGroups(access: Access): Promise<PickerGroup[]> {
 		dataSources: g.dataSources.map((ds) => ({
 			id: ds.id,
 			name: ds.name,
+			group: ds.group ?? null,
 			pages: ds.page_count,
 			documents: ds.document_count,
 			indexed_at: ds.indexed_at
 		}))
 	}));
+}
+
+async function sourceNotices(ids: string[]): Promise<Map<string, string>> {
+	const wanted = new Set(ids);
+	const list = wanted.size > 0 ? await allDataSources() : [];
+	return new Map(
+		list.flatMap((ds) => (wanted.has(ds.id) && ds.notice ? [[ds.id, ds.notice] as const] : []))
+	);
 }
 
 /** Trail actions. Every form posts `trail_id`; RLS refuses anyone but the owner (branch: any reader). */
