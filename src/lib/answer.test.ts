@@ -305,7 +305,7 @@ describe('answerBlocks', () => {
 			: b.kind === 'code'
 				? `pre${b.lang ? `:${b.lang}` : ''}(${b.children.map(showInline).join('')})`
 				: b.kind === 'part'
-					? `part${b.number}[${b.heading.map(showInline).join('')}](${b.body.map(showBlock).join('')})`
+					? `part${b.number ?? ''}[${b.heading.map(showInline).join('')}](${b.body.map(showBlock).join('')})`
 					: `${b.ordered ? `ol${b.start}` : 'ul'}(${b.items.map((i) => `li(${i.map(showBlock).join('')})`).join('')})`;
 	const showInline = (n: AnswerInline): string => {
 		if (n.kind === 'break') return '\\n';
@@ -505,6 +505,42 @@ describe('answerBlocks', () => {
 				'part2[Heading](p({verified|Body [1:verified].|end}))',
 				'ol3(li(p(three)))'
 			]);
+		});
+
+		describe('with bold headings', () => {
+			// The other multi-part shape: a bold line per part, outside every cited sentence.
+			const text =
+				'The periods are:\n\n**Under the Impact Assessment Act**\nTwo years [1].\n\n' +
+				'**Under the Fisheries Act**\nFive years [2]. It runs from the offence [2].';
+			const citations = [
+				cited(text, 'Two years [1].', '[1]', 1, 'verified'),
+				cited(text, 'Five years [2].', '[2]', 2, 'verified'),
+				cited(text, 'It runs from the offence [2].', '[2]', 2, 'unsupported')
+			];
+
+			it('puts each bold heading on its own, unnumbered, its sentences below', () => {
+				expect(blocks(text, citations)).toEqual([
+					'p(The periods are:)',
+					'part[**Under the Impact Assessment Act**](p({verified|Two years [1:verified].|end}))',
+					'part[**Under the Fisheries Act**](p({verified|Five years [2:verified].|end}' +
+						' {unsupported|It runs from the offence [2:unsupported].|end}))'
+				]);
+			});
+
+			it('leaves bold text that continues on its line a paragraph', () => {
+				expect(blocks('**Note** the Act\napplies.', [])).toEqual(['p(**Note** the Act\napplies.)']);
+			});
+
+			it('leaves a bold line with nothing below it a paragraph', () => {
+				expect(blocks('**Heading**\n\nBody.', [])).toEqual(['p(**Heading**)', 'p(Body.)']);
+			});
+
+			it('reads a bold first line inside a cited sentence as that sentence', () => {
+				const t = '**Fines apply**\nto all [1].';
+				expect(blocks(t, [cited(t, t, '[1]', 1, 'verified')])).toEqual([
+					'p(**{verified|Fines apply}**{verified|\nto all [1:verified].|end})'
+				]);
+			});
 		});
 
 		it('leaves single-line items and bullet lists alone', () => {

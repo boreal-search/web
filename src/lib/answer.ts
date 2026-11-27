@@ -166,8 +166,8 @@ export type AnswerInline =
 /** The summary's markdown, reduced to what the summary shows: paragraphs, lists, code and parts. */
 export type AnswerBlock =
 	| { kind: 'paragraph'; children: AnswerInline[] }
-	/** One part of a multi-part answer: `N. <heading>` on its own line, then the part's sentences. */
-	| { kind: 'part'; number: number; heading: AnswerInline[]; body: AnswerBlock[] }
+	/** One part of a multi-part answer: its heading on its own line (`N. <heading>`, or `**<heading>**` with no number), then the part's sentences. */
+	| { kind: 'part'; number: number | null; heading: AnswerInline[]; body: AnswerBlock[] }
 	/** Preformatted code: whitespace kept, markers in it left as text. `lang`: the fence's tag. */
 	| { kind: 'code'; lang: string | null; children: AnswerRun[] }
 	| { kind: 'list'; ordered: boolean; start: number | null; items: AnswerBlock[][] };
@@ -259,9 +259,10 @@ const fenceLang = (lang: string | null | undefined) =>
  * headings read as bold paragraphs, quotes as their contents, links as their text (no hrefs),
  * and images, HTML, rules and definitions as their source text. A marker split across nodes, or
  * inside code, stays text. A code span alone on its line with a fence's backticks
- * (```` ``` make x ``` ````, which CommonMark reads as inline) is a code block. An ordered item
- * whose first line has no marker and no cited sentence, with more lines below it, is a part:
- * the engine's multi-part answers are `1. <heading>\n<sentences>`.
+ * (```` ``` make x ``` ````, which CommonMark reads as inline) is a code block. Multi-part answers
+ * come as `1. <heading>\n<sentences>` or `**<heading>**\n<sentences>`: an ordered item, or a
+ * top-level paragraph whose first line is all bold, is a part when that first line has no
+ * marker and no cited sentence and has more lines below it.
  */
 export function answerBlocks(
 	answer: Pick<Answer, 'text' | 'citations'>,
@@ -376,15 +377,13 @@ export function answerBlocks(
 		flush();
 		return out;
 	};
-	/** Item `number` as a part, if its first line is a heading (checked before any piece is made). */
-	const part = (item: ListItem, number: number): AnswerBlock | null => {
-		const [p, ...rest] = item.children;
-		const at = p?.type === 'paragraph' ? offsets(p) : null;
-		if (p?.type !== 'paragraph' || !at) return null;
+	/** Where `p`'s first line ends, if it can head a part: no marker, no cited sentence, text below. */
+	const headingLine = (p: Paragraph) => {
+		const at = offsets(p);
 		const i = p.children.findIndex((c) => c.type === 'text' && c.value.includes('\n'));
 		const t = p.children[i];
 		const tAt = t && offsets(t);
-		if (t?.type !== 'text' || !tAt) return null;
+		if (!at || t?.type !== 'text' || !tAt) return null;
 		const k = t.value.indexOf('\n');
 		const nl = sourceOffsets(text, ...tAt, t.value)?.[k];
 		if (
@@ -394,6 +393,16 @@ export function answerBlocks(
 			cuts.some((s) => s.sentence !== null && s.from < nl && s.to > at[0])
 		)
 			return null;
+		return { i, t, k, nl, tAt };
+	};
+	/** `p` as part `number`: its first line (`line`) the heading, the rest and `rest` below. */
+	const part = (
+		p: Paragraph,
+		line: NonNullable<ReturnType<typeof headingLine>>,
+		rest: readonly Nodes[],
+		number: number | null
+	): AnswerBlock => {
+		const { i, t, k, nl, tAt } = line;
 		const heading = [
 			...p.children.slice(0, i).flatMap(inline),
 			...leaf(t.value.slice(0, k), tAt[0], nl, true)
@@ -402,13 +411,28 @@ export function answerBlocks(
 		const body = [...paragraph(p, p.children.slice(i + 1), below), ...rest.flatMap(block)];
 		return { kind: 'part', number, heading, body };
 	};
+	/** Ordered item `number` as a part, if its first line can head one. */
+	const numberedPart = (item: ListItem, number: number) => {
+		const [p, ...rest] = item.children;
+		const line = p?.type === 'paragraph' ? headingLine(p) : null;
+		return p?.type === 'paragraph' && line ? part(p, line, rest, number) : null;
+	};
+	/** A top-level paragraph as an unnumbered part, if its first line is one bold heading. */
+	const boldPart = (p: Paragraph) => {
+		const line = headingLine(p);
+		return line?.i === 1 &&
+			p.children[0]?.type === 'strong' &&
+			!line.t.value.slice(0, line.k).trim()
+			? part(p, line, [], null)
+			: null;
+	};
 	const list = (n: Nodes & { type: 'list' }): AnswerBlock[] => {
 		const start = n.ordered ? (n.start ?? 1) : null;
 		const out: AnswerBlock[] = [];
 		let items: AnswerBlock[][] | null = null;
 		for (const [i, item] of n.children.entries()) {
 			const at = start === null ? null : start + i;
-			const asPart = at === null ? null : part(item, at);
+			const asPart = at === null ? null : numberedPart(item, at);
 			if (asPart) {
 				out.push(asPart);
 				items = null;
@@ -455,7 +479,10 @@ export function answerBlocks(
 		}
 	};
 
-	const blocks = fromMarkdown(text).children.flatMap(block);
+	const blocks = fromMarkdown(text).children.flatMap((n) => {
+		const asPart = n.type === 'paragraph' ? boldPart(n) : null;
+		return asPart ? [asPart] : block(n);
+	});
 	const lastOf = new Map<number, AnswerRun>();
 	for (const p of pieces) if (p.sentence !== null) lastOf.set(p.sentence, p);
 	for (const p of lastOf.values()) p.last = true;

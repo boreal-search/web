@@ -51,6 +51,8 @@
 		not_checked: 'not checked'
 	};
 
+	/** A part heading's number, kept as a value: markup would trim its trailing space. */
+	const numbered = (n: number | null) => (n === null ? '' : `${n}. `);
 	const markLabel = (m: Mark) =>
 		`Result ${m.ref}, page ${step.results[m.ref - 1]?.page_number}, ${STATUS_WORD[m.status]}` +
 		(m.boxes.length > 0 ? ', cited text outlined' : '');
@@ -85,7 +87,7 @@
 	{:else if b.kind === 'part'}
 		<section class="part">
 			<h4>
-				{b.number}. {#each b.heading as n, i (i)}{@render inline(n)}{/each}
+				{numbered(b.number)}{#each b.heading as n, i (i)}{@render inline(n)}{/each}
 			</h4>
 			{#each b.body as c, i (i)}{@render block(c)}{/each}
 		</section>
