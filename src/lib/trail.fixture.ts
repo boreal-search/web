@@ -1,5 +1,5 @@
 // Test fixtures for trail steps (imported by tests only).
-import type { Answer, SearchResult } from '#lib/server/engine.types.js';
+import type { Answer, Plan, SearchResult } from '#lib/server/engine.types.js';
 import { applyEvent, newStep, type StepRequest, type TrailStep } from './trail.js';
 
 export const request = (over: Partial<StepRequest> = {}): StepRequest => ({
@@ -102,6 +102,8 @@ export function step(
 		resolved?: string;
 		answer?: Answer | null;
 		inferred?: { document_id: string; title: string }[];
+		/** The engine's `plan` (2.0+); absent as from 1.x. */
+		plan?: Plan;
 	} = {}
 ): TrailStep {
 	const req = request(over.req);
@@ -129,7 +131,8 @@ export function step(
 			],
 			retrieval_ms: 500,
 			reranked: true,
-			readout
+			readout,
+			...(over.plan ? { plan: over.plan } : {})
 		},
 		req.from
 	);

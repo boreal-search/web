@@ -19,8 +19,10 @@
 	let s = $derived(data.search);
 	let step = $derived(data.step);
 	let ms = $derived(s.total_ms);
-	const show = (ref: number) =>
-		document.getElementById(resultAnchorId(ref))?.scrollIntoView({ block: 'center' });
+	const show = (i: number | null) => {
+		if (i !== null)
+			document.getElementById(resultAnchorId(i + 1))?.scrollIntoView({ block: 'center' });
+	};
 </script>
 
 <svelte:head>
@@ -94,7 +96,7 @@
 <section class="band" aria-labelledby="answer-h">
 	<h2 id="answer-h">Response</h2>
 	{#if step.answer}
-		<StepSummary step={{ ...step, answer: step.answer }} onchoose={(m) => show(m.ref)} />
+		<StepSummary step={{ ...step, answer: step.answer }} onchoose={(m) => show(m.result)} />
 	{:else if s.query === null}
 		<p class="empty">Not kept: this org doesn't log queries.</p>
 	{:else}

@@ -11,7 +11,7 @@ import {
 	type TrailStep
 } from '#lib/trail.js';
 import type { SearchContext } from './access.js';
-import type { Answer } from './engine.types';
+import type { Answer, Plan } from './engine.types';
 
 type Db = SupabaseClient<Database>;
 type StepRow = Database['public']['Tables']['trail_steps']['Row'];
@@ -40,8 +40,8 @@ interface LoadedTrail {
 	isOwner: boolean;
 }
 
-/** The stored readout also keeps `wants_answer`, which has no column of its own. */
-type StoredReadout = StepReadout & { wants_answer?: boolean };
+/** The stored readout also keeps `wants_answer` and `plan`, which have no column of their own. */
+type StoredReadout = StepReadout & { wants_answer?: boolean; plan?: Plan | null };
 
 // jsonb columns hold what `stepRow` wrote; trusted at this boundary.
 const asJson = (v: unknown) => v as Json;
@@ -49,7 +49,7 @@ const asJson = (v: unknown) => v as Json;
 export const storedAnswer = (v: Json | null) => v as unknown as Answer | null;
 
 function rowStep(row: StepRow): TrailStep {
-	const { wants_answer, ...readout } = row.readout as unknown as StoredReadout;
+	const { wants_answer, plan, ...readout } = row.readout as unknown as StoredReadout;
 	const answer = storedAnswer(row.answer);
 	return {
 		n: row.n,
@@ -58,6 +58,7 @@ function rowStep(row: StepRow): TrailStep {
 		rewrite: row.rewrite,
 		scope: row.scope as unknown as StepScope,
 		builds_on: row.builds_on,
+		plan: plan ?? null,
 		results: row.results as unknown as StepResult[],
 		answer,
 		wants_answer: wants_answer ?? answer !== null,
@@ -68,7 +69,11 @@ function rowStep(row: StepRow): TrailStep {
 }
 
 const storedReadout = (step: TrailStep): Json =>
-	asJson({ ...step.readout, wants_answer: step.wants_answer } satisfies StoredReadout);
+	asJson({
+		...step.readout,
+		wants_answer: step.wants_answer,
+		plan: step.plan
+	} satisfies StoredReadout);
 
 /** A trail with its steps (in order) and people, or null if it doesn't exist or isn't readable. */
 export async function loadTrail(db: Db, id: string, userId: string): Promise<LoadedTrail | null> {

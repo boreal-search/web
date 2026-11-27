@@ -93,9 +93,28 @@ describe('parseStepRequest', () => {
 		[
 			'context scope ids not strings',
 			{ ...valid, context: [{ query: 'q', scope: { data_source_ids: [1] } }] }
+		],
+		['a context plan that is not an object', { ...valid, context: [{ query: 'q', plan: 'x' }] }],
+		[
+			'a context plan over the size cap',
+			{ ...valid, context: [{ query: 'q', plan: { intent: 'x'.repeat(40_000) } }] }
 		]
 	])('refuses %s', (_, body) => {
 		expect(parseStepRequest(body).ok).toBe(false);
+	});
+
+	it("passes a context step's plan on as is, unread, and leaves it out when absent", () => {
+		const plan = {
+			intent: 'Limitation periods under the IAA and the Fisheries Act',
+			facets: [{ q: 'IAA', scope: [], gated: false, retried: false }],
+			future_field: { nested: [1, 2] }
+		};
+		const out = parseStepRequest({
+			...valid,
+			context: [{ query: 'q1', plan }, { query: 'q2', plan: null }, { query: 'q3' }]
+		});
+		if (!out.ok) throw new Error(out.error);
+		expect(out.value.context).toEqual([{ query: 'q1', plan }, { query: 'q2' }, { query: 'q3' }]);
 	});
 
 	it('names every data source in the scope and the context, once', () => {
@@ -104,6 +123,17 @@ describe('parseStepRequest', () => {
 			context: [{ query: 'q', scope: { data_source_ids: ['a', 'secret'] } }, { query: 'r' }]
 		});
 		expect(requestedDataSources(req)).toEqual(['a', 'secret']);
+	});
+
+	it("names the data sources in a context plan's parts too, whatever else it holds", () => {
+		const req = request({
+			data_source_ids: ['a'],
+			context: [
+				{ query: 'q', plan: { facets: [{ scope: ['a', 'other'] }, { scope: 'x' }, 'junk'] } },
+				{ query: 'r', plan: { facets: 'none' } }
+			]
+		});
+		expect(requestedDataSources(req)).toEqual(['a', 'other']);
 	});
 });
 

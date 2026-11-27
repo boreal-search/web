@@ -208,6 +208,7 @@ export function reviewStep(row: ReviewRow): TrailStep {
 			document_titles: {}
 		},
 		builds_on: null,
+		plan: null,
 		results: (row.results ?? []) as unknown as StepResult[],
 		answer,
 		wants_answer: answer !== null,

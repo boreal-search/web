@@ -1,7 +1,7 @@
 // Exporting a trail as a record (search-trail handover, "Export"): every query, scope and
 // citation, so a reviewer can show how they found what they found. From the stored snapshots
 // only, never the engine. Pure and deterministic: times are UTC (format.ts).
-import { answerCheck, answerCheckLabel } from './answer.js';
+import { answerCheck, answerCheckLabel, outsidePage, resultIndex } from './answer.js';
 import { count, day, plural, stamp } from './format.js';
 import { seconds } from './search-view.js';
 import { scopeLabel, stepNumber, storedStep, type StepResult, type TrailStep } from './trail.js';
@@ -38,8 +38,9 @@ const quoted = (s: string) => {
 	const t = oneLine(s);
 	return `"${t.length > QUOTE_MAX ? `${t.slice(0, QUOTE_MAX - 1).trimEnd()}…` : t}"`;
 };
-const locatorOf = (r: StepResult) =>
-	[r.document_title, ...(r.section ? [r.section] : []), `p.${r.page_number}`].join(' · ');
+const locatorOf = (
+	r: Pick<StepResult, 'document_title' | 'page_number'> & { section?: string | null }
+) => [r.document_title, ...(r.section ? [r.section] : []), `p.${r.page_number}`].join(' · ');
 
 function scopeLine(step: TrailStep) {
 	const docs = step.readout.search?.documents_searched;
@@ -124,9 +125,11 @@ function stepLines(step: TrailStep, origin: string): string[] {
 		for (const l of summaryLines(answer.text)) lines.push(l && INDENT + l);
 		const seen = new Set<string>();
 		for (const c of answer.citations) {
-			const r = step.results[c.ref - 1];
+			// By page, not `results[ref - 1]`: a cross-referenced page isn't in the results.
+			const found = step.results[resultIndex(step.results, c)];
+			const r = found ?? outsidePage(step.results, c);
 			if (!r) continue;
-			const quote = c.highlight.quote ?? r.snippet;
+			const quote = c.highlight.quote ?? found?.snippet;
 			const line = [
 				`[${c.ref}] ${locatorOf(r)}`,
 				STATUS_LABEL[c.status],

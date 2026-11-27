@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+	applyEvent,
 	followUp,
 	isNarrowed,
+	newStep,
 	refine,
 	scopeLabel,
 	stepNumber,
 	storedStep,
 	widen
 } from './trail.js';
-import { step } from './trail.fixture.js';
+import { readout, request, result, step } from './trail.fixture.js';
 
 const plan = { document_id: 'plan', title: 'Offsetting Plan' };
 
@@ -52,6 +54,21 @@ describe('refine', () => {
 		});
 		// Context is queries and scopes only: never summaries or results.
 		expect(JSON.stringify(r.context)).not.toMatch(/Rated not significant|magnitude/);
+	});
+
+	it("sends each step's plan back as is, and none for a step without one (engine 1.x)", () => {
+		const searchPlan = {
+			intent: 'Limitation periods under the IAA and the Fisheries Act',
+			facets: [
+				{ q: 'limitation period under the IAA', scope: [], gated: false, retried: false },
+				{ q: '… under the Fisheries Act', scope: ['kettle'], gated: false, retried: false }
+			]
+		};
+		const steps = [step(1), step(2, { req: { from: 1 }, plan: searchPlan })];
+		expect(steps[1]?.plan).toEqual(searchPlan);
+		const [first, second] = refine(steps, 2).context;
+		expect(first).not.toHaveProperty('plan');
+		expect(second?.plan).toBe(searchPlan);
 	});
 
 	it('prefers explicit document ids, with their titles', () => {
@@ -121,6 +138,29 @@ describe('scope', () => {
 		expect(scopeLabel(step(1))).toBe('Kettle Ridge Application');
 		expect(scopeLabel(step(1, { inferred: [plan] }))).toBe('Offsetting Plan');
 		expect(scopeLabel(step(1, { req: { document_ids: ['vol3'] } }))).toBe('vol3');
+	});
+});
+
+describe('applyEvent', () => {
+	it('keeps results in the order given, whatever their scores, and missing 2.x fields', () => {
+		const s0 = step(1);
+		const event = {
+			type: 'results' as const,
+			query: s0.query,
+			resolved_query: s0.query,
+			scope: { data_source_ids: ['kettle'], document_ids: null, inferred_documents: [] },
+			results: [
+				result({ page_number: 7, score: 0.2, facets: [1] }),
+				result({ page_number: 3, score: 0.9, facets: [] }),
+				result({ page_number: 5, score: 0.5 })
+			],
+			retrieval_ms: 1,
+			reranked: true,
+			readout
+		};
+		const s = applyEvent(newStep(request(), 1, {}, {}), event, null);
+		expect(s.results.map((r) => r.page_number)).toEqual([7, 3, 5]);
+		expect(s.plan).toBeNull();
 	});
 });
 

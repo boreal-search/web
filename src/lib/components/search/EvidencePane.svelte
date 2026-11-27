@@ -99,7 +99,7 @@
 						>
 							<PageRender
 								result={shown}
-								outlines={ev.boxesOn(ev.current + 1)}
+								outlines={ev.boxesOn(ev.current)}
 								{permanentLinks}
 								failed={ev.failed}
 								variant="viewer"
@@ -110,7 +110,7 @@
 							<span class="loc"
 								>{ev.current + 1} · {shown.document_title} · p.{shown.page_number}</span
 							>
-							{#if ev.active?.ref === ev.current + 1 && ev.active.quote}
+							{#if ev.active?.result === ev.current && ev.active.quote}
 								<span class="sr-only">Outlined on the page: {ev.active.quote}</span>
 							{/if}
 							<button

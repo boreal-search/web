@@ -30,7 +30,7 @@
 		interactive: boolean;
 	} = $props();
 
-	let outlines = $derived(ev.boxesOn(i + 1));
+	let outlines = $derived(ev.boxesOn(i));
 </script>
 
 <!-- Click anywhere on a row to show its page; keyboard users have J/K and focus. -->
@@ -108,7 +108,7 @@
 			<div class="sheet zoomed">
 				<PageRender result={r} {outlines} {permanentLinks} failed={ev.failed} variant="expanded" />
 			</div>
-			{#if ev.active?.ref === i + 1 && ev.active.quote}
+			{#if ev.active?.result === i && ev.active.quote}
 				<p class="sr-only">Outlined on the page: {ev.active.quote}</p>
 			{/if}
 		</figure>

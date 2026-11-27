@@ -68,7 +68,8 @@ export function buildSearchEvent(
 		rerank: input.rerank,
 		status: input.status,
 		result_count: response ? response.results.length : null,
-		top_score: response?.results[0]?.score ?? null,
+		// The highest, not the first: multi-part results are ordered by part, not by score.
+		top_score: response?.results.length ? Math.max(...response.results.map((r) => r.score)) : null,
 		retrieval_ms: response?.retrieval_ms ?? null,
 		reranked: response?.reranked ?? null,
 		error: input.error ?? null,
